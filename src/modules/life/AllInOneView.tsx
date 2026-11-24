@@ -23,6 +23,8 @@ import { LearningMediaView } from './LearningMediaView';
 import { TravelPeopleHomeView } from './TravelPeopleHomeView';
 import { StudioExtrasView } from './StudioExtrasView';
 import { HistoryView } from './HistoryView';
+import { GuideView } from './GuideView';
+import { CustomTabView } from './CustomTabView';
 import { DecorCanvasOverlay } from '../../components/Decor/DecorCanvas';
 import type { ModuleId, NavView } from '../../core/types';
 
@@ -39,7 +41,7 @@ interface ScrollSectionDef {
  * with a sticky quick-jump pill bar and individual collapse/expand controls.
  */
 export const AllInOneView: React.FC = () => {
-  const { isModuleEnabled, setActiveView } = useApp();
+  const { settings, isModuleEnabled, setActiveView } = useApp();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const allSections: ScrollSectionDef[] = [
@@ -73,6 +75,13 @@ export const AllInOneView: React.FC = () => {
     { id: 'sec-rituals', view: 'rituals', label: 'Rituals & Context Modes', render: () => <StudioExtrasView mode="rituals" /> },
     { id: 'sec-insights', view: 'insights', label: 'Insights & Heatmaps', render: () => <StudioExtrasView mode="insights" /> },
     { id: 'sec-automations', view: 'automations', label: 'Automations & AI', render: () => <StudioExtrasView mode="automations" /> },
+    { id: 'sec-guide', view: 'guide', label: 'Guide & Help', render: () => <GuideView /> },
+    ...settings.customTabs.map((ct) => ({
+      id: `sec-ctab-${ct.id}`,
+      view: 'custom_tab' as NavView,
+      label: `${ct.emoji} ${ct.name}`,
+      render: () => <CustomTabView tabId={ct.id} />,
+    })),
   ];
 
   const visibleSections = allSections.filter((s) => !s.moduleId || isModuleEnabled(s.moduleId));

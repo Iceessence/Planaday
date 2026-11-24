@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart3, Bot, Download, Layers, LayoutDashboard, Play, Plus, Sparkles, Zap } from 'lucide-react';
+import { BarChart3, Bot, Download, Layers, LayoutDashboard, Play, Plus, Sparkles, Trash2, Zap } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
-import { createRecord, updateRecord } from '../../core/repository';
+import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import {
   evaluateAutomations,
   type AutomationAction,
@@ -113,7 +113,20 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
               <div key={sp.id} className="dp-card dp-stack" style={{ padding: 14 }}>
                 <div className="dp-between">
                   <strong>{sp.title}</strong>
-                  <span className="dp-pill">{p.scope}</span>
+                  <div className="dp-row" style={{ gap: 6 }}>
+                    <span className="dp-pill">{p.scope}</span>
+                    <button
+                      type="button"
+                      className="dp-icon-btn"
+                      title="Delete custom space"
+                      onClick={async () => {
+                        await softDeleteRecord(sp.id);
+                        pushToast(`Moved "${sp.title}" to Trash`, { canUndo: true });
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   className="dp-textarea"
@@ -360,7 +373,10 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
               <option value="focus_timer_ended">When: Focus timer ends</option>
               <option value="med_low_stock">When: Med drops ≤</option>
             </select>
-            <input type="number" className="dp-input" style={{ width: 68 }} value={ruleThreshold} onChange={(e) => setRuleThreshold(Number(e.target.value) || 0)} title="Threshold" />
+            <label className="dp-row" style={{ gap: 4 }}>
+              <input type="number" className="dp-input" style={{ width: 68 }} value={ruleThreshold} onChange={(e) => setRuleThreshold(Number(e.target.value) || 0)} title="Threshold" />
+              <span className="dp-muted" style={{ fontSize: '0.8rem' }}>units</span>
+            </label>
             <select aria-label="Then action" className="dp-select" style={{ width: 'auto' }} value={ruleAction} onChange={(e) => setRuleAction(e.target.value as AutomationAction)}>
               <option value="open_morning_kickoff">Then: Open Morning Kickoff</option>
               <option value="add_to_grocery_list">Then: Add to Grocery List</option>
@@ -400,6 +416,17 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
                 checked={r.payload.enabled}
                 onChange={(e) => void updateRecord<AutomationRulePayload>(r.id, (c) => ({ ...c, payload: { ...c.payload, enabled: e.target.checked } }))}
               />
+              <button
+                type="button"
+                className="dp-icon-btn"
+                title="Delete automation rule"
+                onClick={async () => {
+                  await softDeleteRecord(r.id);
+                  pushToast(`Moved rule "${r.title}" to Trash`, { canUndo: true });
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           </div>
         ))}

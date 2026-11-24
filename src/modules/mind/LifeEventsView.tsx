@@ -157,11 +157,18 @@ export const LifeEventsView: React.FC<{ initialTab?: 'occasions' | 'countdowns' 
           >
             <div className="dp-row">
               <input className="dp-input" style={{ flex: 2 }} placeholder="Occasion (e.g., Maya's Birthday)" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <select aria-label="Category" className="dp-select" style={{ width: 'auto' }} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {OCCASION_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <input type="number" min={1} max={12} className="dp-input" style={{ width: 64 }} value={month} onChange={(e) => setMonth(Number(e.target.value) || 1)} title="Month (1-12)" />
-              <input type="number" min={1} max={31} className="dp-input" style={{ width: 64 }} value={day} onChange={(e) => setDay(Number(e.target.value) || 1)} title="Day (1-31)" />
+              <input list="dp-occasion-cats" aria-label="Category" className="dp-input" style={{ width: 155 }} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (pick or type)…" />
+              <datalist id="dp-occasion-cats">
+                {OCCASION_CATEGORIES.map((c) => <option key={c} value={c} />)}
+              </datalist>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted" style={{ fontSize: '0.8rem' }}>Mo:</span>
+                <input type="number" min={1} max={12} className="dp-input" style={{ width: 58 }} value={month} onChange={(e) => setMonth(Number(e.target.value) || 1)} title="Month (1-12)" />
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted" style={{ fontSize: '0.8rem' }}>Day:</span>
+                <input type="number" min={1} max={31} className="dp-input" style={{ width: 58 }} value={day} onChange={(e) => setDay(Number(e.target.value) || 1)} title="Day (1-31)" />
+              </label>
               <button type="submit" className="dp-btn dp-btn-primary">
                 <Plus size={14} /> Add
               </button>

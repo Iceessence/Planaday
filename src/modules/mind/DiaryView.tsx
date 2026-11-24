@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, Image as ImageIcon, Plus, Sparkles } from 'lucide-react';
+import { Download, Image as ImageIcon, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
-import { createRecord, updateRecord } from '../../core/repository';
+import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { createId, storeBlob } from '../../core/db';
 import { triggerBrowserDownload } from '../../core/backup';
 import { addDaysIso, formatDateLocalized } from '../../core/temporal';
@@ -100,6 +100,19 @@ export const DiaryView: React.FC = () => {
           <button type="button" className="dp-btn dp-btn-sm" onClick={exportMarkdown}>
             <Download size={14} /> Export .md
           </button>
+          {todayDiaryRec && (
+            <button
+              type="button"
+              className="dp-btn dp-btn-danger dp-btn-sm"
+              title="Move today's diary entry to Trash"
+              onClick={async () => {
+                await softDeleteRecord(todayDiaryRec.id);
+                pushToast(`Moved ${activeDate} diary entry to Trash`, { canUndo: true });
+              }}
+            >
+              <Trash2 size={13} /> Trash Entry
+            </button>
+          )}
         </div>
       </div>
 
@@ -249,8 +262,21 @@ export const DiaryView: React.FC = () => {
           </button>
         </div>
         {(entry.extraEntries ?? []).map((ex) => (
-          <div key={ex.id} style={{ fontSize: '0.88rem', borderInlineStart: '2px solid var(--dp-accent)', paddingInlineStart: 10 }}>
-            <strong>{ex.time}</strong> {ex.mood ? `(${ex.mood})` : ''} — {ex.text}
+          <div key={ex.id} className="dp-between" style={{ fontSize: '0.88rem', borderInlineStart: '2px solid var(--dp-accent)', paddingInlineStart: 10 }}>
+            <span>
+              <strong>{ex.time}</strong> {ex.mood ? `(${ex.mood})` : ''} — {ex.text}
+            </span>
+            <button
+              type="button"
+              className="dp-icon-btn"
+              style={{ width: 22, height: 22 }}
+              title="Delete timestamped entry"
+              onClick={() =>
+                void saveDiary({ extraEntries: (entry.extraEntries ?? []).filter((x) => x.id !== ex.id) })
+              }
+            >
+              <Trash2 size={12} />
+            </button>
           </div>
         ))}
       </div>

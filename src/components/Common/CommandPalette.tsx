@@ -56,6 +56,7 @@ export const CommandPalette: React.FC = () => {
       ['rituals', 'Go to Planning Rituals'],
       ['insights', 'Go to Insights & Heatmaps'],
       ['automations', 'Go to Local Automations'],
+      ['guide', 'Go to App Guide & Documentation'],
       ['trash', 'Go to 30-Day Trash Bin'],
       ['settings', 'Go to Settings & Theme Studio'],
     ];

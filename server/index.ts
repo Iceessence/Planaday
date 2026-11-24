@@ -177,7 +177,18 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
 
   app.get('/api/push-config', async () => alarmScheduler.getConfig());
 
-  app.post<{ Body: { ntfyPushUrl?: string; timeZone?: string } }>('/api/push-config', async (req) => {
+  app.post<{
+    Body: {
+      ntfyPushUrl?: string;
+      timeZone?: string;
+      notifyTimers?: boolean;
+      notifyAlarms?: boolean;
+      notifyEvents?: boolean;
+      eventLeadMinutes?: number;
+      notifyChores?: boolean;
+      choreReminderTime?: string;
+    };
+  }>('/api/push-config', async (req) => {
     const updated = alarmScheduler.setConfig(req.body ?? {});
     return { ok: true, config: updated };
   });

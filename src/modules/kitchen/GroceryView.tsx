@@ -111,11 +111,20 @@ export const GroceryView: React.FC = () => {
         }}
       >
         <input className="dp-input" style={{ flex: 2 }} placeholder="Add grocery item…" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
-        <input type="number" step={0.5} min={0.5} className="dp-input" style={{ width: 72 }} value={newItemQty} onChange={(e) => setNewItemQty(Number(e.target.value) || 1)} />
-        <input className="dp-input" style={{ width: 82 }} value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)} />
-        <select aria-label="Store" className="dp-select" style={{ width: 'auto' }} value={newItemStore} onChange={(e) => setNewItemStore(e.target.value)}>
-          {STORES.slice(1).map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <label className="dp-row" style={{ gap: 4 }}>
+          <span className="dp-muted" style={{ fontSize: '0.8rem' }}>Qty:</span>
+          <input type="number" step={0.5} min={0.5} className="dp-input" style={{ width: 68 }} value={newItemQty} onChange={(e) => setNewItemQty(Number(e.target.value) || 1)} />
+        </label>
+        <input list="dp-groc-units" className="dp-input" style={{ width: 92 }} value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)} placeholder="unit…" aria-label="Grocery unit" />
+        <datalist id="dp-groc-units">
+          {['item', 'pack', 'bag', 'box', 'can', 'bottle', 'bunch', 'lb', 'oz', 'kg', 'g', 'L', 'gallon', 'dozen'].map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
+        <input list="dp-groc-stores" aria-label="Store" className="dp-input" style={{ width: 145 }} value={newItemStore} onChange={(e) => setNewItemStore(e.target.value)} placeholder="Store (pick or type)…" />
+        <datalist id="dp-groc-stores">
+          {STORES.slice(1).map((s) => <option key={s} value={s} />)}
+        </datalist>
         <button type="submit" className="dp-btn dp-btn-primary">
           <Plus size={14} /> Add
         </button>

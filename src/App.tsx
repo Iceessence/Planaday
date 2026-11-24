@@ -35,12 +35,16 @@ import { TravelPeopleHomeView } from './modules/life/TravelPeopleHomeView';
 import { StudioExtrasView } from './modules/life/StudioExtrasView';
 import { HistoryView } from './modules/life/HistoryView';
 import { AllInOneView } from './modules/life/AllInOneView';
+import { GuideView } from './modules/life/GuideView';
+import { CustomTabView } from './modules/life/CustomTabView';
 import { DecorCanvasOverlay } from './components/Decor/DecorCanvas';
 
 const ActiveWorkspaceStage: React.FC = () => {
-  const { activeView } = useApp();
+  const { activeView, activeCustomTabId } = useApp();
 
   if (activeView === 'all_in_one') return <AllInOneView />;
+  if (activeView === 'guide') return <GuideView />;
+  if (activeView === 'custom_tab') return <CustomTabView tabId={activeCustomTabId} />;
   if (activeView === 'settings') return <SettingsView />;
   if (activeView === 'trash') return <TrashView />;
   if (activeView === 'home') return <HomeDashboard />;

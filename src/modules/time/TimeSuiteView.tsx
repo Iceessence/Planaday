@@ -78,6 +78,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     extendTimer,
     dismissTimer,
     setActiveView,
+    notifyUser,
   } = useApp();
   const runtimeInfo = useMemo(() => detectRuntimePlatform(), []);
 
@@ -136,12 +137,13 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     remSec: number;
   } | null>(null);
 
-  // Precision Stopwatch state (HH:MM:SS.cc)
+  // Precision Stopwatch state (HH:MM:SS.cc) + customizable milestone notifications
   const [swRunning, setSwRunning] = useState(false);
   const [swElapsedMs, setSwElapsedMs] = useState(0);
   const [swLaps, setSwLaps] = useState<StopwatchLap[]>([]);
   const swStartRef = useRef<number | null>(null);
   const swBaseRef = useRef<number>(0);
+  const swLastNotifiedStepRef = useRef<number>(0);
 
   const timeLedger = useLiveQuery(() => db.timeLedger.orderBy('startedAt').reverse().limit(40).toArray(), []) ?? [];
   const alarms = useMemo(() => records.filter((r) => r.type === 'alarm'), [records]);
@@ -166,19 +168,32 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     };
   }, [nightstandOpen]);
 
-  // Precision Stopwatch RAF tick
+  // Precision Stopwatch RAF tick + milestone chime/notification
   useEffect(() => {
     if (!swRunning) return;
     let raf = 0;
+    const intervalMin = settings.notificationPrefs.stopwatchIntervalMin;
     const tick = () => {
       if (swStartRef.current !== null) {
-        setSwElapsedMs(swBaseRef.current + (performance.now() - swStartRef.current));
+        const curMs = swBaseRef.current + (performance.now() - swStartRef.current);
+        setSwElapsedMs(curMs);
+        if (settings.notificationPrefs.notifyStopwatch && intervalMin > 0) {
+          const step = Math.floor(curMs / (intervalMin * 60_000));
+          if (step > 0 && step > swLastNotifiedStepRef.current) {
+            swLastNotifiedStepRef.current = step;
+            notifyUser(
+              'stopwatch',
+              `Stopwatch Milestone: ${step * intervalMin}m`,
+              `Your stopwatch just crossed ${step * intervalMin} minutes (${formatStopwatchMs(curMs)}).`
+            );
+          }
+        }
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [swRunning]);
+  }, [swRunning, settings.notificationPrefs.notifyStopwatch, settings.notificationPrefs.stopwatchIntervalMin, notifyUser]);
 
   // Active Interval Runner tick
   useEffect(() => {
@@ -422,9 +437,10 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                   const saved = await syncPushConfigToServer(
                     settings.syncServerUrl,
                     settings.ntfyPushUrl || '',
-                    settings.defaultTimeZone
+                    settings.defaultTimeZone,
+                    settings.notificationPrefs
                   );
-                  pushToast(saved ? 'Synced background push URL to Docker server!' : 'Saved locally (connect Docker server to activate background push).');
+                  pushToast(saved ? 'Synced background push URL & alert preferences to Docker server!' : 'Saved locally (connect Docker server to activate background push).');
                 }}
               >
                 Save Push Relay
@@ -561,7 +577,8 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                       type="button"
                       className="dp-btn dp-btn-sm"
                       onClick={() => {
-                        audioEngine.playChime('bell', 0.3);
+                        const vol = Math.max(0.05, (settings.notificationPrefs.volume ?? 75) / 100);
+                        audioEngine.playChime(settings.notificationPrefs.chimeStyle ?? 'bell', vol);
                         setChallengeAnswer('');
                         setRingingAlarm(a);
                       }}
@@ -813,6 +830,33 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
             <div style={{ fontSize: '2.6rem', fontWeight: 700, fontFamily: 'var(--dp-font-mono)', fontVariantNumeric: 'tabular-nums' }}>
               {formatStopwatchMs(swElapsedMs)}
             </div>
+            <div className="dp-row" style={{ fontSize: '0.82rem' }}>
+              <span className="dp-muted">Milestone alert every:</span>
+              <select
+                aria-label="Stopwatch milestone interval"
+                className="dp-select"
+                style={{ width: 'auto', padding: '3px 8px' }}
+                value={settings.notificationPrefs.notifyStopwatch ? settings.notificationPrefs.stopwatchIntervalMin : 0}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  void patchSettings({
+                    notificationPrefs: {
+                      ...settings.notificationPrefs,
+                      notifyStopwatch: val > 0,
+                      stopwatchIntervalMin: val > 0 ? val : settings.notificationPrefs.stopwatchIntervalMin,
+                    },
+                  });
+                }}
+              >
+                <option value={0}>Off</option>
+                <option value={1}>Every 1 min</option>
+                <option value={5}>Every 5 min</option>
+                <option value={10}>Every 10 min</option>
+                <option value={15}>Every 15 min</option>
+                <option value={30}>Every 30 min</option>
+                <option value={60}>Every 60 min</option>
+              </select>
+            </div>
             <div className="dp-row">
               <button
                 type="button"
@@ -865,6 +909,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                   setSwRunning(false);
                   swStartRef.current = null;
                   swBaseRef.current = 0;
+                  swLastNotifiedStepRef.current = 0;
                   setSwElapsedMs(0);
                   setSwLaps([]);
                 }}

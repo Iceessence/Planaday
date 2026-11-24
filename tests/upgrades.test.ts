@@ -11,7 +11,9 @@ import {
   findFreeTimeGaps,
 } from '../src/core/planActions';
 import { buildDayplanaServer } from '../server/index';
-import type { CalendarEventPayload, ChorePayload } from '../src/core/types';
+import { isMedicationRefillDue } from '../src/modules/life/HouseholdHealthView';
+import { isRecordVisibleForProfile } from '../src/core/AppContext';
+import type { CalendarEventPayload, ChorePayload, LifeRecord } from '../src/core/types';
 
 describe('Upgrades — Seconds Timers, Post-Now Free Time, Chore Punctuality, Event Reviews & Server Push', () => {
   beforeEach(async () => {
@@ -110,16 +112,88 @@ describe('Upgrades — Seconds Timers, Post-Now Free Time, Chore Punctuality, Ev
       const postRes = await fetch(`${address}/api/push-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ntfyPushUrl: 'https://ntfy.sh/dayplana-demo-topic', timeZone: 'America/Los_Angeles' }),
+        body: JSON.stringify({
+          ntfyPushUrl: 'https://ntfy.sh/dayplana-demo-topic',
+          timeZone: 'America/Los_Angeles',
+          eventLeadMinutes: 30,
+          choreReminderTime: '08:30',
+          notifyEvents: true,
+          notifyChores: true,
+        }),
       });
       expect(postRes.ok).toBe(true);
       const getRes = await fetch(`${address}/api/push-config`);
-      const cfg = (await getRes.json()) as { ntfyPushUrl: string; timeZone: string };
+      const cfg = (await getRes.json()) as {
+        ntfyPushUrl: string;
+        timeZone: string;
+        eventLeadMinutes: number;
+        choreReminderTime: string;
+      };
       expect(cfg.ntfyPushUrl).toBe('https://ntfy.sh/dayplana-demo-topic');
       expect(cfg.timeZone).toBe('America/Los_Angeles');
+      expect(cfg.eventLeadMinutes).toBe(30);
+      expect(cfg.choreReminderTime).toBe('08:30');
     } finally {
       await app.close();
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it('tracks medication refill-by-date even when extra doses remain from skipped days', () => {
+    // 18 doses left (> 7 threshold), BUT refillByDate is 4 days away (<= 7 daysBefore) -> MUST trigger refill!
+    const byDate = isMedicationRefillDue(
+      {
+        pillsRemaining: 18,
+        refillAlertDoses: 7,
+        refillByDate: '2026-11-27',
+        refillAlertDaysBefore: 7,
+      },
+      '2026-11-23'
+    );
+    expect(byDate.due).toBe(true);
+    expect(byDate.reason).toContain('18 doses left');
+
+    // Plenty of doses & far refill date -> NOT due
+    const notDue = isMedicationRefillDue(
+      {
+        pillsRemaining: 25,
+        refillAlertDoses: 7,
+        refillByDate: '2026-12-20',
+        refillAlertDaysBefore: 7,
+      },
+      '2026-11-23'
+    );
+    expect(notDue.due).toBe(false);
+  });
+
+  it('isolates family member profiles while exposing shared items across profiles', () => {
+    const baseRec: LifeRecord = {
+      id: 'rec_1',
+      workspaceId: 'ws_personal',
+      type: 'event',
+      title: 'Soccer Practice',
+      status: 'active',
+      createdAt: '2026-11-23T00:00:00Z',
+      updatedAt: '2026-11-23T00:00:00Z',
+      deletedAt: null,
+      ownerProfileId: 'prof_mom',
+      sharedWithAll: false,
+      sharedWithProfileIds: [],
+      tags: [],
+      links: [],
+      payload: {},
+      rev: 1,
+      deviceId: 'dev_1',
+    };
+    expect(isRecordVisibleForProfile(baseRec, 'all')).toBe(true);
+    expect(isRecordVisibleForProfile(baseRec, 'prof_mom')).toBe(true);
+    expect(isRecordVisibleForProfile(baseRec, 'prof_dad')).toBe(false);
+
+    // Sharing with Everyone makes it visible to Dad too
+    expect(isRecordVisibleForProfile({ ...baseRec, sharedWithAll: true }, 'prof_dad')).toBe(true);
+    // Sharing specifically with Dad makes it visible to Dad but not Kid
+    const sharedDad = { ...baseRec, sharedWithProfileIds: ['prof_dad'] };
+    expect(isRecordVisibleForProfile(sharedDad, 'prof_dad')).toBe(true);
+    expect(isRecordVisibleForProfile(sharedDad, 'prof_kid')).toBe(false);
   });
 });

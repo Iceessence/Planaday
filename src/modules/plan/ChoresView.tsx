@@ -18,6 +18,8 @@ export const ChoresView: React.FC = () => {
   const [estimateMin, setEstimateMin] = useState(15);
   const [energy, setEnergy] = useState<'low' | 'medium' | 'high'>('low');
   const [supplies, setSupplies] = useState('');
+  const [shareFamily, setShareFamily] = useState(true);
+  const [markImportant, setMarkImportant] = useState(false);
   const [energyFilter, setEnergyFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [maxMinFilter, setMaxMinFilter] = useState(120);
   const [replayDate, setReplayDate] = useState(activeDate);
@@ -61,10 +63,17 @@ export const ChoresView: React.FC = () => {
         nextDueDate: logicalToday,
         completions: [],
       },
-      { estimateMin, energy, category: room.trim() || 'General' }
+      {
+        estimateMin,
+        energy,
+        category: room.trim() || 'General',
+        sharedWithAll: shareFamily,
+        isImportant: markImportant,
+      }
     );
     setTitle('');
     setSupplies('');
+    setMarkImportant(false);
     pushToast('Chore created', { canUndo: true });
   };
 
@@ -146,11 +155,16 @@ export const ChoresView: React.FC = () => {
       <form className="dp-card dp-stack" style={{ padding: 12 }} onSubmit={handleAdd}>
         <div className="dp-row">
           <input className="dp-input" style={{ flex: 2 }} placeholder="New chore (e.g., Wash bedsheets)…" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <input className="dp-input" style={{ flex: 1 }} placeholder="Room / Zone" value={room} onChange={(e) => setRoom(e.target.value)} />
+          <input list="dp-chore-rooms" className="dp-input" style={{ flex: 1 }} placeholder="Room / Zone (pick or type)…" value={room} onChange={(e) => setRoom(e.target.value)} />
+          <datalist id="dp-chore-rooms">
+            {['Kitchen', 'Bathroom', 'Bedroom', 'Living Room', 'Laundry', 'Garage', 'Yard', 'Office', 'Car', 'Entryway', 'Home'].map((r) => (
+              <option key={r} value={r} />
+            ))}
+          </datalist>
           <label className="dp-row">
             <span className="dp-muted">Every</span>
             <input type="number" min={1} max={3650} className="dp-input" style={{ width: 68 }} value={intervalDays} onChange={(e) => setIntervalDays(Number(e.target.value) || 1)} />
-            <span className="dp-muted">d</span>
+            <span className="dp-muted">days</span>
           </label>
           <button type="submit" className="dp-btn dp-btn-primary">
             <Plus size={15} /> Add
@@ -182,6 +196,14 @@ export const ChoresView: React.FC = () => {
               <input type="number" min={1} max={5} className="dp-input" style={{ width: 56 }} value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3 | 4 | 5)} />
             </label>
             <input className="dp-input" style={{ flex: 1 }} placeholder="Linked supplies (comma separated)" value={supplies} onChange={(e) => setSupplies(e.target.value)} />
+            <label className="dp-row" style={{ fontSize: '0.82rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={shareFamily} onChange={(e) => setShareFamily(e.target.checked)} />
+              <span>🏡 Share w/ Family</span>
+            </label>
+            <label className="dp-row" style={{ fontSize: '0.82rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={markImportant} onChange={(e) => setMarkImportant(e.target.checked)} />
+              <span>★ Important</span>
+            </label>
           </div>
         </details>
       </form>
@@ -208,9 +230,15 @@ export const ChoresView: React.FC = () => {
             <div key={c.id} className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>
               <div className="dp-between">
                 <div>
-                  <strong>{c.title}</strong>
+                  <strong>
+                    {c.isImportant ? '★ ' : ''}
+                    {c.title}
+                  </strong>
                   <div className="dp-row" style={{ marginTop: 4 }}>
                     <span className="dp-pill">{c.payload.room}</span>
+                    {(c.sharedWithAll || (c.sharedWithProfileIds?.length ?? 0) > 0) && (
+                      <span className="dp-pill highlight">🏡 Family</span>
+                    )}
                     <span className="dp-pill">{state.freshnessPct}% fresh</span>
                     <span
                       className="dp-pill"

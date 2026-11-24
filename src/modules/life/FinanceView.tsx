@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Receipt, ShieldCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, Plus, Receipt, ShieldCheck, Trash2, Wallet } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord } from '../../core/repository';
 import { addDaysIso, diffDaysIso } from '../../core/temporal';
@@ -118,10 +118,14 @@ export const FinanceView: React.FC = () => {
           }}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Bill or subscription…" value={billTitle} onChange={(e) => setBillTitle(e.target.value)} />
-          <input type="number" step={0.01} className="dp-input" style={{ width: 90 }} value={billAmount} onChange={(e) => setBillAmount(Number(e.target.value) || 0)} />
-          <select aria-label="Currency" className="dp-select" style={{ width: 'auto' }} value={billCurrency} onChange={(e) => setBillCurrency(e.target.value)}>
-            {['USD', 'EUR', 'GBP', 'CAD', 'JPY'].map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <label className="dp-row" style={{ gap: 4 }}>
+            <span className="dp-muted" style={{ fontSize: '0.8rem' }}>Amount:</span>
+            <input type="number" step={0.01} className="dp-input" style={{ width: 90 }} value={billAmount} onChange={(e) => setBillAmount(Number(e.target.value) || 0)} />
+          </label>
+          <input list="dp-currencies" aria-label="Currency" className="dp-input" style={{ width: 76 }} value={billCurrency} onChange={(e) => setBillCurrency(e.target.value.toUpperCase())} />
+          <datalist id="dp-currencies">
+            {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'].map((c) => <option key={c} value={c} />)}
+          </datalist>
           <select aria-label="Cadence" className="dp-select" style={{ width: 'auto' }} value={billCadence} onChange={(e) => setBillCadence(e.target.value as 'monthly' | 'annual')}>
             <option value="monthly">Monthly</option>
             <option value="annual">Annual</option>
@@ -166,11 +170,15 @@ export const FinanceView: React.FC = () => {
               pushToast('Saved budget envelope');
             }}
           >
-            <input className="dp-input" style={{ flex: 1 }} value={envCategory} onChange={(e) => setEnvCategory(e.target.value)} placeholder="Category (e.g., Groceries)" />
-            <input type="number" className="dp-input" style={{ width: 90 }} value={envLimit} onChange={(e) => setEnvLimit(Number(e.target.value) || 0)} />
-            <select className="dp-select" style={{ width: 'auto' }} value={envCurrency} onChange={(e) => setEnvCurrency(e.target.value)}>
-              {['USD', 'EUR', 'GBP', 'CAD'].map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <input list="dp-budget-cats" className="dp-input" style={{ flex: 1 }} value={envCategory} onChange={(e) => setEnvCategory(e.target.value)} placeholder="Category (pick or type)…" />
+            <datalist id="dp-budget-cats">
+              {['Groceries', 'Dining', 'Utilities', 'Housing', 'Transport', 'Health', 'Household', 'Fun', 'Travel', 'Clothing'].map((c) => <option key={c} value={c} />)}
+            </datalist>
+            <label className="dp-row" style={{ gap: 4 }}>
+              <span className="dp-muted" style={{ fontSize: '0.8rem' }}>Limit:</span>
+              <input type="number" className="dp-input" style={{ width: 90 }} value={envLimit} onChange={(e) => setEnvLimit(Number(e.target.value) || 0)} />
+            </label>
+            <input list="dp-currencies" aria-label="Envelope currency" className="dp-input" style={{ width: 74 }} value={envCurrency} onChange={(e) => setEnvCurrency(e.target.value.toUpperCase())} />
             <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm">Save</button>
           </form>
 
@@ -188,7 +196,12 @@ export const FinanceView: React.FC = () => {
               <div key={env.id} className="dp-stack" style={{ gap: 4 }}>
                 <div className="dp-between" style={{ fontSize: '0.86rem' }}>
                   <strong>{env.title}</strong>
-                  <span>{p.currency} {spent.toFixed(2)} / {p.limit.toFixed(2)}</span>
+                  <div className="dp-row" style={{ gap: 6 }}>
+                    <span>{p.currency} {spent.toFixed(2)} / {p.limit.toFixed(2)}</span>
+                    <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete budget envelope" onClick={() => void softDeleteRecord(env.id)}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
                 <div className="dp-progress-track">
                   <div className="dp-progress-fill" style={{ width: `${pct}%`, background: pct > 90 ? 'var(--dp-danger)' : 'var(--dp-accent-2)' }} />
@@ -218,7 +231,12 @@ export const FinanceView: React.FC = () => {
           {warranties.map((w) => (
             <div key={w.id} className="dp-between" style={{ fontSize: '0.84rem' }}>
               <span><Receipt size={13} /> {w.title}</span>
-              <span className="dp-pill">Exp: {String((w.payload as { expiresDate?: string }).expiresDate)}</span>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <span className="dp-pill">Exp: {String((w.payload as { expiresDate?: string }).expiresDate)}</span>
+                <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete warranty" onClick={() => void softDeleteRecord(w.id)}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
           ))}
 
@@ -238,7 +256,10 @@ export const FinanceView: React.FC = () => {
             }}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Wishlist item (30-day cool-off)…" value={wishItem} onChange={(e) => setWishItem(e.target.value)} />
-            <input type="number" className="dp-input" style={{ width: 76 }} value={wishPrice} onChange={(e) => setWishPrice(Number(e.target.value) || 0)} />
+            <label className="dp-row" style={{ gap: 4 }}>
+              <span className="dp-muted">$</span>
+              <input type="number" className="dp-input" style={{ width: 76 }} value={wishPrice} onChange={(e) => setWishPrice(Number(e.target.value) || 0)} />
+            </label>
             <button type="submit" className="dp-btn dp-btn-sm">+ Wish</button>
           </form>
           {wishlist.map((w) => {
@@ -247,7 +268,12 @@ export const FinanceView: React.FC = () => {
             return (
               <div key={w.id} className="dp-between" style={{ fontSize: '0.84rem' }}>
                 <span>{w.title} (${p.price})</span>
-                <span className="dp-pill">{rem > 0 ? `${rem}d cool-off left` : 'Cool-off complete ✓'}</span>
+                <div className="dp-row" style={{ gap: 6 }}>
+                  <span className="dp-pill">{rem > 0 ? `${rem}d cool-off left` : 'Cool-off complete ✓'}</span>
+                  <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete wishlist item" onClick={() => void softDeleteRecord(w.id)}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
             );
           })}

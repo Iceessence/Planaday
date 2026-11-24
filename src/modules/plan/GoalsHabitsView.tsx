@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarPlus, Flame, Play, Plus, Target } from 'lucide-react';
+import { CalendarPlus, Flame, Play, Plus, Target, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
-import { createRecord, updateRecord } from '../../core/repository';
+import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { scheduleActionOnCalendar } from '../../core/planActions';
 import { addDaysIso } from '../../core/temporal';
 import { createId } from '../../core/db';
@@ -108,7 +108,21 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
                     <strong>{g.title}</strong>
                     {g.payload.targetDate && <span className="dp-pill" style={{ marginInlineStart: 8 }}>Target: {g.payload.targetDate}</span>}
                   </div>
-                  <span className="dp-pill highlight">{pct}% ({doneCount}/{ms.length})</span>
+                  <div className="dp-row" style={{ gap: 6 }}>
+                    <span className="dp-pill highlight">{pct}% ({doneCount}/{ms.length})</span>
+                    <button
+                      type="button"
+                      className="dp-icon-btn"
+                      title="Move goal to Trash"
+                      aria-label={`Delete ${g.title}`}
+                      onClick={async () => {
+                        await softDeleteRecord(g.id);
+                        pushToast(`Moved goal "${g.title}" to Trash`, { canUndo: true });
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="dp-progress-track">
                   <div className="dp-progress-fill" style={{ width: `${pct}%` }} />
@@ -132,16 +146,32 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
                         />
                         <span style={{ textDecoration: m.done ? 'line-through' : undefined }}>{m.title}</span>
                       </label>
-                      <button
-                        type="button"
-                        className="dp-btn dp-btn-sm"
-                        onClick={async () => {
-                          await scheduleActionOnCalendar(g.id, activeDate, '14:00', 45, m.id);
-                          pushToast(`Time-blocked milestone "${m.title}" on ${activeDate}`, { canUndo: true });
-                        }}
-                      >
-                        <CalendarPlus size={13} /> Block Time
-                      </button>
+                      <div className="dp-row" style={{ gap: 4 }}>
+                        <button
+                          type="button"
+                          className="dp-btn dp-btn-sm"
+                          onClick={async () => {
+                            await scheduleActionOnCalendar(g.id, activeDate, '14:00', 45, m.id);
+                            pushToast(`Time-blocked milestone "${m.title}" on ${activeDate}`, { canUndo: true });
+                          }}
+                        >
+                          <CalendarPlus size={13} /> Block Time
+                        </button>
+                        <button
+                          type="button"
+                          className="dp-icon-btn"
+                          style={{ width: 24, height: 24 }}
+                          title="Delete milestone"
+                          onClick={() =>
+                            void updateRecord<GoalPayload>(g.id, (c) => ({
+                              ...c,
+                              payload: { ...c.payload, milestones: c.payload.milestones.filter((x) => x.id !== m.id) },
+                            }))
+                          }
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   <div className="dp-row">
@@ -211,8 +241,21 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
           <option value="weekly_target">Weekly Target (1–7)</option>
           <option value="selected_days">Selected Days</option>
         </select>
-        <input type="number" className="dp-input" style={{ width: 68 }} value={habitTargetQty} onChange={(e) => setHabitTargetQty(Number(e.target.value) || 1)} />
-        <input className="dp-input" style={{ width: 82 }} value={habitUnit} onChange={(e) => setHabitUnit(e.target.value)} placeholder="unit" />
+        <label className="dp-row" style={{ gap: 4 }}>
+          <span className="dp-muted" style={{ fontSize: '0.82rem' }}>Goal:</span>
+          <input type="number" min={1} className="dp-input" style={{ width: 68 }} value={habitTargetQty} onChange={(e) => setHabitTargetQty(Number(e.target.value) || 1)} />
+        </label>
+        <input list="dp-habit-units" className="dp-input" style={{ width: 96 }} value={habitUnit} onChange={(e) => setHabitUnit(e.target.value)} placeholder="unit…" aria-label="Habit unit" />
+        <datalist id="dp-habit-units">
+          <option value="min" />
+          <option value="hrs" />
+          <option value="pages" />
+          <option value="cups" />
+          <option value="steps" />
+          <option value="reps" />
+          <option value="miles" />
+          <option value="times" />
+        </datalist>
         <button type="submit" className="dp-btn dp-btn-primary">
           <Plus size={15} /> Add Habit
         </button>
@@ -224,10 +267,26 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
           return (
             <div key={h.id} className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>
               <div className="dp-between">
-                <strong>{h.title}</strong>
-                <div className="dp-row">
+                <strong>
+                  {h.title}{' '}
+                  <span className="dp-muted" style={{ fontSize: '0.8rem', fontWeight: 400 }}>
+                    ({h.payload.targetQuantity ?? 1} {h.payload.unit || 'times'})
+                  </span>
+                </strong>
+                <div className="dp-row" style={{ gap: 6 }}>
                   <span className="dp-pill highlight">🔥 {stats.streak}d streak</span>
                   <span className="dp-pill">28d consistency: {stats.consistency28}%</span>
+                  <button
+                    type="button"
+                    className="dp-icon-btn"
+                    title="Move habit to Trash"
+                    onClick={async () => {
+                      await softDeleteRecord(h.id);
+                      pushToast(`Moved habit "${h.title}" to Trash`, { canUndo: true });
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
               <div className="dp-row" style={{ gap: 6 }}>
@@ -303,13 +362,26 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
                   {steps.map((s) => `${s.name} (${s.minutes}m)`).join(' → ')}
                 </div>
               </div>
-              <button
-                type="button"
-                className="dp-btn dp-btn-primary dp-btn-sm"
-                onClick={() => void startCountdownTimer(rt.title, totalMin * 60, 'interval', rt.id)}
-              >
-                <Play size={13} /> Run ({totalMin}m)
-              </button>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-primary dp-btn-sm"
+                  onClick={() => void startCountdownTimer(rt.title, totalMin * 60, 'interval', rt.id)}
+                >
+                  <Play size={13} /> Run ({totalMin}m)
+                </button>
+                <button
+                  type="button"
+                  className="dp-icon-btn"
+                  title="Move routine to Trash"
+                  onClick={async () => {
+                    await softDeleteRecord(rt.id);
+                    pushToast(`Moved routine "${rt.title}" to Trash`, { canUndo: true });
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           );
         })}

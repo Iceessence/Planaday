@@ -50,12 +50,13 @@ const ALL_MORE_VIEWS: Array<[NavView, string]> = [
   ['rituals', 'Rituals & Contexts'],
   ['insights', 'Insights'],
   ['automations', 'Automations'],
+  ['guide', 'Guide & Help Docs'],
   ['trash', 'Trash (30d)'],
   ['settings', 'Settings & Themes'],
 ];
 
 export const MobileNav: React.FC = () => {
-  const { activeView, setActiveView, settings, setQuickCaptureOpen } = useApp();
+  const { activeView, setActiveView, openCustomTab, settings, setQuickCaptureOpen } = useApp();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const primaryTabs = settings.mobilePrimaryTabs.slice(0, 4);
@@ -98,6 +99,20 @@ export const MobileNav: React.FC = () => {
 
       <ModalDialog open={moreOpen} onClose={() => setMoreOpen(false)} title="All Planner Modules" sheet>
         <div className="dp-grid-2" style={{ gap: 8 }}>
+          {settings.customTabs.map((ct) => (
+            <button
+              key={ct.id}
+              type="button"
+              className="dp-btn"
+              style={{ justifyContent: 'flex-start', borderInlineStart: `3px solid ${ct.color}` }}
+              onClick={() => {
+                openCustomTab(ct.id);
+                setMoreOpen(false);
+              }}
+            >
+              {ct.emoji} {ct.name}
+            </button>
+          ))}
           {ALL_MORE_VIEWS.map(([v, label]) => (
             <button
               key={v}

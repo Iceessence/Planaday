@@ -62,6 +62,7 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
     // Click through sidebar views across all 5 phases + new History & All-in-One Scroll pages
     const viewsToCheck = [
       ['All-in-One Scroll', 'All-in-One Scroll'],
+      ['Home', "Today's Momentum"],
       ['History & Reviews', 'Completion History, Chore Punctuality'],
       ['Flow Calendar', 'Flow Calendar'],
       ['Tasks', 'Tasks & Nested Subtasks'],
@@ -75,6 +76,7 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
       ['Meal Planner', 'Weekly Meal Planner'],
       ['Groceries', 'Smart Aisle-Sorted Grocery List'],
       ['Automations', 'Local Automation Engine'],
+      ['Guide & Help', 'Where Do I Find'],
       ['Settings & Themes', 'Theme Studio Presets'],
       ['Trash (30d)', '30-Day Trash Bin'],
     ];

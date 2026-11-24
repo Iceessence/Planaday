@@ -65,9 +65,11 @@ export type NavView =
   | 'travel'
   | 'home_assets'
   | 'spaces'
+  | 'custom_tab'
   | 'insights'
   | 'rituals'
   | 'automations'
+  | 'guide'
   | 'trash'
   | 'settings';
 
@@ -151,6 +153,11 @@ export interface LifeRecord<P = any> {
   category?: string;
   color?: string;
   assigneeId?: string | null;
+  // Family Profile Ownership & Cross-Profile Sharing
+  ownerProfileId?: string | null;
+  sharedWithAll?: boolean;
+  sharedWithProfileIds?: string[];
+  isImportant?: boolean;
   tags: string[];
   links: EntityLink[];
   recurrence?: RecurrenceRule | null;
@@ -267,6 +274,7 @@ export interface CalendarEventPayload {
   icsUid?: string;
   actualStartTime?: string;
   actualEndTime?: string;
+  actualNote?: string;
   isActualLog?: boolean;
   retrospective?: EventRetrospective | null;
 }
@@ -452,7 +460,15 @@ export interface DecorItemPayload {
   widthPct?: number;
   heightPct?: number;
   stampText?: 'DONE' | 'PRIORITY' | 'MOVED' | 'CANCELED' | string;
-  inkPaths?: Array<{ color: string; width: number; highlighter?: boolean; points: Array<[number, number]> }>;
+  inkPaths?: Array<{
+    id?: string;
+    color: string;
+    width: number;
+    opacity?: number;
+    tool?: 'pen' | 'fine' | 'marker' | 'highlighter' | 'dashed';
+    highlighter?: boolean;
+    points: Array<[number, number]>;
+  }>;
 }
 
 export interface BlobRecord {
@@ -527,11 +543,81 @@ export interface WorkspaceProfile {
   color: string;
 }
 
+export interface FamilyProfile {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  role: 'parent' | 'member' | 'kid';
+}
+
+export interface EventCategoryDef {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+}
+
+export type ChimeStyle = 'soft' | 'bell' | 'marimba' | 'classic_alarm' | 'woodblock' | 'bright';
+
+export interface NotificationPreferences {
+  enabled: boolean;
+  soundEnabled: boolean;
+  osPushEnabled: boolean;
+  ntfyRelayEnabled: boolean;
+  volume: number; // 0..100
+  chimeStyle: ChimeStyle;
+  notifyTimers: boolean;
+  notifyAlarms: boolean;
+  notifyEvents: boolean;
+  eventLeadMinutes: number; // minutes before event start (0..180)
+  notifyChores: boolean;
+  choreReminderTime: string; // HH:MM daily chore digest/alert
+  notifyStopwatch: boolean;
+  stopwatchIntervalMin: number; // notify every N minutes during stopwatch (0 = off)
+}
+
+export type CustomWidgetType = 'events' | 'tasks' | 'chores' | 'note' | 'counters' | 'timers' | 'links';
+
+export interface CustomTabWidget {
+  id: string;
+  type: CustomWidgetType;
+  title: string;
+  filterCategory?: string;
+  filterRoom?: string;
+  filterTag?: string;
+  onlySharedImportant?: boolean;
+  noteContent?: string;
+  counters?: Array<{ id: string; label: string; value: number; target?: number }>;
+  timerPresets?: Array<{ label: string; seconds: number }>;
+  links?: Array<{ id: string; label: string; targetView?: NavView; url?: string }>;
+}
+
+export interface CustomTabDef {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  layout: 'grid' | 'single';
+  widgets: CustomTabWidget[];
+}
+
 export interface AppSettings {
   id: 'app-settings';
   deviceId: string;
   activeWorkspaceId: string;
   workspaces: WorkspaceProfile[];
+  // Family Member Profiles & Sharing
+  familyProfiles: FamilyProfile[];
+  activeProfileId: string; // 'all' for Combined Household or a specific FamilyProfile.id
+  // Selectable Event Categories
+  eventCategories: EventCategoryDef[];
+  // User-Created Sidebar Custom Tabs
+  customTabs: CustomTabDef[];
+  // Custom Branding & Deep Personalization
+  plannerTitle: string;
+  cardRadius: 'sharp' | 'soft' | 'cozy';
+  hiddenSidebarViews: NavView[];
   operatingMode: OperatingMode;
   syncServerUrl: string; // empty in pure offline mode, or e.g. "" (same-origin) / "http://192.168.1.50:3000"
   lastSyncSeq: number;
@@ -581,8 +667,9 @@ export interface AppSettings {
   aiEndpoint: string;
   aiApiKey: string;
   aiModel: string;
-  // Background alarm & timer push notifications (native Capacitor / Desktop / Docker ntfy)
+  // Background alarm, event, chore, stopwatch & timer notification controls
   notificationsEnabled: boolean;
+  notificationPrefs: NotificationPreferences;
   ntfyPushUrl: string; // e.g., https://ntfy.sh/my-private-dayplana-alerts
   // Keyboard shortcut overrides
   shortcuts: Record<string, string>;

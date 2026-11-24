@@ -88,12 +88,14 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             <input className="dp-input" style={{ flex: 2 }} placeholder="Trip destination…" value={tripTitle} onChange={(e) => setTripTitle(e.target.value)} />
             <input type="date" className="dp-input" style={{ width: 'auto' }} value={tripStart} onChange={(e) => setTripStart(e.target.value)} />
             <label className="dp-row">
-              <span className="dp-muted">Days:</span>
+              <span className="dp-muted">Duration:</span>
               <input type="number" min={1} max={60} className="dp-input" style={{ width: 64 }} value={tripDays} onChange={(e) => setTripDays(Number(e.target.value) || 3)} />
+              <span className="dp-muted">days</span>
             </label>
             <label className="dp-row">
-              <span className="dp-muted">People:</span>
+              <span className="dp-muted">Travelers:</span>
               <input type="number" min={1} max={12} className="dp-input" style={{ width: 60 }} value={tripTravelers} onChange={(e) => setTripTravelers(Number(e.target.value) || 1)} />
+              <span className="dp-muted">ppl</span>
             </label>
             <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm"><Plus size={14} /> Plan Trip</button>
           </div>
@@ -113,7 +115,12 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
               <div key={tr.id} className="dp-card dp-stack" style={{ padding: 14 }}>
                 <div className="dp-between">
                   <strong>✈️ {tr.title}</strong>
-                  <span className="dp-pill">{p.startDate} → {p.endDate} ({p.travelers} ppl)</span>
+                  <div className="dp-row" style={{ gap: 6 }}>
+                    <span className="dp-pill">{p.startDate} → {p.endDate} ({p.travelers} ppl)</span>
+                    <button type="button" className="dp-icon-btn" title="Delete trip" onClick={() => void softDeleteRecord(tr.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
                 <p className="dp-muted" style={{ margin: 0, fontSize: '0.84rem' }}>{p.itinerary}</p>
                 <div className="dp-stack" style={{ gap: 4 }}>
@@ -171,6 +178,9 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
                 <div className="dp-row">
                   <button type="button" className="dp-btn dp-btn-sm" onClick={() => void updateRecord(pt.id, (c) => ({ ...c, payload: { ...c.payload, guestCount: Math.max(1, p.guestCount - 1) } }))}>−1 Guest</button>
                   <button type="button" className="dp-btn dp-btn-sm" onClick={() => void updateRecord(pt.id, (c) => ({ ...c, payload: { ...c.payload, guestCount: p.guestCount + 1 } }))}>+1 Guest</button>
+                  <button type="button" className="dp-icon-btn" title="Delete party" onClick={() => void softDeleteRecord(pt.id)}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             );
@@ -209,8 +219,9 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <input className="dp-input" style={{ flex: 1 }} placeholder="Favorite coffee / food…" value={personCoffee} onChange={(e) => setPersonCoffee(e.target.value)} />
           <input className="dp-input" style={{ flex: 1 }} placeholder="Clothing / shoe sizes…" value={personSizes} onChange={(e) => setPersonSizes(e.target.value)} />
           <label className="dp-row">
-            <span className="dp-muted">Keep in touch (d):</span>
+            <span className="dp-muted">Keep in touch every:</span>
             <input type="number" min={1} max={365} className="dp-input" style={{ width: 64 }} value={personCadence} onChange={(e) => setPersonCadence(Number(e.target.value) || 14)} />
+            <span className="dp-muted">days</span>
           </label>
           <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm"><Plus size={14} /> Add Person</button>
         </form>
@@ -267,7 +278,10 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           >
             <input className="dp-input" style={{ flex: 2 }} placeholder="Gift idea…" value={giftIdea} onChange={(e) => setGiftIdea(e.target.value)} />
             <input className="dp-input" style={{ flex: 1 }} placeholder="For whom?" value={giftFor} onChange={(e) => setGiftFor(e.target.value)} />
-            <input type="number" className="dp-input" style={{ width: 84 }} value={giftBudget} onChange={(e) => setGiftBudget(Number(e.target.value) || 0)} />
+            <label className="dp-row" style={{ gap: 4 }}>
+              <span className="dp-muted">$</span>
+              <input type="number" className="dp-input" style={{ width: 84 }} value={giftBudget} onChange={(e) => setGiftBudget(Number(e.target.value) || 0)} />
+            </label>
             <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm">Add Gift</button>
           </form>
           {gifts.map((g) => {
@@ -277,13 +291,18 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             return (
               <div key={g.id} className="dp-between" style={{ padding: 8, background: 'var(--dp-surface-2)', borderRadius: 6 }}>
                 <span><strong>{g.title}</strong> for {p.recipient} (${p.budget})</span>
-                <button
-                  type="button"
-                  className="dp-btn dp-btn-sm"
-                  onClick={() => void updateRecord(g.id, (c) => ({ ...c, payload: { ...c.payload, stage: nextStage } }))}
-                >
-                  Stage: {p.stage} → {nextStage}
-                </button>
+                <div className="dp-row" style={{ gap: 6 }}>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => void updateRecord(g.id, (c) => ({ ...c, payload: { ...c.payload, stage: nextStage } }))}
+                  >
+                    Stage: {p.stage} → {nextStage}
+                  </button>
+                  <button type="button" className="dp-icon-btn" title="Delete gift idea" onClick={() => void softDeleteRecord(g.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -353,7 +372,12 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           {storageItems.map((si) => (
             <div key={si.id} className="dp-between" style={{ fontSize: '0.86rem' }}>
               <strong>{si.title}</strong>
-              <span className="dp-pill highlight">📦 {String((si.payload as { binLocation?: string }).binLocation)}</span>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <span className="dp-pill highlight">📦 {String((si.payload as { binLocation?: string }).binLocation)}</span>
+                <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete storage item" onClick={() => void softDeleteRecord(si.id)}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -379,7 +403,12 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           {homeAssets.map((a) => (
             <div key={a.id} className="dp-between" style={{ fontSize: '0.86rem' }}>
               <strong>{a.title}</strong>
-              <span className="dp-muted">{String((a.payload as { modelNumber?: string }).modelNumber || '')}</span>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <span className="dp-muted">{String((a.payload as { modelNumber?: string }).modelNumber || '')}</span>
+                <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete home asset" onClick={() => void softDeleteRecord(a.id)}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -398,7 +427,10 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             }}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Vehicle (e.g., Subaru Outback)" value={vehicleName} onChange={(e) => setVehicleName(e.target.value)} />
-            <input type="number" className="dp-input" style={{ width: 100 }} value={vehicleMileage} onChange={(e) => setVehicleMileage(Number(e.target.value) || 0)} />
+            <label className="dp-row" style={{ gap: 4 }}>
+              <input type="number" className="dp-input" style={{ width: 96 }} value={vehicleMileage} onChange={(e) => setVehicleMileage(Number(e.target.value) || 0)} />
+              <span className="dp-muted">mi</span>
+            </label>
             <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm">Save</button>
           </form>
           {vehicles.map((v) => {
@@ -406,7 +438,12 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             return (
               <div key={v.id} className="dp-between" style={{ fontSize: '0.86rem' }}>
                 <strong>{v.title}</strong>
-                <span className="dp-pill">{p.mileage.toLocaleString()} mi · Next oil: {p.nextOilChangeMileage.toLocaleString()} mi</span>
+                <div className="dp-row" style={{ gap: 6 }}>
+                  <span className="dp-pill">{p.mileage.toLocaleString()} mi · Next oil: {p.nextOilChangeMileage.toLocaleString()} mi</span>
+                  <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete vehicle" onClick={() => void softDeleteRecord(v.id)}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -433,7 +470,12 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           {petsPlants.map((pp) => (
             <div key={pp.id} className="dp-between" style={{ fontSize: '0.86rem' }}>
               <strong>{pp.title}</strong>
-              <span className="dp-muted">{String((pp.payload as { careNotes?: string }).careNotes || '')}</span>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <span className="dp-muted">{String((pp.payload as { careNotes?: string }).careNotes || '')}</span>
+                <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete care card" onClick={() => void softDeleteRecord(pp.id)}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

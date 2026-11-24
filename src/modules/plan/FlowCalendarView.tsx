@@ -45,7 +45,7 @@ const EVENT_TEMPLATES = [
 const ZOOM_STEPS = [5, 10, 15, 30, 60] as const;
 
 export const FlowCalendarView: React.FC = () => {
-  const { settings, records, activeDate, setActiveDate, logicalToday, pushToast, selectedEventId, setSelectedEventId } = useApp();
+  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, selectedEventId, setSelectedEventId } = useApp();
 
   // Range, positioning, zoom & 4-mode overlap state (Sections 07.01, 07.02)
   const [rangeDays, setRangeDays] = useState<number>(7);
@@ -86,6 +86,13 @@ export const FlowCalendarView: React.FC = () => {
   const [recurWeekdays, setRecurWeekdays] = useState<number[]>([1, 3, 5]);
   const [recurSkipWeekends, setRecurSkipWeekends] = useState(false);
   const [recurUntil, setRecurUntil] = useState('');
+  const [reminderLeadMin, setReminderLeadMin] = useState<number>(settings.notificationPrefs.eventLeadMinutes);
+  const [sharedWithAll, setSharedWithAll] = useState(false);
+  const [sharedWithProfileIds, setSharedWithProfileIds] = useState<string[]>([]);
+  const [isImportant, setIsImportant] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatEmoji, setNewCatEmoji] = useState('🏷️');
+  const [showAddCat, setShowAddCat] = useState(false);
 
   // Recurring Scope Prompt Modal (Section 08.03)
   const [pendingScopeEdit, setPendingScopeEdit] = useState<{
@@ -207,6 +214,11 @@ export const FlowCalendarView: React.FC = () => {
     setRecurInterval(1);
     setRecurSkipWeekends(false);
     setRecurUntil('');
+    setReminderLeadMin(settings.notificationPrefs.eventLeadMinutes);
+    setSharedWithAll(false);
+    setSharedWithProfileIds([]);
+    setIsImportant(false);
+    setShowAddCat(false);
     setEditorOpen(true);
   };
 
@@ -238,6 +250,11 @@ export const FlowCalendarView: React.FC = () => {
     setRecurWeekdays(ev.recurrence?.byWeekday ?? [1, 3, 5]);
     setRecurSkipWeekends(Boolean(ev.recurrence?.skipWeekends));
     setRecurUntil(ev.recurrence?.until ?? '');
+    setReminderLeadMin(ev.payload.remindersMin?.[0] ?? settings.notificationPrefs.eventLeadMinutes);
+    setSharedWithAll(Boolean(ev.sharedWithAll));
+    setSharedWithProfileIds(ev.sharedWithProfileIds ?? []);
+    setIsImportant(Boolean(ev.isImportant));
+    setShowAddCat(false);
     setEditorOpen(true);
   };
 
@@ -296,6 +313,7 @@ export const FlowCalendarView: React.FC = () => {
       location: location.trim() || undefined,
       url: url.trim() || undefined,
       notes: notes.trim() || undefined,
+      remindersMin: reminderLeadMin >= 0 ? [reminderLeadMin] : [],
       buffers:
         prepMin || travelMin || decompressMin
           ? { prepMin: prepMin || undefined, travelMin: travelMin || undefined, decompressMin: decompressMin || undefined }
@@ -311,7 +329,16 @@ export const FlowCalendarView: React.FC = () => {
       }
       await updateRecord<CalendarEventPayload>(
         editingId,
-        { title: title.trim(), color, category, recurrence: builtRecurrence, payload },
+        {
+          title: title.trim(),
+          color,
+          category,
+          recurrence: builtRecurrence,
+          sharedWithAll,
+          sharedWithProfileIds,
+          isImportant,
+          payload,
+        },
         { undoLabel: `Updated event "${title.trim()}"` }
       );
       pushToast(`Saved "${title.trim()}"`, { canUndo: true });
@@ -320,6 +347,9 @@ export const FlowCalendarView: React.FC = () => {
         color,
         category,
         recurrence: builtRecurrence,
+        sharedWithAll,
+        sharedWithProfileIds,
+        isImportant,
       });
       pushToast(`Created event "${title.trim()}"`, { canUndo: true });
     }
@@ -799,8 +829,10 @@ export const FlowCalendarView: React.FC = () => {
                         >
                           <div className="dp-between" style={{ gap: 4 }}>
                             <strong style={{ textDecoration: pos.event.status === 'done' ? 'line-through' : undefined }}>
+                              {pos.event.isImportant ? '★ ' : ''}
                               {pos.event.payload.emoji ? `${pos.event.payload.emoji} ` : ''}
                               {pos.event.title}
+                              {(pos.event.sharedWithAll || (pos.event.sharedWithProfileIds?.length ?? 0) > 0) ? ' 🏡' : ''}
                             </strong>
                             {pos.event.payload.linkedActionId && (
                               <input
@@ -999,13 +1031,161 @@ export const FlowCalendarView: React.FC = () => {
             </div>
           )}
 
+          {/* Visual Selectable Event Category Chips + Custom Category Creator */}
+          <div className="dp-stack" style={{ gap: 6 }}>
+            <div className="dp-between">
+              <span className="dp-muted" style={{ fontSize: '0.82rem' }}>Category (pick a preset below or type any custom category)</span>
+              <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" onClick={() => setShowAddCat((v) => !v)}>
+                + Save New Preset
+              </button>
+            </div>
+            <input
+              list="dp-event-cats"
+              className="dp-input"
+              placeholder="Pick or type any category…"
+              value={category}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCategory(val);
+                const match = settings.eventCategories.find((c) => c.name.toLowerCase() === val.toLowerCase());
+                if (match) {
+                  setColor(match.color);
+                  setEmoji(match.emoji);
+                }
+              }}
+            />
+            <datalist id="dp-event-cats">
+              {settings.eventCategories.map((c) => <option key={c.id} value={c.name} />)}
+            </datalist>
+            <div className="dp-row" style={{ gap: 5 }}>
+              {settings.eventCategories.map((cat) => {
+                const active = category === cat.name;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`dp-btn dp-btn-sm ${active ? 'dp-btn-primary' : ''}`}
+                    style={
+                      active
+                        ? { background: cat.color, borderColor: cat.color, color: '#fff' }
+                        : { borderInlineStart: `3px solid ${cat.color}` }
+                    }
+                    onClick={() => {
+                      setCategory(cat.name);
+                      setColor(cat.color);
+                      setEmoji(cat.emoji);
+                    }}
+                  >
+                    {cat.emoji} {cat.name}
+                  </button>
+                );
+              })}
+            </div>
+            {showAddCat && (
+              <div className="dp-row" style={{ gap: 6 }}>
+                <input
+                  className="dp-input"
+                  style={{ width: 52, textAlign: 'center' }}
+                  value={newCatEmoji}
+                  onChange={(e) => setNewCatEmoji(e.target.value)}
+                  aria-label="Category emoji"
+                />
+                <input
+                  className="dp-input"
+                  style={{ flex: 1 }}
+                  placeholder="New category name (e.g., Kids Sports)…"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-primary dp-btn-sm"
+                  onClick={() => {
+                    const nm = newCatName.trim();
+                    if (!nm) return;
+                    const created = {
+                      id: `cat_${Date.now().toString(36)}`,
+                      name: nm,
+                      emoji: newCatEmoji.trim() || '🏷️',
+                      color,
+                    };
+                    void patchSettings({ eventCategories: [...settings.eventCategories, created] });
+                    setCategory(created.name);
+                    setEmoji(created.emoji);
+                    setNewCatName('');
+                    setShowAddCat(false);
+                    pushToast(`Added category "${created.name}"`);
+                  }}
+                >
+                  Save Category
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="dp-row">
-            <input className="dp-input" style={{ flex: 1 }} placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
-            <input type="color" aria-label="Event color" value={color} onChange={(e) => setColor(e.target.value)} />
+            <label className="dp-row" style={{ gap: 5, fontSize: '0.84rem' }}>
+              <span className="dp-muted">Color:</span>
+              <input type="color" aria-label="Event color" value={color} onChange={(e) => setColor(e.target.value)} />
+            </label>
+            <label className="dp-row" style={{ gap: 5, fontSize: '0.84rem' }}>
+              <span className="dp-muted">Remind:</span>
+              <select
+                aria-label="Event notification lead time"
+                className="dp-select"
+                style={{ width: 'auto', padding: '3px 8px' }}
+                value={reminderLeadMin}
+                onChange={(e) => setReminderLeadMin(Number(e.target.value))}
+              >
+                <option value={-1}>No reminder</option>
+                <option value={0}>At start time</option>
+                <option value={5}>5 min before</option>
+                <option value={10}>10 min before</option>
+                <option value={15}>15 min before</option>
+                <option value={30}>30 min before</option>
+                <option value={60}>1 hour before</option>
+              </select>
+            </label>
             <label className="dp-row">
               <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
               <span>All-day</span>
             </label>
+          </div>
+
+          {/* Family Sharing & Important Notice Controls */}
+          <div className="dp-card dp-stack" style={{ padding: 10, gap: 6, background: 'var(--dp-surface-2)' }}>
+            <div className="dp-row" style={{ gap: 12 }}>
+              <label className="dp-row" style={{ fontSize: '0.84rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={sharedWithAll} onChange={(e) => setSharedWithAll(e.target.checked)} />
+                <span>🏡 Share with Everyone (Family)</span>
+              </label>
+              <label className="dp-row" style={{ fontSize: '0.84rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={isImportant} onChange={(e) => setIsImportant(e.target.checked)} />
+                <span>★ Mark Important Notice</span>
+              </label>
+            </div>
+            {!sharedWithAll && settings.familyProfiles.length > 1 && (
+              <div className="dp-row" style={{ gap: 6, fontSize: '0.8rem' }}>
+                <span className="dp-muted">Or share with specific members:</span>
+                {settings.familyProfiles.map((prof) => {
+                  const checked = sharedWithProfileIds.includes(prof.id);
+                  return (
+                    <label key={prof.id} className="dp-row" style={{ gap: 4, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setSharedWithProfileIds((prev) =>
+                            e.target.checked ? [...prev, prof.id] : prev.filter((id) => id !== prof.id)
+                          )
+                        }
+                      />
+                      <span>{prof.emoji} {prof.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Progressive Disclosure: Advanced Fields Behind More Options */}

@@ -17,23 +17,66 @@ class OfflineAudioEngine {
     return this.ctx;
   }
 
-  public playChime(type: 'soft' | 'bell' | 'complete' = 'soft', volume = 0.25) {
+  public playChime(
+    type: 'soft' | 'bell' | 'complete' | 'marimba' | 'classic_alarm' | 'woodblock' | 'bright' = 'soft',
+    volume = 0.45
+  ) {
     const ctx = this.ensureContext();
     if (!ctx) return;
+    const clampedVol = Math.max(0.01, Math.min(1, volume));
     const now = ctx.currentTime;
-    const notes = type === 'complete' ? [523.25, 659.25, 783.99] : type === 'bell' ? [880, 660] : [587.33];
-    notes.forEach((freq, idx) => {
+
+    type ToneDef = { freq: number; delay: number; dur: number; wave: OscillatorType };
+    const patterns: Record<string, ToneDef[]> = {
+      soft: [{ freq: 587.33, delay: 0, dur: 0.55, wave: 'sine' }],
+      bell: [
+        { freq: 880, delay: 0, dur: 0.55, wave: 'sine' },
+        { freq: 659.25, delay: 0.14, dur: 0.65, wave: 'sine' },
+      ],
+      complete: [
+        { freq: 523.25, delay: 0, dur: 0.4, wave: 'sine' },
+        { freq: 659.25, delay: 0.12, dur: 0.4, wave: 'sine' },
+        { freq: 783.99, delay: 0.24, dur: 0.65, wave: 'sine' },
+      ],
+      marimba: [
+        { freq: 440, delay: 0, dur: 0.28, wave: 'triangle' },
+        { freq: 554.37, delay: 0.11, dur: 0.28, wave: 'triangle' },
+        { freq: 659.25, delay: 0.22, dur: 0.35, wave: 'triangle' },
+        { freq: 880, delay: 0.34, dur: 0.55, wave: 'triangle' },
+      ],
+      classic_alarm: [
+        { freq: 920, delay: 0, dur: 0.14, wave: 'square' },
+        { freq: 920, delay: 0.18, dur: 0.14, wave: 'square' },
+        { freq: 920, delay: 0.36, dur: 0.14, wave: 'square' },
+        { freq: 920, delay: 0.64, dur: 0.14, wave: 'square' },
+        { freq: 920, delay: 0.82, dur: 0.14, wave: 'square' },
+      ],
+      woodblock: [
+        { freq: 760, delay: 0, dur: 0.11, wave: 'triangle' },
+        { freq: 1020, delay: 0.14, dur: 0.13, wave: 'triangle' },
+      ],
+      bright: [
+        { freq: 659.25, delay: 0, dur: 0.22, wave: 'sine' },
+        { freq: 880, delay: 0.11, dur: 0.22, wave: 'sine' },
+        { freq: 1174.66, delay: 0.22, dur: 0.55, wave: 'sine' },
+      ],
+    };
+
+    const notes = patterns[type] ?? patterns.bell;
+    notes.forEach(({ freq, delay, dur, wave }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + idx * 0.12);
-      gain.gain.setValueAtTime(0.001, now + idx * 0.12);
-      gain.gain.exponentialRampToValueAtTime(volume, now + idx * 0.12 + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.12 + 0.55);
+      osc.type = wave;
+      // Attenuate square waves slightly so 100% alarm stays clean without harsh clipping
+      const peakGain = wave === 'square' ? clampedVol * 0.38 : clampedVol * 0.72;
+      osc.frequency.setValueAtTime(freq, now + delay);
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.005, peakGain), now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(now + idx * 0.12);
-      osc.stop(now + idx * 0.12 + 0.6);
+      osc.start(now + delay);
+      osc.stop(now + delay + dur + 0.04);
     });
   }
 

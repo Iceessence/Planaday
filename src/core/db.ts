@@ -2,8 +2,11 @@ import Dexie, { type Table } from 'dexie';
 import type {
   AppSettings,
   BlobRecord,
+  EventCategoryDef,
+  FamilyProfile,
   LifeRecord,
   ModuleId,
+  NotificationPreferences,
   OutboxOp,
   RevisionRecord,
   SyncConflict,
@@ -74,6 +77,41 @@ export const DEFAULT_ENABLED_MODULES: Record<ModuleId, boolean> = {
   ai: false,
 };
 
+export const DEFAULT_EVENT_CATEGORIES: EventCategoryDef[] = [
+  { id: 'cat_work', name: 'Work & Focus', emoji: '💼', color: '#3b6ea5' },
+  { id: 'cat_personal', name: 'Personal', emoji: '🌿', color: '#4f7a65' },
+  { id: 'cat_family', name: 'Family', emoji: '🏡', color: '#c96f53' },
+  { id: 'cat_health', name: 'Health & Medical', emoji: '🩺', color: '#b5453a' },
+  { id: 'cat_errands', name: 'Errands & Shopping', emoji: '🛒', color: '#b47438' },
+  { id: 'cat_social', name: 'Social & Dining', emoji: '🍽️', color: '#d47c8e' },
+  { id: 'cat_chores', name: 'Chores & Home', emoji: '🧹', color: '#6b8e4e' },
+  { id: 'cat_study', name: 'School & Learning', emoji: '📚', color: '#6b5ca5' },
+  { id: 'cat_fitness', name: 'Fitness & Sports', emoji: '🏋️', color: '#2f7a78' },
+  { id: 'cat_travel', name: 'Travel & Transit', emoji: '✈️', color: '#4c759a' },
+  { id: 'cat_finance', name: 'Bills & Finance', emoji: '💳', color: '#8f6c3e' },
+];
+
+export const DEFAULT_FAMILY_PROFILES: FamilyProfile[] = [
+  { id: 'prof_me', name: 'Me (Primary)', emoji: '🧑', color: '#a97434', role: 'parent' },
+];
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
+  enabled: true,
+  soundEnabled: true,
+  osPushEnabled: true,
+  ntfyRelayEnabled: true,
+  volume: 75,
+  chimeStyle: 'bell',
+  notifyTimers: true,
+  notifyAlarms: true,
+  notifyEvents: true,
+  eventLeadMinutes: 15,
+  notifyChores: true,
+  choreReminderTime: '09:00',
+  notifyStopwatch: true,
+  stopwatchIntervalMin: 15,
+};
+
 export function createDefaultSettings(): AppSettings {
   const defaultTheme = THEME_PRESETS[0];
   const isLikelyServerOrigin =
@@ -89,6 +127,13 @@ export function createDefaultSettings(): AppSettings {
       { id: 'ws_work', name: 'Work', emoji: '💼', color: '#3b6ea5' },
       { id: 'ws_home', name: 'Home & Family', emoji: '🏡', color: '#b47438' },
     ],
+    familyProfiles: [...DEFAULT_FAMILY_PROFILES],
+    activeProfileId: 'all',
+    eventCategories: [...DEFAULT_EVENT_CATEGORIES],
+    customTabs: [],
+    plannerTitle: 'Dayplana',
+    cardRadius: 'soft',
+    hiddenSidebarViews: [],
     operatingMode: isLikelyServerOrigin ? 'docker-sync' : 'offline-computer',
     syncServerUrl: '', // same origin when served from Docker; editable for LAN/Tailscale URL
     lastSyncSeq: 0,
@@ -134,6 +179,7 @@ export function createDefaultSettings(): AppSettings {
     aiApiKey: '',
     aiModel: 'llama3.2',
     notificationsEnabled: true,
+    notificationPrefs: { ...DEFAULT_NOTIFICATION_PREFS },
     ntfyPushUrl: '',
     shortcuts: {
       commandPalette: 'Mod+K',
@@ -152,10 +198,28 @@ export function createDefaultSettings(): AppSettings {
 
 export async function getOrInitSettings(): Promise<AppSettings> {
   const existing = await db.settings.get('app-settings');
-  if (existing) return existing;
-  const fresh = createDefaultSettings();
-  await db.settings.put(fresh);
-  return fresh;
+  const defaults = createDefaultSettings();
+  if (existing) {
+    // Gracefully backfill newly added personalization/profile/notification fields for existing installs
+    const merged: AppSettings = {
+      ...defaults,
+      ...existing,
+      familyProfiles: existing.familyProfiles?.length ? existing.familyProfiles : defaults.familyProfiles,
+      activeProfileId: existing.activeProfileId || 'all',
+      eventCategories: existing.eventCategories?.length ? existing.eventCategories : defaults.eventCategories,
+      customTabs: Array.isArray(existing.customTabs) ? existing.customTabs : [],
+      plannerTitle: existing.plannerTitle || 'Dayplana',
+      cardRadius: existing.cardRadius || 'soft',
+      hiddenSidebarViews: Array.isArray(existing.hiddenSidebarViews) ? existing.hiddenSidebarViews : [],
+      notificationPrefs: {
+        ...defaults.notificationPrefs,
+        ...(existing.notificationPrefs ?? {}),
+      },
+    };
+    return merged;
+  }
+  await db.settings.put(defaults);
+  return defaults;
 }
 
 export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {

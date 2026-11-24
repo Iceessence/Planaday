@@ -29,7 +29,17 @@ import {
   fireLocalAlert,
   scheduleNativeNotification,
 } from './nativeAlarms';
-import type { AppSettings, LifeRecord, ModuleId, NavView, SyncConflict } from './types';
+import { timeToMinutes } from './planActions';
+import { expandRecurrenceDates } from './recurrence';
+import type {
+  AppSettings,
+  CalendarEventPayload,
+  ChorePayload,
+  LifeRecord,
+  ModuleId,
+  NavView,
+  SyncConflict,
+} from './types';
 
 export interface ToastItem {
   id: string;
@@ -49,6 +59,16 @@ export interface RunningTimer {
   startedAtIso: string;
 }
 
+export function isRecordVisibleForProfile(record: LifeRecord, activeProfileId: string): boolean {
+  if (!activeProfileId || activeProfileId === 'all') return true;
+  if (!record.ownerProfileId) return true; // shared household / legacy records stay visible
+  if (record.ownerProfileId === activeProfileId) return true;
+  if (record.sharedWithAll) return true;
+  if (record.sharedWithProfileIds?.includes(activeProfileId)) return true;
+  if (record.assigneeId === activeProfileId) return true;
+  return false;
+}
+
 interface AppContextValue {
   ready: boolean;
   settings: AppSettings;
@@ -58,7 +78,10 @@ interface AppContextValue {
   setActiveDate: (dateIso: string) => void;
   activeView: NavView;
   setActiveView: (view: NavView) => void;
+  activeCustomTabId: string | null;
+  openCustomTab: (tabId: string) => void;
   records: LifeRecord[];
+  allWorkspaceRecords: LifeRecord[];
   allRecordsIncludingTrash: LifeRecord[];
   trashedRecords: LifeRecord[];
   openConflicts: SyncConflict[];
@@ -95,6 +118,11 @@ interface AppContextValue {
   openEventInCalendar: (eventId: string, dateIso?: string) => void;
   canInstallPwa: boolean;
   triggerInstallPwa: () => Promise<boolean>;
+  notifyUser: (
+    kind: 'timer' | 'alarm' | 'event' | 'chore' | 'stopwatch',
+    title: string,
+    body: string
+  ) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -122,6 +150,16 @@ export function applySettingsToDocument(settings: AppSettings) {
   root.style.setProperty('--dp-font-size', `${Math.max(12, Math.min(24, settings.fontSizePx))}px`);
   root.style.setProperty('--dp-line-height', String(settings.lineHeight));
 
+  const radiusMap = {
+    sharp: ['3px', '5px', '8px'],
+    soft: ['6px', '11px', '16px'],
+    cozy: ['12px', '18px', '24px'],
+  };
+  const [rSm, rMd, rLg] = radiusMap[settings.cardRadius ?? 'soft'] ?? radiusMap.soft;
+  root.style.setProperty('--dp-radius-sm', rSm);
+  root.style.setProperty('--dp-radius-md', rMd);
+  root.style.setProperty('--dp-radius-lg', rLg);
+
   root.dataset.colorScheme = settings.colorScheme;
   root.dataset.fontPairing = settings.fontPairing;
   root.dataset.density = settings.density;
@@ -135,6 +173,7 @@ export function applySettingsToDocument(settings: AppSettings) {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ready, setReady] = useState(false);
   const [activeView, setActiveView] = useState<NavView>('today');
+  const [activeCustomTabId, setActiveCustomTabId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
@@ -155,7 +194,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const liveSettings = useLiveQuery(() => db.settings.get('app-settings'), []);
-  const settings = useMemo(() => liveSettings ?? createDefaultSettings(), [liveSettings]);
+  const settings = useMemo<AppSettings>(() => {
+    const defaults = createDefaultSettings();
+    if (!liveSettings) return defaults;
+    return {
+      ...defaults,
+      ...liveSettings,
+      familyProfiles: liveSettings.familyProfiles?.length ? liveSettings.familyProfiles : defaults.familyProfiles,
+      activeProfileId: liveSettings.activeProfileId || 'all',
+      eventCategories: liveSettings.eventCategories?.length ? liveSettings.eventCategories : defaults.eventCategories,
+      customTabs: Array.isArray(liveSettings.customTabs) ? liveSettings.customTabs : [],
+      plannerTitle: liveSettings.plannerTitle || 'Dayplana',
+      cardRadius: liveSettings.cardRadius || 'soft',
+      hiddenSidebarViews: Array.isArray(liveSettings.hiddenSidebarViews) ? liveSettings.hiddenSidebarViews : [],
+      notificationPrefs: {
+        ...defaults.notificationPrefs,
+        ...(liveSettings.notificationPrefs ?? {}),
+      },
+    };
+  }, [liveSettings]);
 
   const [logicalToday, setLogicalToday] = useState<string>(() =>
     computeLogicalDateIso(Date.now(), settings.dayBoundaryHour, settings.defaultTimeZone)
@@ -185,7 +242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Recompute logicalToday dynamically on timer tick, focus, and visibilitychange (NEVER frozen at boot — 05.01)
+  // Recompute logicalToday dynamically on timer tick, focus, and visibilitychange
   useEffect(() => {
     const recompute = () => {
       const next = computeLogicalDateIso(Date.now(), settings.dayBoundaryHour, settings.defaultTimeZone);
@@ -236,7 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const allRecordsIncludingTrash = useLiveQuery(() => db.records.toArray(), []) ?? [];
   const openConflicts = useLiveQuery(() => db.syncConflicts.filter((c) => !c.resolved).toArray(), []) ?? [];
 
-  const records = useMemo(
+  const allWorkspaceRecords = useMemo(
     () =>
       allRecordsIncludingTrash.filter(
         (r) => !r.deletedAt && r.workspaceId === settings.activeWorkspaceId
@@ -244,12 +301,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [allRecordsIncludingTrash, settings.activeWorkspaceId]
   );
 
+  // Respect active Family Member Profile (shows member's own items + shared/important household items)
+  const records = useMemo(
+    () => allWorkspaceRecords.filter((r) => isRecordVisibleForProfile(r, settings.activeProfileId)),
+    [allWorkspaceRecords, settings.activeProfileId]
+  );
+
   const trashedRecords = useMemo(
     () => allRecordsIncludingTrash.filter((r) => Boolean(r.deletedAt)),
     [allRecordsIncludingTrash]
   );
 
-  // Timers persisted in IndexedDB so concurrent countdowns reconstruct accurately across reload (10.03)
+  // Timers persisted in IndexedDB so concurrent countdowns reconstruct accurately across reload
   const runningTimers = useMemo<RunningTimer[]>(() => {
     return allRecordsIncludingTrash
       .filter((r) => r.type === 'timer' && !r.deletedAt && r.status === 'active')
@@ -279,6 +342,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const notifyUser = useCallback(
+    (kind: 'timer' | 'alarm' | 'event' | 'chore' | 'stopwatch', title: string, body: string) => {
+      const prefs = settings.notificationPrefs;
+      if (!settings.notificationsEnabled || !prefs.enabled) return;
+      if (kind === 'timer' && !prefs.notifyTimers) return;
+      if (kind === 'alarm' && !prefs.notifyAlarms) return;
+      if (kind === 'event' && !prefs.notifyEvents) return;
+      if (kind === 'chore' && !prefs.notifyChores) return;
+      if (kind === 'stopwatch' && !prefs.notifyStopwatch) return;
+
+      fireLocalAlert(title, body, prefs.chimeStyle, prefs);
+      pushToast(`🔔 ${title}: ${body}`);
+    },
+    [settings.notificationsEnabled, settings.notificationPrefs, pushToast]
+  );
 
   const patchSettings = useCallback(async (patch: Partial<AppSettings>) => {
     const next = await updateSettings(patch);
@@ -350,14 +429,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: nowIso,
         attempts: 0,
       });
-      await scheduleNativeNotification(id, `Timer Done: ${label}`, `Your Dayplana timer "${label}" finished!`, targetEndMs);
+      if (settings.notificationPrefs.enabled && settings.notificationPrefs.notifyTimers) {
+        await scheduleNativeNotification(id, `Timer Done: ${label}`, `Your Dayplana timer "${label}" finished!`, targetEndMs);
+      }
       const mins = Math.floor(safeSec / 60);
       const secs = safeSec % 60;
       const fmt = mins > 0 ? `${mins}m${secs ? ` ${secs}s` : ''}` : `${secs}s`;
       pushToast(`Started timer: ${label} (${fmt})`);
       return id;
     },
-    [settings.activeWorkspaceId, settings.deviceId, pushToast]
+    [settings.activeWorkspaceId, settings.deviceId, settings.notificationPrefs.enabled, settings.notificationPrefs.notifyTimers, pushToast]
   );
 
   const toggleTimerPause = useCallback(async (timerId: string) => {
@@ -435,42 +516,167 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [logicalToday]);
 
-  // Live watcher: fires chime + OS notification when any active countdown hits 00:00 or enabled Alarm hits HH:MM
+  // Live Notification Engine: Timers, Smart Alarms, Upcoming Calendar Events (with custom lead time), & Due Chores!
   useEffect(() => {
     const id = window.setInterval(() => {
+      const prefs = settings.notificationPrefs;
+      if (!settings.notificationsEnabled || !prefs.enabled) return;
+
       const nowMs = Date.now();
-      for (const t of runningTimers) {
-        if (t.targetEndMs !== null && t.targetEndMs <= nowMs && nowMs - t.targetEndMs < 15000) {
-          const key = `tmr:${t.id}:${t.targetEndMs}`;
-          if (!firedAlertsRef.current.has(key)) {
-            firedAlertsRef.current.add(key);
-            fireLocalAlert(`Timer Finished: ${t.label}`, 'Tap to stop or add time in Dayplana.', 'complete');
-            pushToast(`⏰ Timer finished: ${t.label}`);
+      const d = new Date(nowMs);
+      const nowMin = d.getHours() * 60 + d.getMinutes();
+      const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+      // 1. Timers
+      if (prefs.notifyTimers) {
+        for (const t of runningTimers) {
+          if (t.targetEndMs !== null && t.targetEndMs <= nowMs && nowMs - t.targetEndMs < 15000) {
+            const key = `tmr:${t.id}:${t.targetEndMs}`;
+            if (!firedAlertsRef.current.has(key)) {
+              firedAlertsRef.current.add(key);
+              notifyUser('timer', `Timer Finished: ${t.label}`, 'Tap to stop or add time in Dayplana.');
+            }
           }
         }
       }
-      const d = new Date(nowMs);
-      const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
-      for (const a of alarms) {
-        const p = a.payload as { time?: string; enabled?: boolean; skipNext?: boolean };
-        if (p.enabled && !p.skipNext && p.time === hhmm) {
-          const key = `alm:${a.id}:${logicalToday}:${hhmm}`;
-          if (!firedAlertsRef.current.has(key)) {
+
+      // 2. Smart Alarms
+      if (prefs.notifyAlarms) {
+        const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
+        for (const a of alarms) {
+          const p = a.payload as { time?: string; enabled?: boolean; skipNext?: boolean };
+          if (p.enabled && !p.skipNext && p.time === hhmm) {
+            const key = `alm:${a.id}:${logicalToday}:${hhmm}`;
+            if (!firedAlertsRef.current.has(key)) {
+              firedAlertsRef.current.add(key);
+              notifyUser('alarm', `Alarm: ${a.title}`, `Alarm ringing at ${hhmm}`);
+            }
+          }
+        }
+      }
+
+      // 3. Upcoming Calendar Events (custom lead time before start)
+      if (prefs.notifyEvents) {
+        const events = records.filter((r) => r.type === 'event' && r.status === 'active') as Array<
+          LifeRecord<CalendarEventPayload>
+        >;
+        for (const ev of events) {
+          if (ev.payload.allDay || !ev.payload.startTime) continue;
+          const isToday = ev.recurrence
+            ? expandRecurrenceDates(ev.payload.startDate, ev.recurrence, {
+                rangeStart: logicalToday,
+                rangeEnd: logicalToday,
+                maxCount: 1,
+              }).length > 0
+            : ev.payload.startDate === logicalToday;
+          if (!isToday) continue;
+
+          const startMin = timeToMinutes(ev.payload.startTime);
+          const leads = ev.payload.remindersMin?.length ? ev.payload.remindersMin : [prefs.eventLeadMinutes];
+          for (const lead of leads) {
+            if (startMin - lead === nowMin) {
+              const key = `ev:${ev.id}:${logicalToday}:${lead}`;
+              if (!firedAlertsRef.current.has(key)) {
+                firedAlertsRef.current.add(key);
+                const whenText = lead === 0 ? 'starting now' : `starts in ${lead}m (${ev.payload.startTime})`;
+                notifyUser(
+                  'event',
+                  `Upcoming Event: ${ev.title}`,
+                  `${whenText}${ev.payload.location ? ` · ${ev.payload.location}` : ''}`
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Daily Chore Reminder Digest
+      if (prefs.notifyChores && hhmm === prefs.choreReminderTime) {
+        const key = `chores:${logicalToday}:${prefs.choreReminderTime}`;
+        if (!firedAlertsRef.current.has(key)) {
+          const chores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<
+            LifeRecord<ChorePayload>
+          >;
+          const due = chores.filter((c) => !c.payload.paused && c.payload.nextDueDate <= logicalToday);
+          if (due.length > 0) {
             firedAlertsRef.current.add(key);
-            fireLocalAlert(`Dayplana Alarm: ${a.title}`, `Alarm ringing at ${hhmm}`, 'bell');
-            pushToast(`⏰ Alarm ringing: ${a.title} (${hhmm})`);
+            notifyUser(
+              'chore',
+              `${due.length} Chore${due.length === 1 ? '' : 's'} Due Today`,
+              due.slice(0, 3).map((c) => c.title).join(', ')
+            );
+          }
+        }
+      }
+
+      // 5. Scheduled Medication Reminders (primary & optional 2nd time of day)
+      if (prefs.notifyAlarms) {
+        const meds = records.filter((r) => r.type === 'medication' && r.status === 'active');
+        for (const m of meds) {
+          const mp = m.payload as {
+            dose?: string;
+            timeOfDay?: string;
+            secondTimeOfDay?: string;
+            reminderEnabled?: boolean;
+            takenLog?: Array<{ date: string; timeHHMM?: string }>;
+            skippedLog?: Array<{ date: string }>;
+          };
+          if (mp.reminderEnabled === false) continue;
+          const skippedToday = (mp.skippedLog ?? []).some((s) => s.date === logicalToday);
+          if (skippedToday) continue;
+          const times = [mp.timeOfDay, mp.secondTimeOfDay].filter((t): t is string => Boolean(t));
+          for (const medTime of times) {
+            if (medTime === hhmm) {
+              const key = `med:${m.id}:${logicalToday}:${medTime}`;
+              if (!firedAlertsRef.current.has(key)) {
+                firedAlertsRef.current.add(key);
+                notifyUser(
+                  'alarm',
+                  `Medication Reminder: ${m.title}`,
+                  `Time to take ${mp.dose || 'your dose'} (${medTime})`
+                );
+              }
+            }
           }
         }
       }
     }, 1000);
     return () => window.clearInterval(id);
-  }, [runningTimers, records, logicalToday, pushToast]);
+  }, [runningTimers, records, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser]);
+
+  // Schedule native Capacitor alerts for today's upcoming events so Android rings even when closed
+  useEffect(() => {
+    const prefs = settings.notificationPrefs;
+    if (!settings.notificationsEnabled || !prefs.enabled || !prefs.notifyEvents) return;
+    const nowMs = Date.now();
+    const events = records.filter((r) => r.type === 'event' && r.status === 'active') as Array<
+      LifeRecord<CalendarEventPayload>
+    >;
+    for (const ev of events) {
+      if (ev.payload.allDay || !ev.payload.startTime || ev.payload.startDate !== logicalToday) continue;
+      const [hh, mm] = ev.payload.startTime.split(':').map(Number);
+      const fireDate = new Date();
+      fireDate.setHours(hh || 0, (mm || 0) - prefs.eventLeadMinutes, 0, 0);
+      if (fireDate.getTime() > nowMs) {
+        void scheduleNativeNotification(
+          `ev-${ev.id}-${logicalToday}`,
+          `Upcoming Event: ${ev.title}`,
+          prefs.eventLeadMinutes === 0 ? 'Starting now' : `Starts in ${prefs.eventLeadMinutes} min`,
+          fireDate.getTime()
+        );
+      }
+    }
+  }, [records, logicalToday, settings.notificationsEnabled, settings.notificationPrefs]);
 
   const openEventInCalendar = useCallback((eventId: string, dateIso?: string) => {
     if (dateIso) setActiveDate(dateIso);
     setSelectedEventId(eventId);
     setActiveView('calendar');
+  }, []);
+
+  const openCustomTab = useCallback((tabId: string) => {
+    setActiveCustomTabId(tabId);
+    setActiveView('custom_tab');
   }, []);
 
   const triggerInstallPwa = useCallback(async () => {
@@ -486,7 +692,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [settings.enabledModules]
   );
 
-  // Global keyboard map (Section 04.05) — automatically disabled while typing in text inputs
+  // Global keyboard map — automatically disabled while typing in text inputs
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -544,7 +750,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveDate,
         activeView,
         setActiveView,
+        activeCustomTabId,
+        openCustomTab,
         records,
+        allWorkspaceRecords,
         allRecordsIncludingTrash,
         trashedRecords,
         openConflicts,
@@ -579,6 +788,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openEventInCalendar,
         canInstallPwa: Boolean(installPrompt),
         triggerInstallPwa,
+        notifyUser,
       }}
     >
       {children}

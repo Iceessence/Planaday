@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { BookOpen, Compass, Film, Play, Plus } from 'lucide-react';
+import { BookOpen, Compass, Film, Play, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
-import { createRecord, updateRecord } from '../../core/repository';
+import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { addDaysIso } from '../../core/temporal';
 
 export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mode }) => {
@@ -15,7 +15,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
 
   // Media Shelf state
   const [mediaTitle, setMediaTitle] = useState('');
-  const [mediaKind, setMediaKind] = useState<'Book' | 'Audiobook' | 'Podcast' | 'Film' | 'TV' | 'Game'>('Book');
+  const [mediaKind, setMediaKind] = useState('Book');
   const [mediaStatus, setMediaStatus] = useState<'Want to Start' | 'In Progress' | 'Completed' | 'Paused'>('In Progress');
 
   // Hobby Project state
@@ -53,6 +53,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
           <label className="dp-row" style={{ fontSize: '0.84rem' }}>
             <span className="dp-muted">Daily limit:</span>
             <input type="number" min={1} max={100} className="dp-input" style={{ width: 68 }} value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value) || 15)} />
+            <span className="dp-muted">cards/day</span>
           </label>
         </div>
 
@@ -104,7 +105,20 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
               };
               return (
                 <div key={c.id} className="dp-card dp-stack" style={{ padding: 14 }}>
-                  <strong>Q: {p.question}</strong>
+                  <div className="dp-between">
+                    <strong>Q: {p.question}</strong>
+                    <button
+                      type="button"
+                      className="dp-icon-btn"
+                      title="Delete review card"
+                      onClick={async () => {
+                        await softDeleteRecord(c.id);
+                        pushToast('Moved review card to Trash', { canUndo: true });
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                   {shown ? (
                     <>
                       <p style={{ margin: 0, padding: 10, background: 'var(--dp-surface-2)', borderRadius: 8 }}>A: {p.answer}</p>
@@ -170,9 +184,10 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
           }}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Title…" value={mediaTitle} onChange={(e) => setMediaTitle(e.target.value)} />
-          <select aria-label="Media type" className="dp-select" style={{ width: 'auto' }} value={mediaKind} onChange={(e) => setMediaKind(e.target.value as typeof mediaKind)}>
-            {(['Book', 'Audiobook', 'Podcast', 'Film', 'TV', 'Game'] as const).map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
+          <input list="dp-media-kinds" aria-label="Media type" className="dp-input" style={{ width: 130 }} value={mediaKind} onChange={(e) => setMediaKind(e.target.value)} placeholder="Type (pick or type)…" />
+          <datalist id="dp-media-kinds">
+            {['Book', 'Audiobook', 'Podcast', 'Film', 'TV Show', 'Game', 'Course', 'Article'].map((k) => <option key={k} value={k} />)}
+          </datalist>
           <select aria-label="Shelf status" className="dp-select" style={{ width: 'auto' }} value={mediaStatus} onChange={(e) => setMediaStatus(e.target.value as typeof mediaStatus)}>
             {(['Want to Start', 'In Progress', 'Completed', 'Paused'] as const).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -186,7 +201,12 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
               <div key={m.id} className="dp-card dp-stack" style={{ padding: 12, gap: 6 }}>
                 <div className="dp-between">
                   <strong>{m.title}</strong>
-                  <span className="dp-pill">{p.kind} · {p.shelfStatus}</span>
+                  <div className="dp-row" style={{ gap: 4 }}>
+                    <span className="dp-pill">{p.kind} · {p.shelfStatus}</span>
+                    <button type="button" className="dp-icon-btn" style={{ width: 24, height: 24 }} title="Delete media item" onClick={() => void softDeleteRecord(m.id)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
                 <label className="dp-between" style={{ fontSize: '0.82rem' }}>
                   <span>Progress: {p.progressPct}%</span>
@@ -206,11 +226,22 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
                 </label>
                 <div className="dp-between">
                   <button type="button" className="dp-btn dp-btn-sm" onClick={() => void startCountdownTimer(`Reading: ${m.title}`, 25 * 60, 'countdown', m.id)}>
-                    <Play size={12} /> 25m Reading Timer
+                    <Play size={12} /> 25m Timer
                   </button>
-                  <span className="dp-muted" style={{ fontSize: '0.8rem' }}>
-                    {'★'.repeat(p.rating || 0)}{'☆'.repeat(5 - (p.rating || 0))}
-                  </span>
+                  <div className="dp-row" style={{ gap: 2 }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        className="dp-btn dp-btn-ghost dp-btn-sm"
+                        style={{ padding: '1px 3px', fontSize: '0.9rem' }}
+                        onClick={() => void updateRecord(m.id, (c) => ({ ...c, payload: { ...c.payload, rating: star } }))}
+                        aria-label={`Rate ${star} stars`}
+                      >
+                        {star <= (p.rating || 0) ? '★' : '☆'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
@@ -250,13 +281,18 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
                   Supplies: {(p.supplies ?? []).join(', ') || 'None'} · {p.hoursInvested ?? 0} hrs invested
                 </div>
               </div>
-              <button
-                type="button"
-                className="dp-btn dp-btn-sm"
-                onClick={() => void updateRecord(h.id, (c) => ({ ...c, payload: { ...c.payload, hoursInvested: (p.hoursInvested ?? 0) + 1 } }))}
-              >
-                +1 hr
-              </button>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => void updateRecord(h.id, (c) => ({ ...c, payload: { ...c.payload, hoursInvested: (p.hoursInvested ?? 0) + 1 } }))}
+                >
+                  +1 hr
+                </button>
+                <button type="button" className="dp-icon-btn" title="Delete hobby project" onClick={() => void softDeleteRecord(h.id)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           );
         })}

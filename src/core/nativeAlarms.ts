@@ -1,7 +1,8 @@
 // Unified Native OS (Capacitor LocalNotifications), Desktop (Electron/Web Notification),
-// and Background Docker ntfy Push Alarm & Timer Bridge.
+// Audio Chimes (with custom volume & sound styles), and Background Docker ntfy Push Bridge.
 
 import { audioEngine } from './audio';
+import type { ChimeStyle, NotificationPreferences } from './types';
 
 export interface NativeBridgeInfo {
   platform: 'capacitor-native' | 'electron-desktop' | 'web-pwa';
@@ -72,8 +73,8 @@ export async function requestAlarmNotificationPermission(): Promise<boolean> {
 }
 
 /**
- * Schedules a real OS-level native alarm/timer notification on Android/iOS (Capacitor)
- * so alarms & countdowns fire even when Chrome/the app is closed and the screen is locked!
+ * Schedules a real OS-level native alarm/timer/event notification on Android/iOS (Capacitor)
+ * so alerts fire even when Chrome/the app is closed and the screen is locked.
  */
 export async function scheduleNativeNotification(
   id: string,
@@ -116,9 +117,19 @@ export async function cancelNativeNotification(id: string): Promise<void> {
   }
 }
 
-export function fireLocalAlert(title: string, body: string, chime: 'bell' | 'complete' = 'bell') {
-  audioEngine.playChime(chime, 0.35);
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+export function fireLocalAlert(
+  title: string,
+  body: string,
+  chime: ChimeStyle | 'complete' = 'bell',
+  prefs?: Partial<NotificationPreferences>
+) {
+  if (prefs?.enabled === false) return;
+  const vol01 = Math.max(0, Math.min(1, (prefs?.volume ?? 75) / 100));
+  const style = prefs?.chimeStyle ?? chime;
+  if (prefs?.soundEnabled !== false && vol01 > 0) {
+    audioEngine.playChime(style, vol01);
+  }
+  if (prefs?.osPushEnabled !== false && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     try {
       new Notification(title, { body, icon: '/icons/icon.svg' });
     } catch {
@@ -127,17 +138,43 @@ export function fireLocalAlert(title: string, body: string, chime: 'bell' | 'com
   }
 }
 
+export interface ServerPushConfigPayload {
+  ntfyPushUrl: string;
+  timeZone: string;
+  notifyTimers?: boolean;
+  notifyAlarms?: boolean;
+  notifyEvents?: boolean;
+  eventLeadMinutes?: number;
+  notifyChores?: boolean;
+  choreReminderTime?: string;
+}
+
 /**
- * Configures the optional Docker server background push relay (e.g. ntfy.sh)
- * so alarms & timers trigger phone notifications even when Chrome is completely closed.
+ * Syncs background push relay URL & notification preferences to the Docker server
+ * so timers, alarms, upcoming events, and chores notify your phone even when Chrome is closed.
  */
-export async function syncPushConfigToServer(serverBase: string, ntfyPushUrl: string, timeZone: string): Promise<boolean> {
+export async function syncPushConfigToServer(
+  serverBase: string,
+  ntfyPushUrl: string,
+  timeZone: string,
+  prefs?: Partial<NotificationPreferences>
+): Promise<boolean> {
   try {
     const base = serverBase.trim().replace(/\/+$/, '');
+    const body: ServerPushConfigPayload = {
+      ntfyPushUrl: ntfyPushUrl.trim(),
+      timeZone,
+      notifyTimers: prefs?.notifyTimers ?? true,
+      notifyAlarms: prefs?.notifyAlarms ?? true,
+      notifyEvents: prefs?.notifyEvents ?? true,
+      eventLeadMinutes: prefs?.eventLeadMinutes ?? 15,
+      notifyChores: prefs?.notifyChores ?? true,
+      choreReminderTime: prefs?.choreReminderTime ?? '09:00',
+    };
     const res = await fetch(`${base}/api/push-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ntfyPushUrl: ntfyPushUrl.trim(), timeZone }),
+      body: JSON.stringify(body),
     });
     return res.ok;
   } catch {

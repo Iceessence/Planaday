@@ -102,11 +102,20 @@ export const PantryView: React.FC = () => {
       >
         <div className="dp-row">
           <input className="dp-input" style={{ flex: 2 }} placeholder="Ingredient / food item…" value={name} onChange={(e) => setName(e.target.value)} />
-          <input type="number" step={0.25} min={0} className="dp-input" style={{ width: 76 }} value={qty} onChange={(e) => setQty(Number(e.target.value) || 0)} />
-          <input className="dp-input" style={{ width: 84 }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="unit" />
-          <select aria-label="Storage zone" className="dp-select" style={{ width: 'auto' }} value={zone} onChange={(e) => setZone(e.target.value)}>
-            {allZones.map((z) => <option key={z} value={z}>{z}</option>)}
-          </select>
+          <label className="dp-row" style={{ gap: 4 }}>
+            <span className="dp-muted" style={{ fontSize: '0.8rem' }}>Qty:</span>
+            <input type="number" step={0.25} min={0} className="dp-input" style={{ width: 72 }} value={qty} onChange={(e) => setQty(Number(e.target.value) || 0)} />
+          </label>
+          <input list="dp-kitchen-units" className="dp-input" style={{ width: 92 }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="unit…" aria-label="Unit" />
+          <datalist id="dp-kitchen-units">
+            {['item', 'cup', 'tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'L', 'can', 'box', 'bag', 'bunch', 'pack', 'bottle'].map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
+          <input list="dp-pantry-zones" aria-label="Storage zone" className="dp-input" style={{ width: 130 }} value={zone} onChange={(e) => setZone(e.target.value)} placeholder="Zone…" />
+          <datalist id="dp-pantry-zones">
+            {allZones.map((z) => <option key={z} value={z} />)}
+          </datalist>
           <button type="submit" className="dp-btn dp-btn-primary">
             <Plus size={14} /> Add Lot
           </button>

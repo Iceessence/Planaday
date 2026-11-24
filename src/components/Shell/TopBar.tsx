@@ -3,6 +3,7 @@ import {
   Command,
   Download,
   Feather,
+  HelpCircle,
   Plus,
   Redo2,
   Search,
@@ -53,6 +54,21 @@ export const TopBar: React.FC = () => {
         {settings.workspaces.map((ws) => (
           <option key={ws.id} value={ws.id}>
             {ws.emoji} {ws.name}
+          </option>
+        ))}
+      </select>
+
+      <select
+        aria-label="Active family member profile"
+        className="dp-workspace-select"
+        value={settings.activeProfileId}
+        onChange={(e) => void patchSettings({ activeProfileId: e.target.value })}
+        title="Switch between Combined Family view or a specific family member profile"
+      >
+        <option value="all">🏡 Everyone (Family)</option>
+        {settings.familyProfiles.map((prof) => (
+          <option key={prof.id} value={prof.id}>
+            {prof.emoji} {prof.name}
           </option>
         ))}
       </select>
@@ -150,6 +166,16 @@ export const TopBar: React.FC = () => {
       >
         <span className="dp-sync-dot" aria-hidden="true" />
         <span className="dp-hide-xs">{syncLabel}</span>
+      </button>
+
+      <button
+        type="button"
+        className="dp-icon-btn"
+        onClick={() => setActiveView('guide')}
+        title="App Guide & Documentation"
+        aria-label="Open App Guide"
+      >
+        <HelpCircle size={17} />
       </button>
 
       <button

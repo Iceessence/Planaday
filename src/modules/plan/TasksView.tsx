@@ -75,6 +75,8 @@ export const TasksView: React.FC = () => {
   const [estimateMin, setEstimateMin] = useState(25);
   const [priority, setPriority] = useState<'none' | 'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [tagsText, setTagsText] = useState('');
+  const [shareFamily, setShareFamily] = useState(false);
+  const [markImportant, setMarkImportant] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
   const [smartFilter, setSmartFilter] = useState<'all' | 'today' | 'low_quick' | 'overdue_hard' | 'completed'>('all');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -115,11 +117,15 @@ export const TasksView: React.FC = () => {
         estimateMin,
         priority,
         tags,
+        sharedWithAll: shareFamily,
+        isImportant: markImportant,
       }
     );
     setTitle('');
     setDueDate('');
     setTagsText('');
+    setShareFamily(false);
+    setMarkImportant(false);
     pushToast('Task added', { canUndo: true });
   };
 
@@ -190,9 +196,15 @@ export const TasksView: React.FC = () => {
                 pushToast(`Updated "${t.title}"`, { canUndo: true });
               }}
             />
-            <strong style={{ textDecoration: t.status === 'done' ? 'line-through' : undefined }}>{t.title}</strong>
+            <strong style={{ textDecoration: t.status === 'done' ? 'line-through' : undefined }}>
+              {t.isImportant ? '★ ' : ''}
+              {t.title}
+            </strong>
           </label>
           <div className="dp-row">
+            {(t.sharedWithAll || (t.sharedWithProfileIds?.length ?? 0) > 0) && (
+              <span className="dp-pill highlight">🏡 Shared</span>
+            )}
             {t.energy && <span className="dp-pill">{t.energy} energy</span>}
             {t.estimateMin && <span className="dp-pill">⏱ {t.estimateMin}m</span>}
             {t.doDate && <span className="dp-pill">Do: {t.doDate}</span>}
@@ -430,6 +442,14 @@ export const TasksView: React.FC = () => {
               <option value="urgent">Urgent</option>
             </select>
             <input className="dp-input" style={{ width: 160 }} placeholder="#tags (comma separated)" value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
+            <label className="dp-row" style={{ fontSize: '0.82rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={shareFamily} onChange={(e) => setShareFamily(e.target.checked)} />
+              <span>🏡 Share w/ Family</span>
+            </label>
+            <label className="dp-row" style={{ fontSize: '0.82rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={markImportant} onChange={(e) => setMarkImportant(e.target.checked)} />
+              <span>★ Important</span>
+            </label>
           </div>
         </details>
       </form>

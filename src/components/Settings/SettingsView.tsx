@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { Bell, Plus, Trash2, Users, Volume2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import {
   computeGuardedTheme,
@@ -21,7 +22,13 @@ import {
 import { resolveConflict } from '../../core/sync';
 import { wipeSampleData } from '../../core/repository';
 import { applyOnboardingPreset, ONBOARDING_PRESETS } from '../../data/sampleData';
-import type { ModuleId, OperatingMode } from '../../core/types';
+import { audioEngine } from '../../core/audio';
+import {
+  detectRuntimePlatform,
+  requestAlarmNotificationPermission,
+  syncPushConfigToServer,
+} from '../../core/nativeAlarms';
+import type { ChimeStyle, FamilyProfile, ModuleId, NavView, OperatingMode } from '../../core/types';
 
 const PAPER_OPTIONS: Array<{ id: PaperMaterial; label: string }> = [
   { id: 'dot-grid-5mm', label: '5mm Dot-Grid' },
@@ -32,6 +39,17 @@ const PAPER_OPTIONS: Array<{ id: PaperMaterial; label: string }> = [
   { id: 'college-ruled', label: 'College Ruled' },
   { id: 'wide-ruled', label: 'Wide Ruled' },
   { id: 'blank', label: 'Blank Archival' },
+];
+
+const QUICK_ACCENTS = ['#a97434', '#4f7a65', '#3b6ea5', '#b5453a', '#6b5ca5', '#c96f53', '#2f7a78', '#b05a84'];
+
+const CHIME_STYLES: Array<{ id: ChimeStyle; label: string }> = [
+  { id: 'bell', label: 'Warm Bell (2-tone)' },
+  { id: 'soft', label: 'Soft Chime (1-tone)' },
+  { id: 'marimba', label: 'Warm Marimba Arpeggio' },
+  { id: 'classic_alarm', label: 'Classic Beep Alarm (Loud)' },
+  { id: 'woodblock', label: 'Crisp Woodblock' },
+  { id: 'bright', label: 'Bright Rising Chime' },
 ];
 
 const MODULE_META: Array<{ id: ModuleId; label: string; group: string; optional?: boolean }> = [
@@ -67,14 +85,32 @@ export const SettingsView: React.FC = () => {
     storageHealth,
     pushToast,
     logicalToday,
+    openCustomTab,
   } = useApp();
 
-  const [tab, setTab] = useState<'theme' | 'modules' | 'sync' | 'export' | 'schedule'>('theme');
+  const [tab, setTab] = useState<'theme' | 'notifications' | 'profiles' | 'modules' | 'sync' | 'export' | 'schedule'>('theme');
   const [newWsName, setNewWsName] = useState('');
+  const [newProfName, setNewProfName] = useState('');
+  const [newProfEmoji, setNewProfEmoji] = useState('😊');
+  const [newProfColor, setNewProfColor] = useState('#4f7a65');
+  const [newProfRole, setNewProfRole] = useState<FamilyProfile['role']>('member');
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatEmoji, setNewCatEmoji] = useState('🏷️');
+  const [newCatColor, setNewCatColor] = useState('#3b6ea5');
+  const [newTabName, setNewTabName] = useState('');
+  const [newTabEmoji, setNewTabEmoji] = useState('✨');
+  const [newTabColor, setNewTabColor] = useState('#a97434');
+
   const importBackupRef = useRef<HTMLInputElement | null>(null);
   const importThemeRef = useRef<HTMLInputElement | null>(null);
 
   const guarded = computeGuardedTheme(settings.customTokens, settings.contrastLevel === 'AAA' ? 7.0 : 4.5);
+  const runtimeInfo = detectRuntimePlatform();
+  const np = settings.notificationPrefs;
+
+  const updateNotif = (patch: Partial<typeof np>) => {
+    void patchSettings({ notificationPrefs: { ...np, ...patch } });
+  };
 
   const updateToken = (key: keyof ThemeTokens, value: string) => {
     void patchSettings({
@@ -115,18 +151,20 @@ export const SettingsView: React.FC = () => {
     <div className="dp-paper-sheet" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-5)' }}>
       <div className="dp-between" style={{ marginBottom: 16 }}>
         <div>
-          <h2>Settings, Personalization & Three-Mode Sync</h2>
+          <h2>Settings, Notifications, Family Profiles &amp; Personalization</h2>
           <p className="dp-muted" style={{ margin: '4px 0 0', fontSize: '0.88rem' }}>
             Zero localStorage · Unlimited IndexedDB + Blob storage · Automatic OKLCH WCAG contrast guard
           </p>
         </div>
-        <div className="dp-row">
+        <div className="dp-row" style={{ gap: 5 }}>
           {(
             [
-              ['theme', 'Theme & Paper'],
-              ['modules', 'Module Toggles'],
+              ['theme', 'Theme & Style'],
+              ['notifications', 'Notifications & Sound'],
+              ['profiles', 'Family Profiles'],
+              ['modules', 'Tabs & Modules'],
               ['sync', '3-Mode Sync'],
-              ['schedule', 'Clock & Day Rollover'],
+              ['schedule', 'Clock & Rollover'],
               ['export', 'Backup & Export'],
             ] as const
           ).map(([id, label]) => (
@@ -142,8 +180,389 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
+      {/* --- TAB: NOTIFICATIONS, VOLUME, LEAD TIMES & CHIME STYLES --- */}
+      {tab === 'notifications' && (
+        <div className="dp-stack">
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <div className="dp-between">
+              <h4><Bell size={16} /> Master Notification &amp; Sound Controls</h4>
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={async () => {
+                  const ok = await requestAlarmNotificationPermission();
+                  pushToast(ok ? 'OS Notifications enabled!' : 'Browser denied notification permission — check site settings.');
+                }}
+              >
+                Enable OS / Lock-Screen Notifications
+              </button>
+            </div>
+
+            <div className="dp-row" style={{ gap: 16 }}>
+              <label className="dp-row" style={{ cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={np.enabled && settings.notificationsEnabled}
+                  onChange={(e) => {
+                    void patchSettings({
+                      notificationsEnabled: e.target.checked,
+                      notificationPrefs: { ...np, enabled: e.target.checked },
+                    });
+                  }}
+                />
+                <strong>Enable All Alerts</strong>
+              </label>
+              <label className="dp-row" style={{ cursor: 'pointer' }}>
+                <input type="checkbox" checked={np.soundEnabled} onChange={(e) => updateNotif({ soundEnabled: e.target.checked })} />
+                <span>Play Sound Chime</span>
+              </label>
+              <label className="dp-row" style={{ cursor: 'pointer' }}>
+                <input type="checkbox" checked={np.osPushEnabled} onChange={(e) => updateNotif({ osPushEnabled: e.target.checked })} />
+                <span>Show OS / System Banner</span>
+              </label>
+            </div>
+
+            <div className="dp-grid-2" style={{ gap: 12 }}>
+              <label className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">
+                  <Volume2 size={14} style={{ verticalAlign: '-2px' }} /> Alarm &amp; Notification Loudness: <strong>{np.volume}%</strong>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={np.volume}
+                  onChange={(e) => updateNotif({ volume: Number(e.target.value) })}
+                />
+              </label>
+
+              <div className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">Alert Sound Style</span>
+                <div className="dp-row">
+                  <select
+                    aria-label="Chime style"
+                    className="dp-select"
+                    style={{ flex: 1 }}
+                    value={np.chimeStyle}
+                    onChange={(e) => updateNotif({ chimeStyle: e.target.value as ChimeStyle })}
+                  >
+                    {CHIME_STYLES.map((cs) => (
+                      <option key={cs.id} value={cs.id}>{cs.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => audioEngine.playChime(np.chimeStyle, Math.max(0.05, np.volume / 100))}
+                  >
+                    ▶ Preview ({np.volume}%)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>What Notifies You &amp; How Much Before</h4>
+            <div className="dp-grid-2" style={{ gap: 12 }}>
+              <div className="dp-card dp-stack" style={{ padding: 12, background: 'var(--dp-surface-2)' }}>
+                <label className="dp-between" style={{ cursor: 'pointer' }}>
+                  <strong>📅 Calendar Events</strong>
+                  <input type="checkbox" checked={np.notifyEvents} onChange={(e) => updateNotif({ notifyEvents: e.target.checked })} />
+                </label>
+                <label className="dp-row" style={{ fontSize: '0.84rem' }}>
+                  <span className="dp-muted">Notify before event:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={180}
+                    className="dp-input"
+                    style={{ width: 72 }}
+                    value={np.eventLeadMinutes}
+                    onChange={(e) => updateNotif({ eventLeadMinutes: Math.max(0, Math.min(180, Number(e.target.value) || 0)) })}
+                  />
+                  <span>min before</span>
+                </label>
+                <div className="dp-row" style={{ gap: 4 }}>
+                  {[0, 5, 10, 15, 30, 60].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`dp-btn dp-btn-sm ${np.eventLeadMinutes === m ? 'dp-btn-primary' : ''}`}
+                      onClick={() => updateNotif({ eventLeadMinutes: m })}
+                    >
+                      {m === 0 ? 'At start' : `${m}m`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="dp-card dp-stack" style={{ padding: 12, background: 'var(--dp-surface-2)' }}>
+                <label className="dp-between" style={{ cursor: 'pointer' }}>
+                  <strong>🧹 Due &amp; Overdue Chores</strong>
+                  <input type="checkbox" checked={np.notifyChores} onChange={(e) => updateNotif({ notifyChores: e.target.checked })} />
+                </label>
+                <label className="dp-row" style={{ fontSize: '0.84rem' }}>
+                  <span className="dp-muted">Daily chore reminder time:</span>
+                  <input
+                    type="time"
+                    className="dp-input"
+                    style={{ width: 124 }}
+                    value={np.choreReminderTime}
+                    onChange={(e) => updateNotif({ choreReminderTime: e.target.value })}
+                  />
+                </label>
+              </div>
+
+              <div className="dp-card dp-stack" style={{ padding: 12, background: 'var(--dp-surface-2)' }}>
+                <label className="dp-between" style={{ cursor: 'pointer' }}>
+                  <strong>⏱️ Stopwatch Milestones</strong>
+                  <input type="checkbox" checked={np.notifyStopwatch} onChange={(e) => updateNotif({ notifyStopwatch: e.target.checked })} />
+                </label>
+                <label className="dp-row" style={{ fontSize: '0.84rem' }}>
+                  <span className="dp-muted">Chime every:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={240}
+                    className="dp-input"
+                    style={{ width: 72 }}
+                    value={np.stopwatchIntervalMin}
+                    onChange={(e) => updateNotif({ stopwatchIntervalMin: Math.max(0, Number(e.target.value) || 0) })}
+                  />
+                  <span>min (0 = off)</span>
+                </label>
+              </div>
+
+              <div className="dp-card dp-stack" style={{ padding: 12, background: 'var(--dp-surface-2)' }}>
+                <label className="dp-between" style={{ cursor: 'pointer' }}>
+                  <strong>⏲️ Timers &amp; Pomodoros</strong>
+                  <input type="checkbox" checked={np.notifyTimers} onChange={(e) => updateNotif({ notifyTimers: e.target.checked })} />
+                </label>
+                <label className="dp-between" style={{ cursor: 'pointer' }}>
+                  <strong>⏰ Smart Alarms &amp; Medications</strong>
+                  <input type="checkbox" checked={np.notifyAlarms} onChange={(e) => updateNotif({ notifyAlarms: e.target.checked })} />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="dp-card dp-stack" style={{ padding: 14, background: 'var(--dp-surface-2)' }}>
+            <strong>
+              Background Push Relay ({runtimeInfo.canWakeWhenBrowserClosed ? 'Native App Active ✓' : 'Works When Chrome Is Closed via Docker + ntfy'})
+            </strong>
+            <div className="dp-row">
+              <input
+                className="dp-input"
+                style={{ flex: 2 }}
+                placeholder="https://ntfy.sh/your-private-topic"
+                value={settings.ntfyPushUrl || ''}
+                onChange={(e) => void patchSettings({ ntfyPushUrl: e.target.value })}
+              />
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={async () => {
+                  const ok = await syncPushConfigToServer(settings.syncServerUrl, settings.ntfyPushUrl || '', settings.defaultTimeZone, np);
+                  pushToast(ok ? 'Synced notification preferences & push URL to Docker server!' : 'Saved locally (connect Docker server to push when Chrome is closed).');
+                }}
+              >
+                Sync Rules to Docker Server
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB: FAMILY MEMBER PROFILES & SHARING --- */}
+      {tab === 'profiles' && (
+        <div className="dp-stack">
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4><Users size={16} /> Family Member Profiles &amp; Cross-Profile Sharing</h4>
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
+              Create profiles for everyone in your household. Switch between <strong>Everyone (Family)</strong> or an individual profile from the Top Bar.
+              Items marked <strong>🏡 Share with Family</strong> appear across all shared profiles, and <strong>★ Important</strong> items pin to the top of Home &amp; Today!
+            </p>
+
+            <form
+              className="dp-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = newProfName.trim();
+                if (!name) return;
+                const prof: FamilyProfile = {
+                  id: `prof_${Date.now().toString(36)}`,
+                  name,
+                  emoji: newProfEmoji.trim() || '😊',
+                  color: newProfColor,
+                  role: newProfRole,
+                };
+                void patchSettings({ familyProfiles: [...settings.familyProfiles, prof] });
+                setNewProfName('');
+                pushToast(`Added family profile "${prof.name}"`);
+              }}
+            >
+              <input className="dp-input" style={{ width: 52, textAlign: 'center' }} value={newProfEmoji} onChange={(e) => setNewProfEmoji(e.target.value)} aria-label="Profile emoji" />
+              <input className="dp-input" style={{ flex: 2 }} placeholder="Family member name (e.g., Sarah, Leo, Dad)…" value={newProfName} onChange={(e) => setNewProfName(e.target.value)} />
+              <select aria-label="Role" className="dp-select" style={{ width: 'auto' }} value={newProfRole} onChange={(e) => setNewProfRole(e.target.value as FamilyProfile['role'])}>
+                <option value="parent">Parent / Admin</option>
+                <option value="member">Member</option>
+                <option value="kid">Kid</option>
+              </select>
+              <input type="color" aria-label="Profile color" value={newProfColor} onChange={(e) => setNewProfColor(e.target.value)} />
+              <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm"><Plus size={14} /> Add Profile</button>
+            </form>
+
+            <div className="dp-grid-2" style={{ gap: 10 }}>
+              {settings.familyProfiles.map((prof) => {
+                const isActive = settings.activeProfileId === prof.id;
+                return (
+                  <div key={prof.id} className="dp-card dp-between" style={{ padding: 12, borderInlineStart: `4px solid ${prof.color}` }}>
+                    <div>
+                      <strong>{prof.emoji} {prof.name}</strong>{' '}
+                      <span className="dp-pill">{prof.role}</span>
+                      {isActive && <span className="dp-pill highlight" style={{ marginInlineStart: 6 }}>Active</span>}
+                    </div>
+                    <div className="dp-row" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        className={`dp-btn dp-btn-sm ${isActive ? 'dp-btn-primary' : ''}`}
+                        onClick={() => void patchSettings({ activeProfileId: isActive ? 'all' : prof.id })}
+                      >
+                        {isActive ? 'Viewing' : 'Switch To'}
+                      </button>
+                      {settings.familyProfiles.length > 1 && (
+                        <button
+                          type="button"
+                          className="dp-icon-btn"
+                          title="Delete profile"
+                          onClick={() => {
+                            const next = settings.familyProfiles.filter((p) => p.id !== prof.id);
+                            void patchSettings({
+                              familyProfiles: next,
+                              activeProfileId: settings.activeProfileId === prof.id ? 'all' : settings.activeProfileId,
+                            });
+                            pushToast(`Removed profile "${prof.name}"`);
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>Workspaces (Separate Planners like Personal / Work / Home)</h4>
+            <div className="dp-row">
+              {settings.workspaces.map((ws) => (
+                <span key={ws.id} className="dp-pill">
+                  {ws.emoji} {ws.name}
+                  {settings.workspaces.length > 1 && ws.id !== settings.activeWorkspaceId && (
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-ghost dp-btn-sm"
+                      style={{ padding: '0 4px', marginInlineStart: 4 }}
+                      onClick={() => void patchSettings({ workspaces: settings.workspaces.filter((x) => x.id !== ws.id) })}
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            <div className="dp-row">
+              <input
+                className="dp-input"
+                style={{ maxWidth: 260 }}
+                placeholder="New workspace name (e.g., Studio)"
+                value={newWsName}
+                onChange={(e) => setNewWsName(e.target.value)}
+              />
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={() => {
+                  const name = newWsName.trim();
+                  if (!name) return;
+                  const id = `ws_${Date.now().toString(36)}`;
+                  void patchSettings({
+                    workspaces: [...settings.workspaces, { id, name, emoji: '📒', color: '#4f7a65' }],
+                    activeWorkspaceId: id,
+                  });
+                  setNewWsName('');
+                  pushToast(`Created workspace "${name}"`);
+                }}
+              >
+                Add Workspace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB: THEME, BRANDING, EVENT CATEGORIES & PERSONALIZATION --- */}
       {tab === 'theme' && (
         <div className="dp-stack">
+          {/* Custom Planner Name, Card Roundness & Quick Accent Swatches */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>Personal Branding, Shape &amp; Accent</h4>
+            <div className="dp-grid-3" style={{ gap: 10 }}>
+              <label className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">Custom Planner Name</span>
+                <input
+                  className="dp-input"
+                  value={settings.plannerTitle}
+                  onChange={(e) => void patchSettings({ plannerTitle: e.target.value })}
+                  placeholder="Dayplana"
+                />
+              </label>
+              <label className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">Card Corner Style</span>
+                <select
+                  className="dp-select"
+                  value={settings.cardRadius}
+                  onChange={(e) => void patchSettings({ cardRadius: e.target.value as 'sharp' | 'soft' | 'cozy' })}
+                >
+                  <option value="sharp">Crisp Archival Paper</option>
+                  <option value="soft">Soft Rounded (Default)</option>
+                  <option value="cozy">Cozy Pill Curves</option>
+                </select>
+              </label>
+              <div className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">Quick Accent Color</span>
+                <div className="dp-row" style={{ gap: 5 }}>
+                  {QUICK_ACCENTS.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      aria-label={`Set accent ${col}`}
+                      onClick={() => updateToken('primaryAccent', col)}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        background: col,
+                        border: settings.customTokens.primaryAccent === col ? '2px solid var(--dp-ink)' : '1px solid var(--dp-border)',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom accent color"
+                    value={settings.customTokens.primaryAccent}
+                    onChange={(e) => updateToken('primaryAccent', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="dp-section-title">
             <span>Theme Studio Presets (8 Built-in + OKLCH Contrast Guard)</span>
             <div className="dp-row">
@@ -209,7 +628,7 @@ export const SettingsView: React.FC = () => {
 
           <div className="dp-grid-2">
             <div className="dp-card dp-stack">
-              <h4>Paper Surface & Tactile Details</h4>
+              <h4>Paper Surface &amp; Tactile Details</h4>
               <div className="dp-row">
                 {PAPER_OPTIONS.map((p) => (
                   <button
@@ -223,56 +642,32 @@ export const SettingsView: React.FC = () => {
                 ))}
               </div>
               <label className="dp-row">
-                <input
-                  type="checkbox"
-                  checked={settings.paperGrain}
-                  onChange={(e) => void patchSettings({ paperGrain: e.target.checked })}
-                />
+                <input type="checkbox" checked={settings.paperGrain} onChange={(e) => void patchSettings({ paperGrain: e.target.checked })} />
                 <span>Subtle SVG paper grain texture</span>
               </label>
               <label className="dp-row">
-                <input
-                  type="checkbox"
-                  checked={settings.bookSpineShadow}
-                  onChange={(e) => void patchSettings({ bookSpineShadow: e.target.checked })}
-                />
+                <input type="checkbox" checked={settings.bookSpineShadow} onChange={(e) => void patchSettings({ bookSpineShadow: e.target.checked })} />
                 <span>Open-book center spine shadow</span>
               </label>
               <label className="dp-row">
-                <input
-                  type="checkbox"
-                  checked={settings.binderTabs}
-                  onChange={(e) => void patchSettings({ binderTabs: e.target.checked })}
-                />
+                <input type="checkbox" checked={settings.binderTabs} onChange={(e) => void patchSettings({ binderTabs: e.target.checked })} />
                 <span>Colored binder divider tabs</span>
               </label>
               <label className="dp-row">
-                <input
-                  type="checkbox"
-                  checked={settings.reducedMotion}
-                  onChange={(e) => void patchSettings({ reducedMotion: e.target.checked })}
-                />
+                <input type="checkbox" checked={settings.reducedMotion} onChange={(e) => void patchSettings({ reducedMotion: e.target.checked })} />
                 <span>Reduced motion</span>
               </label>
               <label className="dp-row">
-                <input
-                  type="checkbox"
-                  checked={settings.rtl}
-                  onChange={(e) => void patchSettings({ rtl: e.target.checked })}
-                />
+                <input type="checkbox" checked={settings.rtl} onChange={(e) => void patchSettings({ rtl: e.target.checked })} />
                 <span>Right-to-Left (RTL) layout mirroring</span>
               </label>
             </div>
 
             <div className="dp-card dp-stack">
-              <h4>Typography, Density & Color Scheme</h4>
+              <h4>Typography, Density &amp; Color Scheme</h4>
               <label className="dp-stack" style={{ gap: 4 }}>
                 <span className="dp-muted">Color Scheme</span>
-                <select
-                  className="dp-select"
-                  value={settings.colorScheme}
-                  onChange={(e) => void patchSettings({ colorScheme: e.target.value as 'light' | 'dark' | 'system' })}
-                >
+                <select className="dp-select" value={settings.colorScheme} onChange={(e) => void patchSettings({ colorScheme: e.target.value as 'light' | 'dark' | 'system' })}>
                   <option value="system">System Automatic</option>
                   <option value="light">Light</option>
                   <option value="dark">Dark</option>
@@ -280,11 +675,7 @@ export const SettingsView: React.FC = () => {
               </label>
               <label className="dp-stack" style={{ gap: 4 }}>
                 <span className="dp-muted">Font Pairing</span>
-                <select
-                  className="dp-select"
-                  value={settings.fontPairing}
-                  onChange={(e) => void patchSettings({ fontPairing: e.target.value as FontPairing })}
-                >
+                <select className="dp-select" value={settings.fontPairing} onChange={(e) => void patchSettings({ fontPairing: e.target.value as FontPairing })}>
                   <option value="editorial-serif">Editorial Serif + Sans</option>
                   <option value="neo-grotesk">Neo-Grotesk Modern</option>
                   <option value="friendly-rounded">Friendly Rounded</option>
@@ -293,22 +684,12 @@ export const SettingsView: React.FC = () => {
                 </select>
               </label>
               <label className="dp-stack" style={{ gap: 4 }}>
-                <span className="dp-muted">Global Font Scale: {settings.fontSizePx}px (12–24px)</span>
-                <input
-                  type="range"
-                  min={12}
-                  max={24}
-                  value={settings.fontSizePx}
-                  onChange={(e) => void patchSettings({ fontSizePx: Number(e.target.value) })}
-                />
+                <span className="dp-muted">Global Font Scale: {settings.fontSizePx} px (12–24 px)</span>
+                <input type="range" min={12} max={24} value={settings.fontSizePx} onChange={(e) => void patchSettings({ fontSizePx: Number(e.target.value) })} />
               </label>
               <label className="dp-stack" style={{ gap: 4 }}>
                 <span className="dp-muted">Density Mode</span>
-                <select
-                  className="dp-select"
-                  value={settings.density}
-                  onChange={(e) => void patchSettings({ density: e.target.value as DensityMode })}
-                >
+                <select className="dp-select" value={settings.density} onChange={(e) => void patchSettings({ density: e.target.value as DensityMode })}>
                   <option value="airy">Airy</option>
                   <option value="comfortable">Comfortable</option>
                   <option value="compact">Compact</option>
@@ -317,17 +698,55 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
+          {/* Event Categories Manager */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>Custom Event Categories ({settings.eventCategories.length})</h4>
+            <div className="dp-row" style={{ gap: 6 }}>
+              {settings.eventCategories.map((cat) => (
+                <span key={cat.id} className="dp-pill" style={{ borderInlineStart: `3px solid ${cat.color}` }}>
+                  {cat.emoji} {cat.name}
+                  {settings.eventCategories.length > 1 && (
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-ghost dp-btn-sm"
+                      style={{ padding: '0 4px', marginInlineStart: 4 }}
+                      onClick={() => void patchSettings({ eventCategories: settings.eventCategories.filter((c) => c.id !== cat.id) })}
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            <div className="dp-row">
+              <input className="dp-input" style={{ width: 52, textAlign: 'center' }} value={newCatEmoji} onChange={(e) => setNewCatEmoji(e.target.value)} aria-label="New category emoji" />
+              <input className="dp-input" style={{ flex: 1 }} placeholder="Add event category (e.g., Kids Sports, Appointments)…" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} />
+              <input type="color" aria-label="New category color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)} />
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={() => {
+                  const nm = newCatName.trim();
+                  if (!nm) return;
+                  void patchSettings({
+                    eventCategories: [...settings.eventCategories, { id: `cat_${Date.now().toString(36)}`, name: nm, emoji: newCatEmoji.trim() || '🏷️', color: newCatColor }],
+                  });
+                  setNewCatName('');
+                  pushToast(`Added event category "${nm}"`);
+                }}
+              >
+                + Add Category
+              </button>
+            </div>
+          </div>
+
           <details className="dp-details">
-            <summary>Custom Color Tokens & .dmtheme Export / Import</summary>
+            <summary>Custom Color Tokens &amp; .dmtheme Export / Import</summary>
             <div className="dp-grid-3" style={{ marginTop: 12 }}>
               {(Object.keys(settings.customTokens) as Array<keyof ThemeTokens>).map((tok) => (
                 <label key={tok} className="dp-between" style={{ fontSize: '0.85rem' }}>
                   <span>{tok}</span>
-                  <input
-                    type="color"
-                    value={settings.customTokens[tok]}
-                    onChange={(e) => updateToken(tok, e.target.value)}
-                  />
+                  <input type="color" value={settings.customTokens[tok]} onChange={(e) => updateToken(tok, e.target.value)} />
                 </label>
               ))}
             </div>
@@ -361,9 +780,72 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
+      {/* --- TAB: CUSTOM SIDEBAR TABS & MODULE TOGGLES --- */}
       {tab === 'modules' && (
         <div className="dp-stack">
-          <p className="dp-muted">
+          {/* Custom Sidebar Tabs Creator */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>My Custom Sidebar Tabs ({settings.customTabs.length})</h4>
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.84rem' }}>
+              Build your own standalone tabs that live directly in your sidebar with filtered Events, Tasks, Chores, Notes, Trackers, Timers &amp; Links.
+            </p>
+            <div className="dp-row">
+              <input className="dp-input" style={{ width: 52, textAlign: 'center' }} value={newTabEmoji} onChange={(e) => setNewTabEmoji(e.target.value)} aria-label="Custom tab emoji" />
+              <input className="dp-input" style={{ flex: 2 }} placeholder="New custom tab name (e.g., Fitness Hub, School, Garden)…" value={newTabName} onChange={(e) => setNewTabName(e.target.value)} />
+              <input type="color" aria-label="Custom tab color" value={newTabColor} onChange={(e) => setNewTabColor(e.target.value)} />
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={() => {
+                  const nm = newTabName.trim();
+                  if (!nm) return;
+                  const id = `ctab_${Date.now().toString(36)}`;
+                  void patchSettings({
+                    customTabs: [
+                      ...settings.customTabs,
+                      {
+                        id,
+                        name: nm,
+                        emoji: newTabEmoji.trim() || '✨',
+                        color: newTabColor,
+                        layout: 'grid',
+                        widgets: [
+                          { id: `wid_${Date.now().toString(36)}_1`, type: 'tasks', title: `${nm} Checklist` },
+                          { id: `wid_${Date.now().toString(36)}_2`, type: 'note', title: `${nm} Scratchpad`, noteContent: '' },
+                        ],
+                      },
+                    ],
+                  });
+                  setNewTabName('');
+                  openCustomTab(id);
+                  pushToast(`Created custom tab "${nm}"!`);
+                }}
+              >
+                <Plus size={14} /> Create Custom Tab
+              </button>
+            </div>
+            {settings.customTabs.length > 0 && (
+              <div className="dp-row" style={{ gap: 6 }}>
+                {settings.customTabs.map((ct) => (
+                  <div key={ct.id} className="dp-pill" style={{ borderInlineStart: `3px solid ${ct.color}` }}>
+                    <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" style={{ padding: 0 }} onClick={() => openCustomTab(ct.id)}>
+                      {ct.emoji} {ct.name}
+                    </button>
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-ghost dp-btn-sm"
+                      style={{ padding: '0 4px', marginInlineStart: 4 }}
+                      onClick={() => void patchSettings({ customTabs: settings.customTabs.filter((x) => x.id !== ct.id) })}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <p className="dp-muted" style={{ margin: 0 }}>
             Hide any module in 1 click without deleting underlying data. Active timers or alarms remain running in the mini-bar.
           </p>
           <div className="dp-grid-2">
@@ -388,45 +870,33 @@ export const SettingsView: React.FC = () => {
             ))}
           </div>
 
-          <div className="dp-card dp-stack">
-            <h4>Workspaces & Profiles</h4>
-            <div className="dp-row">
-              {settings.workspaces.map((ws) => (
-                <span key={ws.id} className="dp-pill">
-                  {ws.emoji} {ws.name}
-                </span>
-              ))}
+          {/* Hide Individual Extra Sidebar Items */}
+          <details className="dp-details">
+            <summary>Hide / Show Individual Utility Sidebar Links</summary>
+            <div className="dp-row" style={{ marginTop: 10, gap: 8 }}>
+              {(['all_in_one', 'history', 'spaces', 'rituals', 'insights', 'automations', 'guide'] as NavView[]).map((v) => {
+                const hidden = settings.hiddenSidebarViews.includes(v);
+                return (
+                  <label key={v} className="dp-row" style={{ cursor: 'pointer', fontSize: '0.84rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={!hidden}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? settings.hiddenSidebarViews.filter((x) => x !== v)
+                          : [...settings.hiddenSidebarViews, v];
+                        void patchSettings({ hiddenSidebarViews: next });
+                      }}
+                    />
+                    <span style={{ textTransform: 'capitalize' }}>{v.replace('_', ' ')}</span>
+                  </label>
+                );
+              })}
             </div>
-            <div className="dp-row">
-              <input
-                className="dp-input"
-                style={{ maxWidth: 260 }}
-                placeholder="New workspace name (e.g., Studio)"
-                value={newWsName}
-                onChange={(e) => setNewWsName(e.target.value)}
-              />
-              <button
-                type="button"
-                className="dp-btn dp-btn-primary dp-btn-sm"
-                onClick={() => {
-                  const name = newWsName.trim();
-                  if (!name) return;
-                  const id = `ws_${Date.now().toString(36)}`;
-                  void patchSettings({
-                    workspaces: [...settings.workspaces, { id, name, emoji: '📒', color: '#4f7a65' }],
-                    activeWorkspaceId: id,
-                  });
-                  setNewWsName('');
-                  pushToast(`Created workspace "${name}"`);
-                }}
-              >
-                Add Workspace
-              </button>
-            </div>
-          </div>
+          </details>
 
           <div className="dp-card dp-stack">
-            <h4>Curated Starter Presets & Sample Data</h4>
+            <h4>Curated Starter Presets &amp; Sample Data</h4>
             <div className="dp-row">
               {ONBOARDING_PRESETS.map((p) => (
                 <button
@@ -500,7 +970,7 @@ export const SettingsView: React.FC = () => {
 
           <div className="dp-card dp-stack">
             <div className="dp-between">
-              <h4>Sync Status & Connection</h4>
+              <h4>Sync Status &amp; Connection</h4>
               <span className="dp-pill">
                 Status: {syncState.status} · Queued ops: {syncState.pendingCount}
               </span>
@@ -508,7 +978,7 @@ export const SettingsView: React.FC = () => {
             <label className="dp-stack" style={{ gap: 4 }}>
               <span className="dp-muted">
                 Docker Sync Server URL (leave blank when served directly from your Docker container, or enter e.g.{' '}
-                <code>http://192.168.1.50:3000</code> or your Tailscale URL)
+                <code>http://192.168.88.31:3000</code>)
               </span>
               <input
                 className="dp-input"
@@ -589,15 +1059,11 @@ export const SettingsView: React.FC = () => {
           <div className="dp-card dp-stack">
             <h4>Logical Day Boundary (Night Owl Rollover)</h4>
             <p className="dp-muted" style={{ fontSize: '0.84rem', margin: 0 }}>
-              Current logical Today: <strong>{logicalToday}</strong>. Recomputes live on timer tick & tab focus.
+              Current logical Today: <strong>{logicalToday}</strong>. Recomputes live on timer tick &amp; tab focus.
             </p>
             <label className="dp-stack" style={{ gap: 4 }}>
               <span>Rollover Hour</span>
-              <select
-                className="dp-select"
-                value={settings.dayBoundaryHour}
-                onChange={(e) => void patchSettings({ dayBoundaryHour: Number(e.target.value) })}
-              >
+              <select className="dp-select" value={settings.dayBoundaryHour} onChange={(e) => void patchSettings({ dayBoundaryHour: Number(e.target.value) })}>
                 <option value={0}>Midnight (00:00)</option>
                 <option value={1}>1:00 AM</option>
                 <option value={2}>2:00 AM</option>
@@ -608,47 +1074,29 @@ export const SettingsView: React.FC = () => {
             </label>
             <label className="dp-stack" style={{ gap: 4 }}>
               <span>Daily Capacity Warning Threshold: {settings.dailyCapacityHours} hrs</span>
-              <input
-                type="range"
-                min={3}
-                max={14}
-                value={settings.dailyCapacityHours}
-                onChange={(e) => void patchSettings({ dailyCapacityHours: Number(e.target.value) })}
-              />
+              <input type="range" min={3} max={14} value={settings.dailyCapacityHours} onChange={(e) => void patchSettings({ dailyCapacityHours: Number(e.target.value) })} />
             </label>
           </div>
 
           <div className="dp-card dp-stack">
-            <h4>Calendar & Locale Formatting</h4>
+            <h4>Calendar &amp; Locale Formatting</h4>
             <label className="dp-stack" style={{ gap: 4 }}>
               <span>Week Starts On</span>
-              <select
-                className="dp-select"
-                value={settings.weekStartsOn}
-                onChange={(e) => void patchSettings({ weekStartsOn: Number(e.target.value) as 0 | 1 })}
-              >
+              <select className="dp-select" value={settings.weekStartsOn} onChange={(e) => void patchSettings({ weekStartsOn: Number(e.target.value) as 0 | 1 })}>
                 <option value={1}>Monday</option>
                 <option value={0}>Sunday</option>
               </select>
             </label>
             <label className="dp-stack" style={{ gap: 4 }}>
               <span>Time Display</span>
-              <select
-                className="dp-select"
-                value={settings.timeFormat}
-                onChange={(e) => void patchSettings({ timeFormat: e.target.value as '12h' | '24h' })}
-              >
+              <select className="dp-select" value={settings.timeFormat} onChange={(e) => void patchSettings({ timeFormat: e.target.value as '12h' | '24h' })}>
                 <option value="12h">12-Hour (AM/PM)</option>
                 <option value="24h">24-Hour</option>
               </select>
             </label>
             <label className="dp-stack" style={{ gap: 4 }}>
               <span>Locale (MM/DD vs DD/MM)</span>
-              <select
-                className="dp-select"
-                value={settings.locale}
-                onChange={(e) => void patchSettings({ locale: e.target.value })}
-              >
+              <select className="dp-select" value={settings.locale} onChange={(e) => void patchSettings({ locale: e.target.value })}>
                 <option value="en-US">English (US — MM/DD/YYYY)</option>
                 <option value="en-GB">English (UK — DD/MM/YYYY)</option>
                 <option value="de-DE">Deutsch (DD.MM.YYYY)</option>
@@ -666,7 +1114,7 @@ export const SettingsView: React.FC = () => {
           <div className="dp-card dp-stack">
             <h4>Portable Export Center (Works Across All 3 Operating Modes)</h4>
             <p className="dp-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
-              Export or restore your entire Dayplana database—including unlimited long notes, revisions, time logs, and binary blobs.
+              Export or restore your entire database—including unlimited long notes, revisions, time logs, and binary blobs.
             </p>
             <div className="dp-row">
               <button

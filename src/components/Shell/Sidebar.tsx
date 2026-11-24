@@ -15,6 +15,7 @@ import {
   Flame,
   Gift,
   HeartHandshake,
+  HelpCircle,
   Home,
   Hourglass,
   Layers,
@@ -23,6 +24,7 @@ import {
   Menu,
   Package,
   Plane,
+  Plus,
   Settings,
   ShoppingCart,
   Sparkles,
@@ -59,7 +61,21 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
   collapsed,
   onToggleCollapse,
 }) => {
-  const { activeView, setActiveView, isModuleEnabled, trashedRecords, records, logicalToday } = useApp();
+  const {
+    settings,
+    patchSettings,
+    activeView,
+    setActiveView,
+    activeCustomTabId,
+    openCustomTab,
+    isModuleEnabled,
+    trashedRecords,
+    records,
+    logicalToday,
+    pushToast,
+  } = useApp();
+  const [quickAddTabOpen, setQuickAddTabOpen] = React.useState(false);
+  const [newTabTitle, setNewTabTitle] = React.useState('');
 
   const openTasksCount = records.filter((r) => r.type === 'task' && r.status === 'active').length;
   const dueChoresCount = records.filter(
@@ -145,6 +161,7 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
         { view: 'rituals', label: 'Rituals & Contexts', icon: <LayoutDashboard size={17} /> },
         { view: 'insights', label: 'Insights & Heatmaps', icon: <BarChart3 size={17} /> },
         { view: 'automations', label: 'Automations', icon: <Zap size={17} /> },
+        { view: 'guide', label: 'Guide & Help', icon: <HelpCircle size={17} /> },
         { view: 'trash', label: 'Trash (30d)', icon: <Trash2 size={17} />, badgeCount: trashedRecords.length || undefined },
         { view: 'settings', label: 'Settings & Themes', icon: <Settings size={17} /> },
       ],
@@ -156,9 +173,9 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
       <div className="dp-brand">
         <div className="dp-brand-mark">
           <span className="dp-brand-icon" aria-hidden="true">
-            D
+            {(settings.plannerTitle || 'D').charAt(0).toUpperCase()}
           </span>
-          {!collapsed && <span>Dayplana</span>}
+          {!collapsed && <span>{settings.plannerTitle || 'Dayplana'}</span>}
         </div>
         <button
           type="button"
@@ -170,8 +187,91 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
         </button>
       </div>
 
+      {/* User-Created Custom Sidebar Tabs */}
+      <div className="dp-nav-group">
+        {!collapsed && (
+          <div className="dp-nav-group-label" style={{ justifyContent: 'space-between' }}>
+            <span className="dp-row" style={{ gap: 6 }}>
+              <span className="dp-binder-dot" style={{ background: 'var(--dp-accent)' }} />
+              <span>My Custom Tabs</span>
+            </span>
+            <button
+              type="button"
+              className="dp-icon-btn"
+              style={{ width: 20, height: 20 }}
+              title="Create a brand-new custom sidebar tab"
+              aria-label="New Custom Tab"
+              onClick={() => setQuickAddTabOpen((v) => !v)}
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+        )}
+        {quickAddTabOpen && !collapsed && (
+          <form
+            className="dp-row"
+            style={{ padding: '4px 6px', gap: 4 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const nm = newTabTitle.trim();
+              if (!nm) return;
+              const id = `ctab_${Date.now().toString(36)}`;
+              void patchSettings({
+                customTabs: [
+                  ...settings.customTabs,
+                  {
+                    id,
+                    name: nm,
+                    emoji: '✨',
+                    color: '#a97434',
+                    layout: 'grid',
+                    widgets: [
+                      { id: `wid_${Date.now().toString(36)}_t`, type: 'tasks', title: `${nm} Tasks` },
+                      { id: `wid_${Date.now().toString(36)}_n`, type: 'note', title: `${nm} Notes`, noteContent: '' },
+                    ],
+                  },
+                ],
+              });
+              setNewTabTitle('');
+              setQuickAddTabOpen(false);
+              openCustomTab(id);
+              pushToast(`Created custom tab "${nm}"!`);
+            }}
+          >
+            <input
+              autoFocus
+              className="dp-input"
+              style={{ flex: 1, padding: '3px 6px', fontSize: '0.78rem' }}
+              placeholder="Tab name…"
+              value={newTabTitle}
+              onChange={(e) => setNewTabTitle(e.target.value)}
+            />
+            <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm" style={{ padding: '2px 6px' }}>
+              Add
+            </button>
+          </form>
+        )}
+        {settings.customTabs.map((ct) => (
+          <button
+            key={ct.id}
+            type="button"
+            className={`dp-nav-btn ${activeView === 'custom_tab' && activeCustomTabId === ct.id ? 'active' : ''}`}
+            style={{ '--tab-color': ct.color } as React.CSSProperties}
+            title={collapsed ? ct.name : undefined}
+            onClick={() => openCustomTab(ct.id)}
+          >
+            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{ct.emoji}</span>
+            {!collapsed && <span>{ct.name}</span>}
+          </button>
+        ))}
+      </div>
+
       {groups.map((group) => {
-        const visibleItems = group.items.filter((item) => !item.moduleId || isModuleEnabled(item.moduleId));
+        const visibleItems = group.items.filter(
+          (item) =>
+            (!item.moduleId || isModuleEnabled(item.moduleId)) &&
+            !settings.hiddenSidebarViews.includes(item.view)
+        );
         if (visibleItems.length === 0) return null;
         return (
           <div key={group.id} className="dp-nav-group">

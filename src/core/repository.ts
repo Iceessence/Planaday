@@ -79,6 +79,15 @@ export async function createRecord<P = Record<string, unknown>>(
     category: extra.category,
     color: extra.color,
     assigneeId: extra.assigneeId ?? null,
+    ownerProfileId:
+      extra.ownerProfileId !== undefined
+        ? extra.ownerProfileId
+        : settings.activeProfileId && settings.activeProfileId !== 'all'
+          ? settings.activeProfileId
+          : null,
+    sharedWithAll: extra.sharedWithAll ?? false,
+    sharedWithProfileIds: extra.sharedWithProfileIds ?? [],
+    isImportant: extra.isImportant ?? false,
     tags: extra.tags ?? [],
     links: extra.links ?? [],
     recurrence: extra.recurrence ?? null,

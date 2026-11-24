@@ -13,6 +13,7 @@ import {
   Sparkles,
   Star,
   Timer,
+  Trash2,
 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { addDaysIso, formatDateLocalized, formatTimeDisplay } from '../../core/temporal';
@@ -25,7 +26,7 @@ import {
   timeToMinutes,
 } from '../../core/planActions';
 import { scheduleMealWithPrepReminder } from '../../core/kitchenActions';
-import { createRecord, updateRecord } from '../../core/repository';
+import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { getDailyFact } from '../../data/facts';
 import { ModalDialog } from '../../components/Common/ModalDialog';
 import type {
@@ -82,6 +83,15 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
   const [quickChoreRoom, setQuickChoreRoom] = useState('Home');
   const [quickMealSlot, setQuickMealSlot] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('dinner');
   const [quickPinTop3, setQuickPinTop3] = useState(false);
+  const [quickEventCategoryId, setQuickEventCategoryId] = useState(settings.eventCategories[1]?.id ?? settings.eventCategories[0]?.id ?? 'cat_personal');
+  const [quickShareFamily, setQuickShareFamily] = useState(false);
+  const [quickImportant, setQuickImportant] = useState(false);
+
+  // Real "Log Actual Time" Modal state (compare when an event ACTUALLY happened vs Planned)
+  const [actualEvent, setActualEvent] = useState<LifeRecord<CalendarEventPayload> | null>(null);
+  const [actualStartVal, setActualStartVal] = useState('09:00');
+  const [actualEndVal, setActualEndVal] = useState('10:00');
+  const [actualNoteVal, setActualNoteVal] = useState('');
 
   // Event Retrospective ("How did it go?") Modal state
   const [retroEvent, setRetroEvent] = useState<LifeRecord<CalendarEventPayload> | null>(null);
@@ -223,6 +233,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     if (!text && quickKind !== 'timer') return;
 
     if (quickKind === 'event') {
+      const cat = settings.eventCategories.find((c) => c.id === quickEventCategoryId) ?? settings.eventCategories[0];
       const endTime = minutesToTime(timeToMinutes(quickStartTime) + Math.max(15, quickDurationMin));
       await createRecord<CalendarEventPayload>(
         'event',
@@ -236,10 +247,16 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           floating: false,
           timeZone: settings.defaultTimeZone,
           style: 'soft',
-          emoji: '📌',
+          emoji: cat?.emoji || '📌',
           eventStatus: 'confirmed',
+          remindersMin: [settings.notificationPrefs.eventLeadMinutes],
         },
-        { category: 'Personal', color: '#a97434' }
+        {
+          category: cat?.name || 'Personal',
+          color: cat?.color || '#a97434',
+          sharedWithAll: quickShareFamily,
+          isImportant: quickImportant,
+        }
       );
       pushToast(`Added event "${text}" at ${formatTimeDisplay(quickStartTime, settings.timeFormat)}`, { canUndo: true });
     } else if (quickKind === 'task') {
@@ -251,7 +268,12 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           boardColumn: 'next',
           pinnedTop3Date: quickPinTop3 && topThree.length < 3 ? activeDate : null,
         },
-        { doDate: activeDate, estimateMin: quickDurationMin || 25 }
+        {
+          doDate: activeDate,
+          estimateMin: quickDurationMin || 25,
+          sharedWithAll: quickShareFamily,
+          isImportant: quickImportant,
+        }
       );
       pushToast(`Added task "${text}" to Today`, { canUndo: true });
     } else if (quickKind === 'chore') {
@@ -268,7 +290,12 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           nextDueDate: activeDate,
           completions: [],
         },
-        { estimateMin: 15, category: quickChoreRoom.trim() || 'Home' }
+        {
+          estimateMin: 15,
+          category: quickChoreRoom.trim() || 'Home',
+          sharedWithAll: quickShareFamily,
+          isImportant: quickImportant,
+        }
       );
       pushToast(`Added chore "${text}" due ${activeDate}`, { canUndo: true });
     } else if (quickKind === 'meal') {
@@ -301,6 +328,8 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
     setQuickTitle('');
     setQuickPinTop3(false);
+    setQuickShareFamily(false);
+    setQuickImportant(false);
   };
 
   const handleQuickAddTask = async (e: React.FormEvent) => {
@@ -337,11 +366,36 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     setRetroNote(ev.payload.retrospective?.note ?? '');
   };
 
+  const openActualModal = (ev: LifeRecord<CalendarEventPayload>) => {
+    setActualEvent(ev);
+    setActualStartVal(ev.payload.actualStartTime || ev.payload.startTime || '09:00');
+    setActualEndVal(ev.payload.actualEndTime || ev.payload.endTime || minutesToTime(nowMin));
+    setActualNoteVal(ev.payload.actualNote || '');
+  };
+
+  const sharedImportantToday = useMemo(
+    () =>
+      dayEvents.filter((ev) => ev.isImportant && (ev.sharedWithAll || (ev.sharedWithProfileIds?.length ?? 0) > 0)),
+    [dayEvents]
+  );
+
   const renderEventRow = (ev: LifeRecord<CalendarEventPayload>, isPast: boolean) => {
     const startM = ev.payload.startTime ? timeToMinutes(ev.payload.startTime) : null;
     const endM = ev.payload.endTime ? timeToMinutes(ev.payload.endTime) : null;
     const happeningNow = isViewingToday && startM !== null && endM !== null && nowMin >= startM && nowMin < endM;
     const minsUntil = isViewingToday && startM !== null && startM > nowMin ? startM - nowMin : null;
+
+    let actualVarianceLabel = '';
+    if (ev.payload.actualStartTime && ev.payload.actualEndTime && startM !== null && endM !== null) {
+      const plannedDur = Math.max(1, endM - startM);
+      const actualDur = Math.max(1, timeToMinutes(ev.payload.actualEndTime) - timeToMinutes(ev.payload.actualStartTime));
+      const delta = actualDur - plannedDur;
+      actualVarianceLabel = delta === 0 ? 'on plan' : delta > 0 ? `+${delta}m over` : `${Math.abs(delta)}m shorter`;
+    }
+
+    const ownerProf = ev.ownerProfileId
+      ? settings.familyProfiles.find((p) => p.id === ev.ownerProfileId)
+      : null;
 
     return (
       <div
@@ -350,7 +404,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
         style={{
           padding: '8px 12px',
           borderInlineStart: `4px solid ${ev.color || 'var(--dp-accent)'}`,
-          opacity: ev.status === 'done' || isPast ? 0.78 : 1,
+          opacity: ev.status === 'done' || isPast ? 0.8 : 1,
           cursor: 'pointer',
         }}
         onClick={() => openEventInCalendar(ev.id, activeDate)}
@@ -372,9 +426,16 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           <div>
             <div className="dp-row" style={{ gap: 6 }}>
               <strong style={{ textDecoration: ev.status === 'done' ? 'line-through' : undefined }}>
+                {ev.isImportant ? '★ ' : ''}
                 {ev.payload.emoji ? `${ev.payload.emoji} ` : ''}
                 {ev.title}
               </strong>
+              {ev.category && <span className="dp-pill">{ev.category}</span>}
+              {(ev.sharedWithAll || (ev.sharedWithProfileIds?.length ?? 0) > 0) && (
+                <span className="dp-pill highlight">
+                  🏡 {ownerProf ? `Shared by ${ownerProf.name}` : 'Shared Family'}
+                </span>
+              )}
               {happeningNow && (
                 <span className="dp-pill" style={{ borderColor: 'var(--dp-danger)', color: 'var(--dp-danger)' }}>
                   ● Now
@@ -394,16 +455,30 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
             <div className="dp-muted" style={{ fontSize: '0.78rem' }}>
               {ev.payload.allDay
                 ? 'All day'
-                : `${formatTimeDisplay(ev.payload.startTime || '09:00', settings.timeFormat)} – ${formatTimeDisplay(ev.payload.endTime || '10:00', settings.timeFormat)}`}
+                : `Planned: ${formatTimeDisplay(ev.payload.startTime || '09:00', settings.timeFormat)} – ${formatTimeDisplay(ev.payload.endTime || '10:00', settings.timeFormat)}`}
               {ev.payload.location ? ` · 📍 ${ev.payload.location}` : ''}
-              {showActualRail && ev.payload.actualStartTime
-                ? ` · Actual: ${ev.payload.actualStartTime}–${ev.payload.actualEndTime || '?'}`
-                : ''}
+              {ev.payload.actualStartTime && (
+                <span style={{ color: 'var(--dp-accent-2)', fontWeight: 600 }}>
+                  {' '}· Actual: {formatTimeDisplay(ev.payload.actualStartTime, settings.timeFormat)}–
+                  {formatTimeDisplay(ev.payload.actualEndTime || ev.payload.actualStartTime, settings.timeFormat)}
+                  {actualVarianceLabel ? ` (${actualVarianceLabel})` : ''}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         <div className="dp-row" onClick={(e) => e.stopPropagation()}>
+          {(showActualRail || isPast || happeningNow) && !ev.payload.allDay && (
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              title="Record when this event ACTUALLY started and ended to compare against your plan"
+              onClick={() => openActualModal(ev)}
+            >
+              {ev.payload.actualStartTime ? 'Edit Actual' : 'Log Actual'}
+            </button>
+          )}
           {(isPast || ev.status === 'done') && (
             <button
               type="button"
@@ -596,8 +671,21 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
           {quickKind === 'event' && (
             <>
+              <select
+                aria-label="Event category"
+                className="dp-select"
+                style={{ width: 'auto' }}
+                value={quickEventCategoryId}
+                onChange={(e) => setQuickEventCategoryId(e.target.value)}
+              >
+                {settings.eventCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.emoji} {c.name}
+                  </option>
+                ))}
+              </select>
               <input type="time" aria-label="Event start time" className="dp-input" style={{ width: 122 }} value={quickStartTime} onChange={(e) => setQuickStartTime(e.target.value)} />
-              <input type="number" aria-label="Duration minutes" min={5} max={480} className="dp-input" style={{ width: 72 }} value={quickDurationMin} onChange={(e) => setQuickDurationMin(Number(e.target.value) || 30)} title="Minutes" />
+              <input type="number" aria-label="Duration minutes" min={5} max={480} className="dp-input" style={{ width: 68 }} value={quickDurationMin} onChange={(e) => setQuickDurationMin(Number(e.target.value) || 30)} title="Minutes" />
               <span className="dp-muted" style={{ fontSize: '0.8rem' }}>min</span>
             </>
           )}
@@ -610,7 +698,14 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           )}
 
           {quickKind === 'chore' && (
-            <input className="dp-input" style={{ width: 120 }} value={quickChoreRoom} onChange={(e) => setQuickChoreRoom(e.target.value)} placeholder="Room" />
+            <>
+              <input list="dp-today-rooms" className="dp-input" style={{ width: 130 }} value={quickChoreRoom} onChange={(e) => setQuickChoreRoom(e.target.value)} placeholder="Room…" />
+              <datalist id="dp-today-rooms">
+                {['Kitchen', 'Bathroom', 'Bedroom', 'Living Room', 'Laundry', 'Garage', 'Yard', 'Office', 'Home'].map((r) => (
+                  <option key={r} value={r} />
+                ))}
+              </datalist>
+            </>
           )}
 
           {quickKind === 'meal' && (
@@ -631,11 +726,41 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
             </>
           )}
 
+          {(quickKind === 'event' || quickKind === 'task' || quickKind === 'chore') && (
+            <>
+              <label className="dp-row" style={{ fontSize: '0.78rem', cursor: 'pointer' }} title="Share with all family profiles">
+                <input type="checkbox" checked={quickShareFamily} onChange={(e) => setQuickShareFamily(e.target.checked)} />
+                <span>🏡 Family</span>
+              </label>
+              <label className="dp-row" style={{ fontSize: '0.78rem', cursor: 'pointer' }} title="Highlight as an important notice">
+                <input type="checkbox" checked={quickImportant} onChange={(e) => setQuickImportant(e.target.checked)} />
+                <span>★ Important</span>
+              </label>
+            </>
+          )}
+
           <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm">
             <Plus size={14} /> {quickKind === 'timer' ? 'Start' : 'Add'}
           </button>
         </div>
       </form>
+
+      {/* Important Shared Family Notice Strip */}
+      {sharedImportantToday.length > 0 && (
+        <div className="dp-banner" style={{ margin: 0, borderColor: 'var(--dp-accent)' }}>
+          <span className="dp-row">
+            <strong>🏡 Important Shared Today:</strong>{' '}
+            {sharedImportantToday.map((ev) => `${ev.title} (${ev.payload.startTime ? formatTimeDisplay(ev.payload.startTime, settings.timeFormat) : 'All day'})`).join(' · ')}
+          </span>
+          <button
+            type="button"
+            className="dp-btn dp-btn-sm"
+            onClick={() => openEventInCalendar(sharedImportantToday[0].id, activeDate)}
+          >
+            View Event
+          </button>
+        </div>
+      )}
 
       {/* Overdue Alert Banner + 4 Clickable KPI Counters */}
       {(overdueChores.length > 0 || (yesterdayLeftovers.length > 0 && !rolloverDismissed)) && (
@@ -690,8 +815,13 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
               <Clock size={16} /> {isViewingToday ? 'Still Upcoming Today' : 'Time-Block Schedule'}
             </span>
             <div className="dp-row">
-              <button type="button" className="dp-btn dp-btn-sm" onClick={() => setShowActualRail((v) => !v)}>
-                {showActualRail ? 'Planned + Actual' : 'Planned Rail'}
+              <button
+                type="button"
+                className={`dp-btn dp-btn-sm ${showActualRail ? 'dp-btn-primary' : ''}`}
+                title="Planned View shows your intended schedule. Planned vs. Actual lets you record when events really started & finished so you can see schedule drift."
+                onClick={() => setShowActualRail((v) => !v)}
+              >
+                {showActualRail ? 'Planned vs. Actual' : 'Planned View'}
               </button>
               <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('calendar')}>
                 Flow Calendar →
@@ -889,6 +1019,18 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
                   >
                     <CalendarPlus size={14} />
                   </button>
+                  <button
+                    type="button"
+                    className="dp-icon-btn"
+                    title="Move task to Trash"
+                    aria-label={`Delete ${t.title}`}
+                    onClick={async () => {
+                      await softDeleteRecord(t.id);
+                      pushToast(`Moved "${t.title}" to Trash`, { canUndo: true });
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -1021,6 +1163,123 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           )}
         </section>
       </div>
+
+      {/* Log Actual Time Modal (Compare Planned Schedule vs Reality) */}
+      <ModalDialog open={Boolean(actualEvent)} onClose={() => setActualEvent(null)} title={`Log Actual Time — ${actualEvent?.title || ''}`}>
+        {actualEvent && (
+          <div className="dp-stack">
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.84rem' }}>
+              Planned time:{' '}
+              <strong>
+                {formatTimeDisplay(actualEvent.payload.startTime || '09:00', settings.timeFormat)} –{' '}
+                {formatTimeDisplay(actualEvent.payload.endTime || '10:00', settings.timeFormat)}
+              </strong>
+              . Adjust below to log when it <em>actually</em> started and ended.
+            </p>
+            <div className="dp-grid-2" style={{ gap: 10 }}>
+              <label className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">Actual Start</span>
+                <input type="time" className="dp-input" value={actualStartVal} onChange={(e) => setActualStartVal(e.target.value)} />
+              </label>
+              <label className="dp-stack" style={{ gap: 4 }}>
+                <span className="dp-muted">Actual End</span>
+                <input type="time" className="dp-input" value={actualEndVal} onChange={(e) => setActualEndVal(e.target.value)} />
+              </label>
+            </div>
+            <div className="dp-row" style={{ gap: 5 }}>
+              <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Quick adjust:</span>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => setActualEndVal(minutesToTime(nowMin))}
+              >
+                Ended Just Now
+              </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => setActualStartVal(minutesToTime(timeToMinutes(actualEvent.payload.startTime || '09:00') + 10))}
+              >
+                Started +10m Late
+              </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => setActualEndVal(minutesToTime(timeToMinutes(actualEvent.payload.endTime || '10:00') + 15))}
+              >
+                Ran +15m Long
+              </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => setActualEndVal(minutesToTime(timeToMinutes(actualEvent.payload.endTime || '10:00') + 30))}
+              >
+                Ran +30m Long
+              </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => {
+                  setActualStartVal(actualEvent.payload.startTime || '09:00');
+                  setActualEndVal(actualEvent.payload.endTime || '10:00');
+                }}
+              >
+                Matched Plan
+              </button>
+            </div>
+            <input
+              className="dp-input"
+              placeholder="Optional note (e.g., Traffic delay, finished early, deep flow)…"
+              value={actualNoteVal}
+              onChange={(e) => setActualNoteVal(e.target.value)}
+            />
+            <div className="dp-between">
+              {actualEvent.payload.actualStartTime ? (
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-ghost dp-btn-sm"
+                  onClick={async () => {
+                    await updateRecord<CalendarEventPayload>(actualEvent.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, actualStartTime: undefined, actualEndTime: undefined, actualNote: undefined },
+                    }));
+                    setActualEvent(null);
+                    pushToast('Cleared actual time log');
+                  }}
+                >
+                  Clear Actual
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary"
+                onClick={async () => {
+                  await updateRecord<CalendarEventPayload>(
+                    actualEvent.id,
+                    (c) => ({
+                      ...c,
+                      payload: {
+                        ...c.payload,
+                        actualStartTime: actualStartVal,
+                        actualEndTime: actualEndVal,
+                        actualNote: actualNoteVal.trim() || undefined,
+                      },
+                    }),
+                    { undoLabel: `Logged actual time for "${actualEvent.title}"` }
+                  );
+                  setActualEvent(null);
+                  setShowActualRail(true);
+                  pushToast(`Logged actual time (${actualStartVal}–${actualEndVal})`, { canUndo: true });
+                }}
+              >
+                Save Actual Time
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalDialog>
 
       {/* Event Retrospective ("How did it go?") Modal */}
       <ModalDialog open={Boolean(retroEvent)} onClose={() => setRetroEvent(null)} title={`How did "${retroEvent?.title || ''}" go?`}>
