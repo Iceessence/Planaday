@@ -27,7 +27,7 @@ RUN npm ci --omit=dev || npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
 
-RUN mkdir -p /data/blobs && chown -R node:node /data /app
+RUN mkdir -p /data/blobs && chown -R node:node /data /app && chmod -R a+rX /app && chmod 777 /data /data/blobs
 VOLUME ["/data"]
 EXPOSE 3000
 
