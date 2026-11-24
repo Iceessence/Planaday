@@ -1,0 +1,271 @@
+/* Dayplana Edition 2 — Tactile Paper Design Tokens, Color Scheme, OKLCH Contrast Guard & Paper Surfaces */
+
+:root {
+  /* MANDATORY: viewport-wide theming for scrollbars, form controls, and initial canvas */
+  color-scheme: light dark;
+
+  /* Core Theme Tokens (live-updated by Theme Studio + OKLCH Contrast Guard) */
+  --dp-canvas: #efe9dc;
+  --dp-paper: #faf6ee;
+  --dp-surface-2: #f2ebdc;
+  --dp-ink: #2a241d;
+  --dp-muted: #6b5f50;
+  --dp-accent: #a97434;
+  --dp-accent-2: #4f7a65;
+  --dp-highlight: #f7e3a8;
+  --dp-border: #dcd2be;
+
+  /* Guarded high-contrast foregrounds (OKLCH computed + CSS contrast-color enhancement) */
+  --dp-on-accent: #faf8f4;
+  --dp-on-accent-2: #faf8f4;
+  --dp-on-highlight: #2a241d;
+
+  /* Semantic accents */
+  --dp-danger: #b5453a;
+  --dp-warn: #b87c24;
+  --dp-ok: #3e7a5d;
+  --dp-info: #3a6a9b;
+
+  /* Typography */
+  --dp-font-heading: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --dp-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --dp-font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, SFMono-Regular, monospace;
+  --dp-font-size: 15px;
+  --dp-line-height: 1.55;
+
+  /* Density spacing scale */
+  --dp-space-1: 4px;
+  --dp-space-2: 8px;
+  --dp-space-3: 12px;
+  --dp-space-4: 18px;
+  --dp-space-5: 24px;
+  --dp-radius-sm: 6px;
+  --dp-radius-md: 11px;
+  --dp-radius-lg: 16px;
+
+  /* Paper & binder tactile shadows */
+  --dp-shadow-page: 0 1px 2px rgb(40 30 15 / 0.06), 0 8px 24px rgb(40 30 15 / 0.08);
+  --dp-shadow-float: 0 10px 34px rgb(20 15 8 / 0.16), 0 2px 6px rgb(20 15 8 / 0.08);
+  --dp-dot-color: color-mix(in oklch, var(--dp-ink) 16%, transparent);
+  --dp-rule-color: color-mix(in oklch, var(--dp-ink) 12%, transparent);
+  --dp-margin-rule: color-mix(in oklch, #c96f53 38%, transparent);
+
+  /* Native form & scrollbar adaptation */
+  accent-color: var(--dp-accent);
+  scrollbar-color: color-mix(in oklch, var(--dp-muted) 55%, transparent) transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-color-scheme='system'] {
+    --dp-canvas: #121520;
+    --dp-paper: #191d2b;
+    --dp-surface-2: #21273a;
+    --dp-ink: #eef0f8;
+    --dp-muted: #9ea7c2;
+    --dp-accent: #86a2f5;
+    --dp-accent-2: #d9a46c;
+    --dp-highlight: #313d63;
+    --dp-border: #2d354d;
+    --dp-on-accent: #121520;
+  }
+}
+
+:root[data-color-scheme='light'] {
+  color-scheme: light;
+}
+:root[data-color-scheme='dark'] {
+  color-scheme: dark;
+}
+
+/* Font pairings */
+:root[data-font-pairing='editorial-serif'] {
+  --dp-font-heading: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --dp-font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+:root[data-font-pairing='neo-grotesk'] {
+  --dp-font-heading: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+  --dp-font-body: 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+}
+:root[data-font-pairing='friendly-rounded'] {
+  --dp-font-heading: 'Trebuchet MS', 'Nunito', 'Segoe UI', ui-rounded, sans-serif;
+  --dp-font-body: 'Segoe UI', ui-rounded, system-ui, sans-serif;
+}
+:root[data-font-pairing='cozy-handwritten'] {
+  --dp-font-heading: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive, serif;
+  --dp-font-body: Georgia, 'Segoe UI', serif;
+}
+:root[data-font-pairing='crisp-monospace'] {
+  --dp-font-heading: 'Cascadia Code', ui-monospace, SFMono-Regular, Consolas, monospace;
+  --dp-font-body: 'Cascadia Code', ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+/* Density Modes */
+:root[data-density='airy'] {
+  --dp-space-2: 10px;
+  --dp-space-3: 16px;
+  --dp-space-4: 24px;
+  --dp-space-5: 32px;
+}
+:root[data-density='compact'] {
+  --dp-space-2: 5px;
+  --dp-space-3: 8px;
+  --dp-space-4: 12px;
+  --dp-space-5: 16px;
+}
+
+/* Dynamic contrast-color enhancement with XYZ fallback */
+.dp-btn-primary,
+.dp-badge-accent {
+  background-color: var(--dp-accent);
+  color: var(--dp-on-accent);
+}
+@supports (color: contrast-color(white)) {
+  .dp-btn-primary,
+  .dp-badge-accent {
+    color: contrast-color(var(--dp-accent));
+  }
+}
+
+/* Legacy scrollbar fallback only where scrollbar-color is unsupported */
+@supports not (scrollbar-color: auto) {
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--dp-border);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  background-color: var(--dp-canvas);
+  color: var(--dp-ink);
+  font-family: var(--dp-font-body);
+  font-size: var(--dp-font-size);
+  line-height: var(--dp-line-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .dp-serif {
+  font-family: var(--dp-font-heading);
+  letter-spacing: -0.015em;
+  margin: 0;
+  color: var(--dp-ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--dp-accent);
+  outline-offset: 2px;
+}
+
+/* --- Tactile Paper Surface Materials (Section 14.01) --- */
+
+.dp-paper-sheet {
+  position: relative;
+  background-color: var(--dp-paper);
+  color: var(--dp-ink);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-lg);
+  box-shadow: var(--dp-shadow-page);
+  container-type: inline-size;
+}
+
+.dp-paper-sheet[data-paper='warm-cream'] {
+  background-image: radial-gradient(circle at 20% 10%, rgb(255 250 240 / 0.45), transparent 60%);
+}
+
+.dp-paper-sheet[data-paper='kraft'] {
+  background-color: #d8c09d;
+  color: #261c12;
+  border-color: #b79b73;
+  background-image:
+    radial-gradient(rgb(100 68 32 / 0.08) 1px, transparent 0),
+    radial-gradient(rgb(255 245 225 / 0.14) 1px, transparent 0);
+  background-size: 16px 16px, 23px 23px;
+  background-position: 0 0, 7px 11px;
+}
+
+.dp-paper-sheet[data-paper='charcoal-dot'] {
+  background-color: #1e2124;
+  color: #eceee9;
+  border-color: #34393f;
+  background-image: radial-gradient(circle, rgb(235 238 232 / 0.18) 1.1px, transparent 1.1px);
+  background-size: 20px 20px;
+}
+
+.dp-paper-sheet[data-paper='dot-grid-5mm'] {
+  background-image: radial-gradient(circle, var(--dp-dot-color) 1.15px, transparent 1.15px);
+  background-size: 20px 20px;
+  background-position: 10px 10px;
+}
+
+.dp-paper-sheet[data-paper='graph'] {
+  background-image:
+    linear-gradient(to right, var(--dp-rule-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--dp-rule-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.dp-paper-sheet[data-paper='college-ruled'] {
+  background-image:
+    linear-gradient(to right, transparent 42px, var(--dp-margin-rule) 42px, var(--dp-margin-rule) 43.5px, transparent 43.5px),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 27px, var(--dp-rule-color) 27px, var(--dp-rule-color) 28px);
+}
+
+.dp-paper-sheet[data-paper='wide-ruled'] {
+  background-image:
+    linear-gradient(to right, transparent 46px, var(--dp-margin-rule) 46px, var(--dp-margin-rule) 47.5px, transparent 47.5px),
+    repeating-linear-gradient(to bottom, transparent 0, transparent 35px, var(--dp-rule-color) 35px, var(--dp-rule-color) 36px);
+}
+
+.dp-paper-sheet[data-paper='blank'] {
+  background-image: none;
+}
+
+/* Optional subtle SVG fractal paper grain */
+:root[data-paper-grain='true'] .dp-paper-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.038;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+:root[data-reduced-motion='true'] *,
+:root[data-reduced-motion='true'] *::before,
+:root[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}

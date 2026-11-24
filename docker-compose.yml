@@ -1,0 +1,24 @@
+services:
+  dayplana:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dayplana
+    restart: unless-stopped
+    ports:
+      - "${DAYPLANA_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DATA_DIR=/data
+      # Optional: point to local Ollama instance on host for BYOK AI helpers
+      # - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    volumes:
+      - dayplana_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  dayplana_data:
+    driver: local

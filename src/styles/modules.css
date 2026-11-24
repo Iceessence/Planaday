@@ -1,0 +1,357 @@
+/* Dayplana Edition 2 — Open-Book Spread, Flow Calendar, Notes, Time Suite, Kitchen OS & Life-OS Layouts */
+
+/* --- Open-Book Two-Page Paper Spread (Section 05.02) --- */
+.dp-open-book {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  position: relative;
+  border-radius: var(--dp-radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--dp-border);
+  box-shadow: var(--dp-shadow-page);
+}
+
+.dp-open-book.single-page {
+  grid-template-columns: 1fr;
+}
+
+.dp-book-page {
+  padding: var(--dp-space-5);
+  min-height: 620px;
+  position: relative;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root[data-book-spine='true'] .dp-open-book:not(.single-page) .dp-book-page-left {
+  border-inline-end: 1px solid var(--dp-border);
+  box-shadow: inset -18px 0 22px -18px rgb(40 25 10 / 0.24);
+}
+
+:root[data-book-spine='true'] .dp-open-book:not(.single-page) .dp-book-page-right {
+  box-shadow: inset 18px 0 22px -18px rgb(40 25 10 / 0.2);
+}
+
+@media (max-width: 980px) {
+  .dp-open-book {
+    grid-template-columns: 1fr;
+  }
+  :root[data-book-spine='true'] .dp-open-book .dp-book-page-left {
+    border-inline-end: none;
+    border-bottom: 1px dashed var(--dp-border);
+    box-shadow: none;
+  }
+  :root[data-book-spine='true'] .dp-open-book .dp-book-page-right {
+    box-shadow: none;
+  }
+}
+
+/* --- KPI Row & Grids --- */
+.dp-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.dp-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--dp-radius-md);
+  border: 1px solid var(--dp-border);
+  background: var(--dp-paper);
+  cursor: pointer;
+  text-align: start;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.dp-kpi-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--dp-accent);
+}
+
+.dp-kpi-value {
+  font-family: var(--dp-font-heading);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.dp-kpi-label {
+  font-size: 0.78rem;
+  color: var(--dp-muted);
+}
+
+.dp-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+.dp-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 14px;
+}
+
+.dp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dp-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dp-muted {
+  color: var(--dp-muted);
+}
+
+.dp-section-title {
+  font-family: var(--dp-font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed var(--dp-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* --- Flow Calendar Grid --- */
+.dp-flow-shell {
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  background: var(--dp-paper);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dp-flow-scroll {
+  overflow: auto;
+  max-height: 68dvh;
+  position: relative;
+}
+
+.dp-flow-grid {
+  display: grid;
+  position: relative;
+}
+
+.dp-flow-ruler {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 6;
+  background: var(--dp-surface-2);
+  border-inline-end: 1px solid var(--dp-border);
+}
+
+.dp-flow-day-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--dp-surface-2);
+  border-bottom: 1px solid var(--dp-border);
+  border-inline-end: 1px solid var(--dp-border);
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.dp-flow-event {
+  position: absolute;
+  border-radius: 7px;
+  padding: 4px 7px;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  min-height: 47px;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+}
+
+.dp-flow-event.selected {
+  outline: 2px solid var(--dp-ink);
+  z-index: 12 !important;
+}
+
+.dp-flow-resize-handle {
+  position: absolute;
+  bottom: 0;
+  inset-inline: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.dp-now-line {
+  position: absolute;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--dp-danger);
+  z-index: 9;
+  pointer-events: none;
+}
+
+.dp-now-line::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -4px;
+  top: -3.5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--dp-danger);
+}
+
+/* --- Month 42-Day Grid & Year in Pixels --- */
+.dp-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid var(--dp-border);
+  border-inline-start: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  overflow: hidden;
+}
+
+.dp-month-cell {
+  min-height: 96px;
+  padding: 6px;
+  border-inline-end: 1px solid var(--dp-border);
+  border-bottom: 1px solid var(--dp-border);
+  background: var(--dp-paper);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dp-month-cell.outside {
+  background: var(--dp-surface-2);
+  opacity: 0.65;
+}
+
+.dp-month-cell.today {
+  background: color-mix(in oklch, var(--dp-highlight) 35%, var(--dp-paper));
+}
+
+/* --- Progress & Decay Bars --- */
+.dp-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--dp-surface-2);
+  border: 1px solid var(--dp-border);
+  overflow: hidden;
+}
+
+.dp-progress-fill {
+  height: 100%;
+  background: var(--dp-accent-2);
+  border-radius: 99px;
+  transition: width 200ms ease;
+}
+
+/* --- Sticker & Washi Canvas Overlay --- */
+.dp-decor-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 8;
+}
+
+.dp-decor-item {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.dp-decor-item.locked {
+  cursor: default;
+}
+
+.dp-washi-strip {
+  height: 22px;
+  min-width: 110px;
+  opacity: 0.72;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgb(255 255 255 / 0.25) 0 6px,
+    transparent 6px 12px
+  );
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+.dp-rubber-stamp {
+  border: 3px double currentColor;
+  padding: 3px 10px;
+  font-family: var(--dp-font-mono);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  opacity: 0.78;
+}
+
+/* --- Zen Sheet & Nightstand Fullscreen --- */
+.dp-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--dp-paper);
+  color: var(--dp-ink);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow: auto;
+}
+
+.dp-nightstand {
+  background: #000000;
+  color: #e6d5b8;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* --- Empty State --- */
+.dp-empty {
+  padding: 32px 20px;
+  text-align: center;
+  border: 1px dashed var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  background: color-mix(in oklch, var(--dp-surface-2) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* --- Cooking Mode High Contrast --- */
+.dp-cooking-mode {
+  font-size: 1.25rem;
+  line-height: 1.65;
+}

@@ -1,0 +1,560 @@
+/* Dayplana Edition 2 — Adaptive Shell: Desktop Sidebar, Tablet Split, Phone Bottom Tabs, Mini-Bar & Native Dialogs */
+
+.dp-app {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100dvh;
+  background-color: var(--dp-canvas);
+}
+
+.dp-app.sidebar-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+
+/* --- Desktop Collapsible Stationery Sidebar --- */
+.dp-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--dp-surface-2);
+  border-inline-end: 1px solid var(--dp-border);
+  padding: 12px 10px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.dp-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 12px;
+  border-bottom: 1px dashed var(--dp-border);
+  margin-bottom: 10px;
+}
+
+.dp-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--dp-font-heading);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--dp-ink);
+  min-width: 0;
+}
+
+.dp-brand-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: var(--dp-accent);
+  color: var(--dp-on-accent);
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.dp-nav-group {
+  margin-bottom: 12px;
+}
+
+.dp-nav-group-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dp-muted);
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp-binder-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  display: inline-block;
+}
+
+.dp-nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--dp-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dp-ink);
+  cursor: pointer;
+  text-align: start;
+  font-size: 0.91rem;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.dp-nav-btn:hover {
+  background: color-mix(in oklch, var(--dp-paper) 75%, transparent);
+}
+
+.dp-nav-btn.active {
+  background: var(--dp-paper);
+  border-color: var(--dp-border);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.05);
+}
+
+:root[data-binder-tabs='true'] .dp-nav-btn.active {
+  border-inline-start: 4px solid var(--tab-color, var(--dp-accent));
+}
+
+.dp-nav-count {
+  margin-inline-start: auto;
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--dp-surface-2);
+  color: var(--dp-muted);
+  border: 1px solid var(--dp-border);
+}
+
+/* --- Main Stage + Compact Top Bar --- */
+.dp-main-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100dvh;
+}
+
+.dp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px var(--dp-space-4);
+  background: color-mix(in oklch, var(--dp-canvas) 90%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--dp-border);
+  min-height: 52px;
+}
+
+.dp-topbar-spacer {
+  flex: 1;
+}
+
+.dp-workspace-select {
+  background: var(--dp-paper);
+  border: 1px solid var(--dp-border);
+  border-radius: 99px;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dp-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 99px;
+  border: 1px solid var(--dp-border);
+  background: var(--dp-paper);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dp-sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dp-ok);
+}
+.dp-sync-pill[data-status='offline'] .dp-sync-dot { background: var(--dp-warn); }
+.dp-sync-pill[data-status='error'] .dp-sync-dot { background: var(--dp-danger); }
+.dp-sync-pill[data-status='standalone'] .dp-sync-dot { background: var(--dp-info); }
+.dp-sync-pill[data-status='syncing'] .dp-sync-dot { background: var(--dp-accent); }
+
+/* --- Persistent Dockable Time Mini-Bar (Section 02.03) --- */
+.dp-minibar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px var(--dp-space-4);
+  background: var(--dp-paper);
+  border-bottom: 1px solid var(--dp-border);
+  font-size: 0.84rem;
+}
+
+.dp-minibar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--dp-surface-2);
+  border: 1px solid var(--dp-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.dp-minibar-chip.overdue {
+  border-color: var(--dp-danger);
+  color: var(--dp-danger);
+}
+
+/* --- Storage Quota / Conflict Alert Banner --- */
+.dp-banner {
+  margin: 10px var(--dp-space-4) 0;
+  padding: 10px 14px;
+  border-radius: var(--dp-radius-md);
+  border: 1px solid var(--dp-warn);
+  background: color-mix(in oklch, var(--dp-warn) 12%, var(--dp-paper));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.88rem;
+}
+
+.dp-banner.danger {
+  border-color: var(--dp-danger);
+  background: color-mix(in oklch, var(--dp-danger) 12%, var(--dp-paper));
+}
+
+.dp-content {
+  flex: 1;
+  padding: var(--dp-space-4);
+  max-width: 1520px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* --- Reusable Tactile Controls --- */
+.dp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--dp-radius-sm);
+  border: 1px solid var(--dp-border);
+  background: var(--dp-paper);
+  color: var(--dp-ink);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: transform 90ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.dp-btn:hover {
+  background: var(--dp-surface-2);
+  border-color: color-mix(in oklch, var(--dp-accent) 45%, var(--dp-border));
+}
+
+.dp-btn:active {
+  transform: translateY(0.5px);
+}
+
+.dp-btn-primary {
+  background: var(--dp-accent);
+  color: var(--dp-on-accent);
+  border-color: var(--dp-accent);
+  font-weight: 600;
+}
+
+.dp-btn-primary:hover {
+  filter: brightness(1.06);
+  background: var(--dp-accent);
+}
+
+.dp-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.dp-btn-danger {
+  color: var(--dp-danger);
+  border-color: color-mix(in oklch, var(--dp-danger) 40%, var(--dp-border));
+}
+
+.dp-btn-sm {
+  padding: 4px 9px;
+  font-size: 0.8rem;
+}
+
+.dp-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--dp-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dp-ink);
+  cursor: pointer;
+}
+.dp-icon-btn:hover {
+  background: var(--dp-surface-2);
+  border-color: var(--dp-border);
+}
+
+.dp-input,
+.dp-select,
+.dp-textarea {
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: var(--dp-radius-sm);
+  border: 1px solid var(--dp-border);
+  background: var(--dp-paper);
+  color: var(--dp-ink);
+}
+
+.dp-textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.dp-card {
+  background: var(--dp-paper);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-md);
+  padding: var(--dp-space-4);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+.dp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: var(--dp-surface-2);
+  border: 1px solid var(--dp-border);
+  color: var(--dp-ink);
+}
+
+.dp-pill.highlight {
+  background: var(--dp-highlight);
+  color: var(--dp-on-highlight);
+  border-color: transparent;
+}
+
+.dp-details {
+  border: 1px dashed var(--dp-border);
+  border-radius: var(--dp-radius-sm);
+  padding: 8px 12px;
+  background: color-mix(in oklch, var(--dp-surface-2) 55%, transparent);
+}
+.dp-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--dp-muted);
+  user-select: none;
+}
+
+/* --- Native Modal Dialog & Bottom Sheet (Modern Web Guidance compliant) --- */
+dialog.dp-dialog {
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-lg);
+  background: var(--dp-paper);
+  color: var(--dp-ink);
+  box-shadow: var(--dp-shadow-float);
+  overflow: auto;
+}
+
+dialog.dp-dialog.wide {
+  width: min(880px, calc(100vw - 24px));
+}
+
+dialog.dp-dialog.sheet {
+  margin-bottom: 0;
+  margin-top: auto;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  width: min(720px, 100vw);
+}
+
+/* MANDATORY: Prevent scroll chaining without locking html/body overflow */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background: rgb(16 12 8 / 0.45);
+  backdrop-filter: blur(3px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.dp-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--dp-border);
+  position: sticky;
+  top: 0;
+  background: var(--dp-paper);
+  z-index: 2;
+}
+
+.dp-dialog-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dp-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--dp-border);
+  background: var(--dp-surface-2);
+}
+
+/* --- In-App Undo Toast Stack --- */
+.dp-toast-stack {
+  position: fixed;
+  bottom: 20px;
+  inset-inline-end: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 60;
+  max-width: min(380px, calc(100vw - 32px));
+}
+
+.dp-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--dp-radius-md);
+  background: var(--dp-ink);
+  color: var(--dp-paper);
+  box-shadow: var(--dp-shadow-float);
+  font-size: 0.87rem;
+}
+
+.dp-toast button {
+  background: var(--dp-accent);
+  color: var(--dp-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- Phone Bottom Tabs & Thumb-Reachable FAB (Section 02.02) --- */
+.dp-mobile-nav,
+.dp-mobile-fab {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .dp-app,
+  .dp-app.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .dp-sidebar {
+    display: none;
+  }
+
+  .dp-content {
+    padding: 12px 10px 88px;
+  }
+
+  .dp-topbar {
+    padding: 6px 10px;
+  }
+
+  .dp-mobile-nav {
+    position: fixed;
+    bottom: 0;
+    inset-inline: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--dp-paper);
+    border-top: 1px solid var(--dp-border);
+    padding: 4px 4px max(6px, env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.08);
+  }
+
+  .dp-mobile-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 5px 2px;
+    border: none;
+    background: transparent;
+    color: var(--dp-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  .dp-mobile-tab.active {
+    color: var(--dp-accent);
+  }
+
+  .dp-mobile-fab {
+    position: fixed;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    inset-inline-end: 16px;
+    z-index: 42;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    background: var(--dp-accent);
+    color: var(--dp-on-accent);
+    box-shadow: var(--dp-shadow-float);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+
+  .dp-toast-stack {
+    bottom: 76px;
+    inset-inline-end: 12px;
+  }
+}
+
+/* 320px narrow screen safety */
+@media (max-width: 380px) {
+  .dp-topbar {
+    gap: 4px;
+  }
+  .dp-sync-pill span.dp-hide-xs {
+    display: none;
+  }
+}

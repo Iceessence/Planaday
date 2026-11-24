@@ -1,0 +1,51 @@
+{
+  "name": "Dayplana — Tactile Life Planner",
+  "short_name": "Dayplana",
+  "description": "All-in-one tactile paper life planner with unlimited offline storage and self-hosted Docker sync.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f1e7",
+  "theme_color": "#b48342",
+  "categories": ["productivity", "lifestyle", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/?share=1",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Today Spread",
+      "short_name": "Today",
+      "url": "/#today"
+    },
+    {
+      "name": "Quick Capture",
+      "short_name": "Capture",
+      "url": "/#capture"
+    },
+    {
+      "name": "Thought Inbox",
+      "short_name": "Thoughts",
+      "url": "/#thoughts"
+    },
+    {
+      "name": "Kitchen Hub",
+      "short_name": "Kitchen",
+      "url": "/#recipes"
+    }
+  ]
+}

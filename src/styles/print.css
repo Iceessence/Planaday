@@ -1,0 +1,56 @@
+/* Dayplana Edition 2 — Clean Ink-Friendly Print-to-Paper CSS (A4 / Letter / A5) (Section 14.07) */
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  :root {
+    --dp-canvas: #ffffff !important;
+    --dp-paper: #ffffff !important;
+    --dp-surface-2: #f7f7f7 !important;
+    --dp-ink: #000000 !important;
+    --dp-muted: #444444 !important;
+    --dp-border: #cccccc !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+
+  .dp-sidebar,
+  .dp-topbar,
+  .dp-minibar,
+  .dp-mobile-nav,
+  .dp-mobile-fab,
+  .dp-toast-stack,
+  .dp-banner,
+  .dp-no-print {
+    display: none !important;
+  }
+
+  .dp-app,
+  .dp-main-col {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .dp-content {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .dp-paper-sheet,
+  .dp-card,
+  .dp-open-book {
+    box-shadow: none !important;
+    border-color: #bbbbbb !important;
+    break-inside: avoid;
+  }
+
+  .dp-paper-sheet::after {
+    display: none !important;
+  }
+}
