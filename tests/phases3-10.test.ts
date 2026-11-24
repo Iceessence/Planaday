@@ -267,7 +267,8 @@ describe('Phases 3–10 — Task Calendar, Duration/Distraction, Lab Wet/NIR Sta
     // Expanded stickers & v3.0.0 changelog
     expect(STICKER_CATEGORIES).toContain('Laboratory & Science');
     expect(BUILTIN_STICKERS.length).toBeGreaterThanOrEqual(250);
-    expect(PLANADAY_CHANGELOG[0].version).toBe('3.0.0');
+    expect(PLANADAY_CHANGELOG.some((c) => c.version === '3.0.0')).toBe(true);
+    expect(PLANADAY_CHANGELOG[0].version).toBe('4.0.0');
     expect(window.localStorage.length).toBe(0);
   });
 });

@@ -69,6 +69,17 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
       ['History & Reviews', 'Completion History, Chore Punctuality'],
       ['Reports & Analytics', 'Statistics, Reports'],
       ['Lab Management', 'Laboratory Management Workspace'],
+      ['Calculator & Graph', 'Mathematical & Analytical Workspace'],
+      ['Spreadsheets', 'Integrated Spreadsheets'],
+      ['Presentations', 'Presentation Creator'],
+      ['Kanban Boards', 'Universal Kanban Boards'],
+      ['Whiteboard Canvas', 'Infinite Whiteboard'],
+      ['Projects & Records', 'Creative Projects & Custom Record Builder'],
+      ['Game Dev Studio', 'Game Development Workspace'],
+      ['Book Studio', 'Book Writing & Story Studio'],
+      ['Code Sandbox', 'Sandboxed Code & Testing Studio'],
+      ['Camera & Photos', 'Camera, Photo Library & Non-Destructive Editor'],
+      ['Universal Files', 'Universal Document & File Hub'],
       ['Flow Calendar', 'Flow Calendar'],
       ['Tasks', 'Tasks & Nested Subtasks'],
       ['Chores', 'Completion-Based Chores & Room Health'],
@@ -93,8 +104,13 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
       expect(btn, `Expected sidebar button "${navLabel}"`).toBeDefined();
       await act(async () => {
         btn!.click();
-        await new Promise((r) => setTimeout(r, 30));
       });
+      for (let t = 0; t < 40; t++) {
+        if (container.textContent?.includes(expectedHeading)) break;
+        await act(async () => {
+          await new Promise((r) => setTimeout(r, 25));
+        });
+      }
       expect(container.textContent).toContain(expectedHeading);
     }
 
@@ -104,5 +120,5 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
     await act(async () => {
       root.unmount();
     });
-  });
+  }, 20000);
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { AppProvider, useApp } from './core/AppContext';
 import { Sidebar } from './components/Shell/Sidebar';
 import { TopBar } from './components/Shell/TopBar';
@@ -21,9 +21,6 @@ import { PeriodPlannerView } from './modules/plan/PeriodPlannerView';
 import { TasksView } from './modules/plan/TasksView';
 import { ChoresView } from './modules/plan/ChoresView';
 import { GoalsHabitsView } from './modules/plan/GoalsHabitsView';
-import { DigitalPlannerView } from './modules/planner/DigitalPlannerView';
-import { LabWorkspaceView } from './modules/lab/LabWorkspaceView';
-import { ReportsView } from './modules/life/ReportsView';
 import { NotesView } from './modules/mind/NotesView';
 import { ThoughtInboxView } from './modules/mind/ThoughtInboxView';
 import { DiaryView } from './modules/mind/DiaryView';
@@ -45,6 +42,22 @@ import { GuideView } from './modules/life/GuideView';
 import { CustomTabView } from './modules/life/CustomTabView';
 import { DecorCanvasOverlay } from './components/Decor/DecorCanvas';
 
+// On-demand lazy chunks for heavy workspaces & creative studios (§38.5)
+const DigitalPlannerView = lazy(() => import('./modules/planner/DigitalPlannerView').then((m) => ({ default: m.DigitalPlannerView })));
+const LabWorkspaceView = lazy(() => import('./modules/lab/LabWorkspaceView').then((m) => ({ default: m.LabWorkspaceView })));
+const ReportsView = lazy(() => import('./modules/life/ReportsView').then((m) => ({ default: m.ReportsView })));
+const CalculatorView = lazy(() => import('./modules/studio/CalculatorView').then((m) => ({ default: m.CalculatorView })));
+const SpreadsheetView = lazy(() => import('./modules/studio/SpreadsheetView').then((m) => ({ default: m.SpreadsheetView })));
+const PresentationView = lazy(() => import('./modules/studio/PresentationView').then((m) => ({ default: m.PresentationView })));
+const ProjectsView = lazy(() => import('./modules/creative/ProjectsView').then((m) => ({ default: m.ProjectsView })));
+const GameDevView = lazy(() => import('./modules/creative/GameDevView').then((m) => ({ default: m.GameDevView })));
+const BookStudioView = lazy(() => import('./modules/creative/BookStudioView').then((m) => ({ default: m.BookStudioView })));
+const KanbanView = lazy(() => import('./modules/studio/KanbanView').then((m) => ({ default: m.KanbanView })));
+const WhiteboardView = lazy(() => import('./modules/studio/WhiteboardView').then((m) => ({ default: m.WhiteboardView })));
+const CodeStudioView = lazy(() => import('./modules/studio/CodeStudioView').then((m) => ({ default: m.CodeStudioView })));
+const PhotoStudioView = lazy(() => import('./modules/studio/PhotoStudioView').then((m) => ({ default: m.PhotoStudioView })));
+const FileManagerView = lazy(() => import('./modules/studio/FileManagerView').then((m) => ({ default: m.FileManagerView })));
+
 const ActiveWorkspaceStage: React.FC = () => {
   const { activeView, activeCustomTabId } = useApp();
 
@@ -65,6 +78,17 @@ const ActiveWorkspaceStage: React.FC = () => {
   if (activeView === 'history') return <HistoryView />;
   if (activeView === 'reports') return <ReportsView />;
   if (activeView === 'lab') return <LabWorkspaceView />;
+  if (activeView === 'calculator') return <CalculatorView />;
+  if (activeView === 'spreadsheets') return <SpreadsheetView />;
+  if (activeView === 'presentations') return <PresentationView />;
+  if (activeView === 'projects') return <ProjectsView />;
+  if (activeView === 'game_dev') return <GameDevView />;
+  if (activeView === 'book_writing') return <BookStudioView />;
+  if (activeView === 'kanban') return <KanbanView />;
+  if (activeView === 'whiteboard') return <WhiteboardView />;
+  if (activeView === 'code_studio') return <CodeStudioView />;
+  if (activeView === 'photo_studio') return <PhotoStudioView />;
+  if (activeView === 'files') return <FileManagerView />;
   if (activeView === 'goals') return <GoalsHabitsView mode="goals" />;
   if (activeView === 'habits') return <GoalsHabitsView mode="habits" />;
   if (activeView === 'notes') return <NotesView />;
@@ -138,7 +162,9 @@ const ShellFrame: React.FC = () => {
         )}
 
         <main className="dp-content">
-          <ActiveWorkspaceStage />
+          <Suspense fallback={<div className="dp-card" style={{ padding: '1.5rem' }}>Loading Planaday studio…</div>}>
+            <ActiveWorkspaceStage />
+          </Suspense>
         </main>
       </div>
 

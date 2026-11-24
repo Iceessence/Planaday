@@ -61,6 +61,8 @@ export const NotesView: React.FC = () => {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [newNotebookName, setNewNotebookName] = useState('');
   const [notePageIdx, setNotePageIdx] = useState(0);
+  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
+  const [showArchived, setShowArchived] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -87,10 +89,11 @@ export const NotesView: React.FC = () => {
   const visibleNotes = useMemo(() => {
     const q = noteSearch.trim().toLowerCase();
     const list = notes.filter((n) => {
+      if (!showArchived && n.payload.archived) return false;
       if (activeNotebook !== 'all' && n.payload.notebookId !== activeNotebook) return false;
-      if (notePinFilter === 'pinned' && !n.payload.pinned) return false;
+      if (notePinFilter === 'pinned' && !n.payload.pinned && !n.payload.favorite) return false;
       if (q) {
-        const hay = `${n.title} ${n.payload.content ?? ''} ${(n.tags ?? []).join(' ')}`.toLowerCase();
+        const hay = `${n.title} ${n.payload.description ?? ''} ${n.payload.content ?? ''} ${(n.tags ?? []).join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -108,7 +111,55 @@ export const NotesView: React.FC = () => {
       }
       return a.updatedAt.localeCompare(b.updatedAt) * dir;
     });
-  }, [notes, activeNotebook, noteSearch, notePinFilter, noteSortBy, noteSortDir]);
+  }, [notes, activeNotebook, noteSearch, notePinFilter, noteSortBy, noteSortDir, showArchived]);
+
+  const noteById = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
+
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, Array<LifeRecord<NotePayload>>>();
+    const visibleIds = new Set(visibleNotes.map((n) => n.id));
+    for (const n of visibleNotes) {
+      const pid = n.payload.parentId && visibleIds.has(n.payload.parentId) ? n.payload.parentId : '__root__';
+      const arr = map.get(pid) ?? [];
+      arr.push(n);
+      map.set(pid, arr);
+    }
+    return map;
+  }, [visibleNotes]);
+
+  const getDescendantIds = useCallback(
+    (rootId: string): Set<string> => {
+      const out = new Set<string>([rootId]);
+      const queue = [rootId];
+      while (queue.length) {
+        const cur = queue.shift()!;
+        for (const n of notes) {
+          if (n.payload.parentId === cur && !out.has(n.id)) {
+            out.add(n.id);
+            queue.push(n.id);
+          }
+        }
+      }
+      return out;
+    },
+    [notes]
+  );
+
+  const getBreadcrumbTrail = useCallback(
+    (note: LifeRecord<NotePayload> | null): Array<LifeRecord<NotePayload>> => {
+      if (!note) return [];
+      const chain: Array<LifeRecord<NotePayload>> = [];
+      const seen = new Set<string>();
+      let cur: LifeRecord<NotePayload> | undefined = note;
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        chain.unshift(cur);
+        cur = cur.payload.parentId ? noteById.get(cur.payload.parentId) : undefined;
+      }
+      return chain;
+    },
+    [noteById]
+  );
 
   const activeNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId) ?? visibleNotes[0] ?? null,
@@ -209,10 +260,12 @@ export const NotesView: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleManualSave]);
 
-  const handleCreateNote = async () => {
-    const nb = activeNotebook === 'all' ? 'nb_personal' : activeNotebook;
-    const created = await createRecord<NotePayload>('note', 'Untitled Note', {
+  const handleCreateNote = async (parentId: string | null = null) => {
+    const parentNote = parentId ? noteById.get(parentId) : null;
+    const nb = parentNote?.payload.notebookId ?? (activeNotebook === 'all' ? 'nb_personal' : activeNotebook);
+    const created = await createRecord<NotePayload>('note', parentId ? 'Untitled Sub-Note' : 'Untitled Note', {
       notebookId: nb,
+      parentId,
       writtenForDate: logicalToday,
       content: '',
       citations: [],
@@ -220,10 +273,32 @@ export const NotesView: React.FC = () => {
       voiceMemoBlobIds: [],
       touchedDates: [logicalToday],
     });
+    if (parentId) {
+      setCollapsedNodes((prev) => ({ ...prev, [parentId]: false }));
+    }
     setSelectedNoteId(created.id);
     setViewMode('edit');
     setMobilePane('editor');
-    pushToast('Created new note', { canUndo: true });
+    pushToast(parentId ? 'Created nested sub-note' : 'Created new note', { canUndo: true });
+  };
+
+  const handleDuplicateSubtree = async (root: LifeRecord<NotePayload>) => {
+    const cloneBranch = async (src: LifeRecord<NotePayload>, newParentId: string | null): Promise<LifeRecord<NotePayload>> => {
+      const copy = await createRecord<NotePayload>('note', `${src.title}${newParentId === src.payload.parentId ? ' (Copy)' : ''}`, {
+        ...src.payload,
+        parentId: newParentId,
+        writtenForDate: logicalToday,
+        touchedDates: [logicalToday],
+      });
+      const kids = notes.filter((n) => n.payload.parentId === src.id);
+      for (const k of kids) {
+        await cloneBranch(k, copy.id);
+      }
+      return copy;
+    };
+    const rootCopy = await cloneBranch(root, root.payload.parentId ?? null);
+    setSelectedNoteId(rootCopy.id);
+    pushToast(`Duplicated "${root.title}" & all nested sub-notes`, { tone: 'ok' });
   };
 
   const handleContentChange = (nextContent: string) => {
@@ -564,36 +639,90 @@ export const NotesView: React.FC = () => {
         </div>
       ) : (
         <div className={`dp-split-pane ${mobilePane === 'editor' ? 'mobile-show-detail' : 'mobile-show-list'}`}>
-          {/* Note List */}
-          <div className="dp-split-list dp-stack" style={{ gap: 6, maxHeight: '66dvh', overflowY: 'auto' }}>
-            {visibleNotes.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                className="dp-card"
-                style={{
-                  textAlign: 'start',
-                  padding: 10,
-                  cursor: 'pointer',
-                  borderColor: n.id === activeNote?.id ? 'var(--dp-accent)' : undefined,
-                  borderWidth: n.id === activeNote?.id ? 2 : 1,
-                }}
-                onClick={() => {
-                  setSelectedNoteId(n.id);
-                  setMobilePane('editor');
-                }}
-              >
-                <div className="dp-between">
-                  <strong style={{ fontSize: '0.9rem' }}>
-                    {n.payload.pinned ? '📌 ' : ''}
-                    {n.title}
-                  </strong>
-                </div>
-                <div className="dp-muted" style={{ fontSize: '0.75rem', marginTop: 3 }}>
-                  Written for {n.payload.writtenForDate}
-                </div>
-              </button>
-            ))}
+          {/* Unlimited Recursive Note Tree (§29) */}
+          <div className="dp-split-list dp-stack" style={{ gap: 5, maxHeight: '66dvh', overflowY: 'auto' }}>
+            <div className="dp-between" style={{ fontSize: '0.75rem', padding: '0 2px' }}>
+              <span className="dp-muted">Nested Hierarchy ({visibleNotes.length})</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+                Archived
+              </label>
+            </div>
+            {(() => {
+              const renderTree = (parentKey: string, depth: number): React.ReactNode => {
+                const items = childrenByParent.get(parentKey) ?? [];
+                return items.map((n) => {
+                  const kids = childrenByParent.get(n.id) ?? [];
+                  const isCollapsed = Boolean(collapsedNodes[n.id]);
+                  const indent = Math.min(depth, 8) * 14;
+                  return (
+                    <React.Fragment key={n.id}>
+                      <div
+                        className="dp-card"
+                        style={{
+                          marginLeft: indent,
+                          padding: '8px 9px',
+                          cursor: 'pointer',
+                          borderColor: n.id === activeNote?.id ? 'var(--dp-accent)' : undefined,
+                          borderWidth: n.id === activeNote?.id ? 2 : 1,
+                          opacity: n.payload.archived ? 0.65 : 1,
+                        }}
+                        onClick={() => {
+                          setSelectedNoteId(n.id);
+                          setMobilePane('editor');
+                        }}
+                      >
+                        <div className="dp-between" style={{ gap: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                            {kids.length > 0 ? (
+                              <button
+                                type="button"
+                                className="dp-btn"
+                                style={{ padding: '0 4px', fontSize: '0.72rem', minHeight: 20 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCollapsedNodes((prev) => ({ ...prev, [n.id]: !prev[n.id] }));
+                                }}
+                                aria-label="Toggle sub-notes"
+                              >
+                                {isCollapsed ? '▸' : '▾'}
+                              </button>
+                            ) : (
+                              <span className="dp-muted" style={{ fontSize: '0.7rem', width: 12, textAlign: 'center' }}>•</span>
+                            )}
+                            <strong style={{ fontSize: '0.86rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {n.payload.pinned ? '📌 ' : ''}
+                              {n.payload.favorite ? '⭐ ' : ''}
+                              {n.title}
+                            </strong>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            {kids.length > 0 && <span className="dp-badge" style={{ fontSize: '0.68rem' }}>{kids.length}</span>}
+                            <button
+                              type="button"
+                              className="dp-btn"
+                              style={{ padding: '0 5px', fontSize: '0.72rem', minHeight: 20 }}
+                              title="Add nested sub-note inside this note"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCreateNote(n.id);
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        <div className="dp-muted" style={{ fontSize: '0.72rem', marginTop: 2, paddingLeft: 16 }}>
+                          {n.payload.writtenForDate}{n.payload.archived ? ' · Archived' : ''}
+                        </div>
+                      </div>
+                      {!isCollapsed && kids.length > 0 && renderTree(n.id, depth + 1)}
+                    </React.Fragment>
+                  );
+                });
+              };
+              return renderTree('__root__', 0);
+            })()}
           </div>
 
           {/* Note Editor Canvas */}
@@ -676,6 +805,80 @@ export const NotesView: React.FC = () => {
                     }}
                   >
                     <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Breadcrumb Trail + Unlimited Nesting Actions (§29) */}
+              <div className="dp-between" style={{ gap: 6, flexWrap: 'wrap', padding: '4px 8px', borderRadius: 8, background: 'var(--dp-paper-alt, var(--dp-surface-2))', fontSize: '0.78rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  <span className="dp-muted">Path:</span>
+                  {getBreadcrumbTrail(activeNote).map((crumb, idx, arr) => (
+                    <React.Fragment key={crumb.id}>
+                      {idx > 0 && <span className="dp-muted">›</span>}
+                      <button
+                        type="button"
+                        className="dp-btn"
+                        style={{ padding: '1px 6px', fontSize: '0.75rem', fontWeight: idx === arr.length - 1 ? 700 : 400 }}
+                        onClick={() => setSelectedNoteId(crumb.id)}
+                      >
+                        {crumb.title}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleCreateNote(activeNote.id)}>
+                    + Sub-Note
+                  </button>
+                  <select
+                    aria-label="Parent note"
+                    className="dp-select"
+                    style={{ width: 'auto', maxWidth: 170, padding: '2px 6px', fontSize: '0.75rem' }}
+                    value={activeNote.payload.parentId ?? ''}
+                    onChange={(e) =>
+                      void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                        ...c,
+                        payload: { ...c.payload, parentId: e.target.value || null },
+                      }))
+                    }
+                  >
+                    <option value="">Parent: Top Level</option>
+                    {(() => {
+                      const forbidden = getDescendantIds(activeNote.id);
+                      return notes
+                        .filter((cand) => !forbidden.has(cand.id))
+                        .map((cand) => (
+                          <option key={cand.id} value={cand.id}>Under: {cand.title.slice(0, 28)}</option>
+                        ));
+                    })()}
+                  </select>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleDuplicateSubtree(activeNote)}>
+                    Duplicate Branch
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() =>
+                      void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                        ...c,
+                        payload: { ...c.payload, favorite: !c.payload.favorite },
+                      }))
+                    }
+                  >
+                    {activeNote.payload.favorite ? '⭐ Fav' : '☆ Fav'}
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() =>
+                      void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                        ...c,
+                        payload: { ...c.payload, archived: !c.payload.archived },
+                      }))
+                    }
+                  >
+                    {activeNote.payload.archived ? 'Unarchive' : 'Archive'}
                   </button>
                 </div>
               </div>

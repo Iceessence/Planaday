@@ -31,6 +31,23 @@ export default defineConfig({
             './src/modules/planner/DigitalPlannerView.tsx',
             './src/modules/life/ReportsView.tsx',
           ],
+          mathOffice: [
+            './src/modules/studio/CalculatorView.tsx',
+            './src/modules/studio/SpreadsheetView.tsx',
+            './src/modules/studio/PresentationView.tsx',
+          ],
+          creativeStudios: [
+            './src/modules/creative/ProjectsView.tsx',
+            './src/modules/creative/GameDevView.tsx',
+            './src/modules/creative/BookStudioView.tsx',
+          ],
+          visualCodeMedia: [
+            './src/modules/studio/KanbanView.tsx',
+            './src/modules/studio/WhiteboardView.tsx',
+            './src/modules/studio/CodeStudioView.tsx',
+            './src/modules/studio/PhotoStudioView.tsx',
+            './src/modules/studio/FileManagerView.tsx',
+          ],
           mindTime: [
             './src/modules/mind/NotesView.tsx',
             './src/modules/mind/ThoughtInboxView.tsx',

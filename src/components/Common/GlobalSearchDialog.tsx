@@ -56,6 +56,51 @@ function recordTypeToView(type: RecordType): NavView {
     case 'party':
     case 'packing_template':
       return 'travel';
+    case 'calc_saved':
+      return 'calculator';
+    case 'spreadsheet':
+      return 'spreadsheets';
+    case 'presentation':
+      return 'presentations';
+    case 'project':
+    case 'custom_schema':
+    case 'custom_entity':
+      return 'projects';
+    case 'game_project':
+    case 'game_entity':
+      return 'game_dev';
+    case 'book_project':
+    case 'book_chapter':
+    case 'book_entity':
+      return 'book_writing';
+    case 'kanban_board':
+    case 'kanban_card':
+      return 'kanban';
+    case 'whiteboard':
+      return 'whiteboard';
+    case 'code_project':
+    case 'code_snippet':
+      return 'code_studio';
+    case 'photo_asset':
+      return 'photo_studio';
+    case 'file_folder':
+      return 'files';
+    case 'lab_sample':
+    case 'lab_subcontract':
+    case 'lab_inventory':
+    case 'lab_order':
+    case 'lab_budget':
+    case 'lab_price_entry':
+    case 'lab_price_template':
+    case 'lab_research':
+    case 'lab_email_draft':
+    case 'lab_task':
+    case 'lab_meeting':
+    case 'lab_calibration':
+    case 'lab_wet_nir':
+    case 'lab_work_hour':
+    case 'lab_qms_item':
+      return 'lab';
     default:
       return 'today';
   }
@@ -128,6 +173,20 @@ export const GlobalSearchDialog: React.FC = () => {
             <option value="event">Events</option>
             <option value="chore">Chores</option>
             <option value="note">Notes</option>
+            <option value="spreadsheet">Spreadsheets</option>
+            <option value="presentation">Presentations</option>
+            <option value="project">Projects</option>
+            <option value="game_project">Game Dev</option>
+            <option value="book_project">Books</option>
+            <option value="book_chapter">Book Chapters</option>
+            <option value="kanban_card">Kanban Cards</option>
+            <option value="whiteboard">Whiteboards</option>
+            <option value="code_project">Code Projects</option>
+            <option value="code_snippet">Code Snippets</option>
+            <option value="photo_asset">Photos</option>
+            <option value="calc_saved">Calculations</option>
+            <option value="lab_sample">Lab Samples</option>
+            <option value="lab_inventory">Lab Inventory</option>
             <option value="thought">Thoughts</option>
             <option value="diary">Diary</option>
             <option value="recipe">Recipes</option>

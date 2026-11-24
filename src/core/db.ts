@@ -79,6 +79,17 @@ export const DEFAULT_ENABLED_MODULES: Record<ModuleId, boolean> = {
   home_assets: false,
   lab: true,
   reports: true,
+  calculator: true,
+  spreadsheets: true,
+  presentations: true,
+  projects: true,
+  game_dev: true,
+  book_writing: true,
+  kanban: true,
+  whiteboard: true,
+  code_studio: true,
+  photo_studio: true,
+  files: true,
   ai: false,
 };
 

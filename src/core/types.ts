@@ -38,6 +38,17 @@ export type ModuleId =
   | 'home_assets'
   | 'lab'
   | 'reports'
+  | 'calculator'
+  | 'spreadsheets'
+  | 'presentations'
+  | 'projects'
+  | 'game_dev'
+  | 'book_writing'
+  | 'kanban'
+  | 'whiteboard'
+  | 'code_studio'
+  | 'photo_studio'
+  | 'files'
   | 'ai';
 
 export type NavView =
@@ -77,6 +88,17 @@ export type NavView =
   | 'travel'
   | 'home_assets'
   | 'lab'
+  | 'calculator'
+  | 'spreadsheets'
+  | 'presentations'
+  | 'projects'
+  | 'game_dev'
+  | 'book_writing'
+  | 'kanban'
+  | 'whiteboard'
+  | 'code_studio'
+  | 'photo_studio'
+  | 'files'
   | 'spaces'
   | 'custom_tab'
   | 'insights'
@@ -156,7 +178,25 @@ export type RecordType =
   | 'lab_calibration'
   | 'lab_wet_nir'
   | 'lab_work_hour'
-  | 'lab_qms_item';
+  | 'lab_qms_item'
+  | 'calc_saved'
+  | 'spreadsheet'
+  | 'presentation'
+  | 'project'
+  | 'custom_schema'
+  | 'custom_entity'
+  | 'game_project'
+  | 'game_entity'
+  | 'book_project'
+  | 'book_chapter'
+  | 'book_entity'
+  | 'kanban_board'
+  | 'kanban_card'
+  | 'whiteboard'
+  | 'code_project'
+  | 'code_snippet'
+  | 'photo_asset'
+  | 'file_folder';
 
 export interface EntityLink {
   targetId: string;
@@ -375,6 +415,12 @@ export interface HabitPayload {
 
 export interface NotePayload {
   notebookId: string;
+  parentId?: string | null; // §29 Unlimited hierarchical nested notes (any depth!)
+  sortOrder?: number;
+  isSection?: boolean;
+  description?: string;
+  archived?: boolean;
+  favorite?: boolean;
   folderPath?: string;
   writtenForDate: string; // YYYY-MM-DD
   pinned?: boolean;
