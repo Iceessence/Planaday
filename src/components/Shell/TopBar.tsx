@@ -22,13 +22,18 @@ import type { NavView } from '../../core/types';
 
 const VIEW_TITLES: Record<NavView, string> = {
   all_in_one: 'All-in-One',
+  quick_glance: 'Quick Glance',
   home: 'Home',
   today: 'Today',
+  digital_planner: 'Physical Planner',
   planner: 'Week / Month',
   calendar: 'Calendar',
+  task_calendar: 'Task Calendar',
   tasks: 'Tasks',
   chores: 'Chores',
   history: 'History',
+  reports: 'Reports & Stats',
+  lab: 'Lab Management',
   events: 'Life Events',
   notes: 'Notes',
   thoughts: 'Thoughts',

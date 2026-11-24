@@ -80,7 +80,7 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
       ok: true,
       app: 'planaday',
       legacyApp: 'dayplana',
-      version: '2.1.0',
+      version: '3.0.0',
       dataDir,
       ...stats,
       timestamp: new Date().toISOString(),

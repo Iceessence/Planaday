@@ -27,6 +27,7 @@ import {
 } from '../../core/planActions';
 import { scheduleMealWithPrepReminder } from '../../core/kitchenActions';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
+import { createId, storeBlob } from '../../core/db';
 import { getDailyFact, getFactTopics } from '../../data/facts';
 import { ModalDialog } from '../../components/Common/ModalDialog';
 import { WeatherCard } from '../../components/Common/WeatherCard';
@@ -35,8 +36,10 @@ import { SafeInput, SafeTextarea } from '../../components/Common/SafeTextEditor'
 import type {
   CalendarEventPayload,
   ChorePayload,
+  DailyNoteSectionDef,
   DiaryPayload,
   EventRetrospective,
+  FoodLogPayload,
   LifeRecord,
   NotePayload,
   PaperMaterial,
@@ -105,6 +108,10 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
   const [retroOutcome, setRetroOutcome] = useState<EventRetrospective['outcome']>('Good');
   const [retroRating, setRetroRating] = useState<1 | 2 | 3 | 4 | 5>(4);
   const [retroNote, setRetroNote] = useState('');
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [newSectionEmoji, setNewSectionEmoji] = useState('📝');
+  const [newSectionSched, setNewSectionSched] = useState<DailyNoteSectionDef['schedule']>('daily');
+  const todayPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setNowDate(new Date()), 30_000);
@@ -127,9 +134,51 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     [allTasks, activeDate]
   );
 
-  const topThree = useMemo(
-    () => allTasks.filter((t) => t.payload.pinnedTop3Date === activeDate).slice(0, 3),
-    [allTasks, activeDate]
+  const maxFavs = settings.maxFavorites; // null/undefined = unlimited!
+  const topThree = useMemo(() => {
+    const pinned = allTasks.filter((t) => t.payload.pinnedTop3Date === activeDate);
+    return typeof maxFavs === 'number' && maxFavs > 0 ? pinned.slice(0, maxFavs) : pinned;
+  }, [allTasks, activeDate, maxFavs]);
+
+  // Upcoming Important Items across configurable future window (Section 11)
+  const upcomingHorizonDays = settings.todayUpcomingDays ?? 14;
+  const upcomingImportantItems = useMemo(() => {
+    const endCutoff = addDaysIso(activeDate, Math.max(1, upcomingHorizonDays));
+    const items: Array<{ id: string; date: string; title: string; badge: string; view: 'calendar' | 'tasks' | 'events' }> = [];
+    for (const ev of allEvents) {
+      if (ev.payload.startDate > activeDate && ev.payload.startDate <= endCutoff && (ev.isImportant || ev.payload.importance === 'must_do')) {
+        items.push({ id: ev.id, date: ev.payload.startDate, title: `${ev.payload.emoji || '📅'} ${ev.title}`, badge: 'Event', view: 'calendar' });
+      }
+    }
+    for (const t of allTasks) {
+      if (t.status !== 'active') continue;
+      const targetD = t.dueDate || t.doDate;
+      if (targetD && targetD > activeDate && targetD <= endCutoff && (t.isImportant || t.priority === 'urgent' || t.priority === 'high')) {
+        items.push({ id: t.id, date: targetD, title: `✅ ${t.title}`, badge: t.dueDate ? 'Hard Due' : t.priority || 'Task', view: 'tasks' });
+      }
+    }
+    return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 10);
+  }, [allEvents, allTasks, activeDate, upcomingHorizonDays]);
+
+  const activeWeekday = useMemo(() => {
+    const [y, m, d] = activeDate.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1).getDay();
+  }, [activeDate]);
+
+  const customDailySections = useMemo(() => {
+    const list = settings.customDailyNoteSections ?? [];
+    const isWeekend = activeWeekday === 0 || activeWeekday === 6;
+    return list.filter((s) => {
+      if (!s.visible) return false;
+      if (s.schedule === 'weekdays' && isWeekend) return false;
+      if (s.schedule === 'weekends' && !isWeekend) return false;
+      return true;
+    });
+  }, [settings.customDailyNoteSections, activeWeekday]);
+
+  const todayFoodLogs = useMemo(
+    () => (records.filter((r) => r.type === 'food_log') as Array<LifeRecord<FoodLogPayload>>).filter((f) => f.payload.date === activeDate),
+    [records, activeDate]
   );
 
   const yesterdayLeftovers = useMemo(
@@ -267,13 +316,14 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
       );
       pushToast(`Added event "${text}" at ${formatTimeDisplay(quickStartTime, settings.timeFormat)}`, { canUndo: true });
     } else if (quickKind === 'task') {
+      const canPin = maxFavs === null || maxFavs === undefined || topThree.length < maxFavs;
       await createRecord<TaskPayload>(
         'task',
         text,
         {
           subtasks: [],
           boardColumn: 'next',
-          pinnedTop3Date: quickPinTop3 && topThree.length < 3 ? activeDate : null,
+          pinnedTop3Date: quickPinTop3 && canPin ? activeDate : null,
         },
         {
           doDate: activeDate,
@@ -313,7 +363,19 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
         title: text,
         addPrepReminder: false,
       });
-      pushToast(`Planned ${quickMealSlot}: "${text}"`, { canUndo: true });
+      await createRecord<FoodLogPayload>(
+        'food_log',
+        text,
+        {
+          date: activeDate,
+          time: minutesToTime(nowMin),
+          mealCategory: quickMealSlot,
+          foodName: text,
+        },
+        {},
+        { skipUndo: true }
+      );
+      pushToast(`Logged ${quickMealSlot}: "${text}" (synced to Meal Planner & Food History!)`, { canUndo: true });
     } else if (quickKind === 'timer') {
       const totalSec = Math.max(1, (quickDurationMin || 0) * 60 + (quickTimerSec || 0));
       await startCountdownTimer(text || 'Today Timer', totalSec, 'countdown');
@@ -355,14 +417,14 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
   const toggleTop3 = async (task: LifeRecord<TaskPayload>) => {
     const pinned = task.payload.pinnedTop3Date === activeDate;
-    if (!pinned && topThree.length >= 3) {
-      pushToast('Top Three is full — unpin one priority first.');
+    if (!pinned && typeof maxFavs === 'number' && maxFavs > 0 && topThree.length >= maxFavs) {
+      pushToast(`Favorites cap (${maxFavs}) reached — raise or set Unlimited in Today Settings.`);
       return;
     }
     await updateRecord<TaskPayload>(
       task.id,
       (cur) => ({ ...cur, payload: { ...cur.payload, pinnedTop3Date: pinned ? null : activeDate } }),
-      { undoLabel: pinned ? 'Unpinned from Top 3' : 'Pinned to Top 3' }
+      { undoLabel: pinned ? 'Unpinned from Favorites' : 'Pinned to Favorites' }
     );
   };
 
@@ -666,6 +728,103 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
               <option value="C">°C</option>
             </select>
           </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <span className="dp-muted">Upcoming Lookahead:</span>
+            <select
+              className="dp-select"
+              style={{ width: 'auto', padding: '2px 6px' }}
+              value={upcomingHorizonDays}
+              onChange={(e) => void patchSettings({ todayUpcomingDays: Number(e.target.value) || 14 })}
+            >
+              <option value={3}>3 days</option>
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+            </select>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <span className="dp-muted">Max Favorites:</span>
+            <select
+              className="dp-select"
+              style={{ width: 'auto', padding: '2px 6px' }}
+              value={maxFavs === null || maxFavs === undefined ? 'unlimited' : String(maxFavs)}
+              onChange={(e) => void patchSettings({ maxFavorites: e.target.value === 'unlimited' ? null : Number(e.target.value) })}
+            >
+              <option value="unlimited">Unlimited</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
+            </select>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.todayCompactMode)}
+              onChange={(e) => void patchSettings({ todayCompactMode: e.target.checked })}
+            />
+            <span>Compact Mode</span>
+          </label>
+        </div>
+
+        {/* Manage Unlimited Custom Daily Note Sections (Section 11.1) */}
+        <div className="dp-stack" style={{ gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--dp-border)', fontSize: '0.82rem' }}>
+          <strong>Custom Daily Note Sections ({(settings.customDailyNoteSections ?? []).length})</strong>
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {(settings.customDailyNoteSections ?? []).map((sec) => (
+              <span key={sec.id} className="dp-pill" style={{ gap: 5 }}>
+                <input
+                  type="checkbox"
+                  checked={sec.visible}
+                  onChange={() =>
+                    void patchSettings({
+                      customDailyNoteSections: (settings.customDailyNoteSections ?? []).map((s) =>
+                        s.id === sec.id ? { ...s, visible: !s.visible } : s
+                      ),
+                    })
+                  }
+                />
+                <span>{sec.emoji} {sec.title} ({sec.schedule})</span>
+                <button
+                  type="button"
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--dp-danger)' }}
+                  onClick={() =>
+                    void patchSettings({
+                      customDailyNoteSections: (settings.customDailyNoteSections ?? []).filter((s) => s.id !== sec.id),
+                    })
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <input className="dp-input" style={{ width: 44 }} value={newSectionEmoji} onChange={(e) => setNewSectionEmoji(e.target.value)} aria-label="Section emoji" />
+            <input className="dp-input" style={{ flex: 1, minWidth: 150 }} placeholder="Add custom daily note section (e.g., Lab Prep, Evening Reflection)…" value={newSectionTitle} onChange={(e) => setNewSectionTitle(e.target.value)} />
+            <select className="dp-select" style={{ width: 'auto' }} value={newSectionSched} onChange={(e) => setNewSectionSched(e.target.value as DailyNoteSectionDef['schedule'])}>
+              <option value="daily">Every Day</option>
+              <option value="weekdays">Weekdays Only</option>
+              <option value="weekends">Weekends Only</option>
+            </select>
+            <button
+              type="button"
+              className="dp-btn dp-btn-primary dp-btn-sm"
+              onClick={() => {
+                if (!newSectionTitle.trim()) return;
+                void patchSettings({
+                  customDailyNoteSections: [
+                    ...(settings.customDailyNoteSections ?? []),
+                    { id: createId('dsec'), title: newSectionTitle.trim(), emoji: newSectionEmoji || '📝', visible: true, schedule: newSectionSched },
+                  ],
+                });
+                setNewSectionTitle('');
+                pushToast('Added custom daily note section!');
+              }}
+            >
+              + Add Section
+            </button>
+          </div>
         </div>
       </TabSettingsDrawer>
 
@@ -1152,29 +1311,106 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
             placeholder="Jot freeform notes, meeting highlights, or sketches for today…"
           />
 
-          <div className="dp-grid-2" style={{ gap: 10 }}>
-            <label className="dp-stack" style={{ gap: 4 }}>
-              <strong style={{ fontSize: '0.88rem' }}>Tonight</strong>
-              <SafeTextarea
-                recordKey={`today:${activeDate}:tonight`}
-                externalValue={diary.tonight ?? ''}
-                onCommit={(val) => saveDiaryField({ tonight: val })}
-                className="dp-textarea"
-                style={{ minHeight: 68, background: 'transparent' }}
-                placeholder="Evening wind-down or dinner plan…"
-              />
-            </label>
-            <label className="dp-stack" style={{ gap: 4 }}>
-              <strong style={{ fontSize: '0.88rem' }}>Gratitude</strong>
-              <SafeTextarea
-                recordKey={`today:${activeDate}:gratitude`}
-                externalValue={diary.gratitude ?? ''}
-                onCommit={(val) => saveDiaryField({ gratitude: val })}
-                className="dp-textarea"
-                style={{ minHeight: 68, background: 'transparent' }}
-                placeholder="One calm thing you appreciated today…"
-              />
-            </label>
+          {/* Unlimited Custom Daily Note Sections (Section 11.1) */}
+          {customDailySections.length > 0 && (
+            <div className="dp-grid-2" style={{ gap: 10 }}>
+              {customDailySections.map((sec) => {
+                const legacyKey = sec.id === 'sec_tonight' ? 'tonight' : sec.id === 'sec_gratitude' ? 'gratitude' : null;
+                const curVal =
+                  diary.dailyNoteSections?.[sec.id] ??
+                  (legacyKey === 'tonight' ? diary.tonight : legacyKey === 'gratitude' ? diary.gratitude : '') ??
+                  '';
+                return (
+                  <label key={sec.id} className="dp-stack" style={{ gap: 4 }}>
+                    <strong style={{ fontSize: '0.86rem' }}>{sec.emoji} {sec.title}</strong>
+                    <SafeTextarea
+                      recordKey={`today:${activeDate}:sec:${sec.id}`}
+                      externalValue={curVal}
+                      onCommit={(val) => {
+                        const patch: Partial<DiaryPayload> = {
+                          dailyNoteSections: { ...(diary.dailyNoteSections ?? {}), [sec.id]: val },
+                        };
+                        if (legacyKey === 'tonight') patch.tonight = val;
+                        if (legacyKey === 'gratitude') patch.gratitude = val;
+                        return saveDiaryField(patch);
+                      }}
+                      className="dp-textarea"
+                      style={{ minHeight: settings.todayCompactMode ? 48 : 68, background: 'transparent' }}
+                      placeholder={`Write ${sec.title.toLowerCase()}…`}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Upcoming Important Items (Lookahead across Future Days — Section 11) */}
+          {upcomingImportantItems.length > 0 && (
+            <div className="dp-card dp-stack" style={{ padding: 10, gap: 6, background: 'var(--dp-surface-2)' }}>
+              <div className="dp-between">
+                <strong style={{ fontSize: '0.86rem' }}>
+                  🗓️ Upcoming Important Items (Next {upcomingHorizonDays} Days)
+                </strong>
+                <span className="dp-pill">{upcomingImportantItems.length}</span>
+              </div>
+              {upcomingImportantItems.map((it) => (
+                <div key={it.id} className="dp-between" style={{ fontSize: '0.82rem', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-ghost dp-btn-sm"
+                    style={{ padding: 0, textAlign: 'start', justifyContent: 'flex-start' }}
+                    onClick={() => setActiveView(it.view)}
+                  >
+                    {it.title}
+                  </button>
+                  <span className="dp-pill">{it.date} · {it.badge}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Today's Logged Meals & Daily Photos Quick Strip (Synced with Food History & Diary!) */}
+          <div className="dp-card dp-stack" style={{ padding: 10, gap: 6 }}>
+            <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+              <strong style={{ fontSize: '0.86rem' }}>🍽️ Meals Logged Today ({todayFoodLogs.length}) &amp; 📷 Photos ({diary.photos?.length ?? 0})</strong>
+              <div className="dp-row" style={{ gap: 5 }}>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('meals')}>
+                  Food History →
+                </button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => todayPhotoInputRef.current?.click()}>
+                  + Daily Photo
+                </button>
+                <input
+                  ref={todayPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const stored = await storeBlob(f, f.name);
+                    await saveDiaryField({
+                      mediaBlobIds: [...(diary.mediaBlobIds ?? []), stored.hash],
+                      photos: [
+                        ...(diary.photos ?? []),
+                        { id: createId('ph'), blobHash: stored.hash, caption: f.name.replace(/\.[^.]+$/, ''), timestamp: new Date().toISOString(), album: 'Daily' },
+                      ],
+                    });
+                    pushToast('Saved daily photo (synced to Diary!)');
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            </div>
+            {todayFoodLogs.length > 0 && (
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 5, fontSize: '0.78rem' }}>
+                {todayFoodLogs.map((f) => (
+                  <span key={f.id} className="dp-pill">
+                    {f.payload.mealCategory}: <strong>{f.payload.foodName}</strong>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="dp-card dp-stack" style={{ padding: 12, gap: 10 }}>

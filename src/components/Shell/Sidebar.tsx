@@ -8,11 +8,14 @@ import {
   CalendarDays,
   CheckSquare,
   ChefHat,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Compass,
   FileText,
   Film,
   Flame,
+  FlaskConical,
   Gift,
   HeartHandshake,
   HelpCircle,
@@ -22,7 +25,9 @@ import {
   LayoutDashboard,
   Lightbulb,
   Menu,
+  NotebookPen,
   Package,
+  PieChart,
   Plane,
   Plus,
   Settings,
@@ -92,14 +97,26 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
       tabColor: '#a97434',
       items: [
         { view: 'all_in_one', label: 'All-in-One Scroll', icon: <Layers size={17} /> },
+        { view: 'quick_glance', label: 'Quick Glance', moduleId: 'quick_glance', icon: <Zap size={17} /> },
         { view: 'home', label: 'Home', icon: <Home size={17} /> },
         { view: 'today', label: 'Today Spread', icon: <Sun size={17} /> },
+        { view: 'digital_planner', label: 'Physical Planner', moduleId: 'digital_planner', icon: <NotebookPen size={17} /> },
         { view: 'planner', label: 'Week / Month / Year', moduleId: 'calendar', icon: <CalendarDays size={17} /> },
         { view: 'calendar', label: 'Flow Calendar', moduleId: 'calendar', icon: <Calendar size={17} /> },
+        { view: 'task_calendar', label: 'Task Calendar', moduleId: 'task_calendar', icon: <Clock size={17} /> },
         { view: 'tasks', label: 'Tasks', moduleId: 'tasks', icon: <CheckSquare size={17} />, badgeCount: openTasksCount },
         { view: 'chores', label: 'Chores', moduleId: 'chores', icon: <Sparkles size={17} />, badgeCount: dueChoresCount },
         { view: 'history', label: 'History & Reviews', icon: <BarChart3 size={17} /> },
+        { view: 'reports', label: 'Reports & Analytics', moduleId: 'reports', icon: <PieChart size={17} /> },
         { view: 'events', label: 'Life Events', moduleId: 'events', icon: <Gift size={17} /> },
+      ],
+    },
+    {
+      id: 'professional',
+      label: 'Laboratory',
+      tabColor: '#2f7a78',
+      items: [
+        { view: 'lab', label: 'Lab Management', moduleId: 'lab', icon: <FlaskConical size={17} /> },
       ],
     },
     {
@@ -273,30 +290,44 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
             !settings.hiddenSidebarViews.includes(item.view)
         );
         if (visibleItems.length === 0) return null;
+        const isGroupCollapsed = !collapsed && (settings.collapsedSidebarGroups ?? []).includes(group.id);
         return (
           <div key={group.id} className="dp-nav-group">
             {!collapsed && (
-              <div className="dp-nav-group-label">
-                <span className="dp-binder-dot" style={{ background: group.tabColor }} />
-                <span>{group.label}</span>
-              </div>
-            )}
-            {visibleItems.map((item) => (
               <button
-                key={item.view}
                 type="button"
-                className={`dp-nav-btn ${activeView === item.view ? 'active' : ''}`}
-                style={{ '--tab-color': group.tabColor } as React.CSSProperties}
-                title={collapsed ? item.label : undefined}
-                onClick={() => setActiveView(item.view)}
+                className="dp-nav-group-label"
+                style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', justifyContent: 'space-between', padding: '4px 8px' }}
+                onClick={() => {
+                  const cur = settings.collapsedSidebarGroups ?? [];
+                  const next = cur.includes(group.id) ? cur.filter((x) => x !== group.id) : [...cur, group.id];
+                  void patchSettings({ collapsedSidebarGroups: next });
+                }}
               >
-                {item.icon}
-                {!collapsed && <span>{item.label}</span>}
-                {!collapsed && item.badgeCount !== undefined && item.badgeCount > 0 && (
-                  <span className="dp-nav-count">{item.badgeCount}</span>
-                )}
+                <span className="dp-row" style={{ gap: 6 }}>
+                  <span className="dp-binder-dot" style={{ background: group.tabColor }} />
+                  <span>{group.label}</span>
+                </span>
+                {isGroupCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
               </button>
-            ))}
+            )}
+            {!isGroupCollapsed &&
+              visibleItems.map((item) => (
+                <button
+                  key={item.view}
+                  type="button"
+                  className={`dp-nav-btn ${activeView === item.view ? 'active' : ''}`}
+                  style={{ '--tab-color': group.tabColor } as React.CSSProperties}
+                  title={collapsed ? item.label : undefined}
+                  onClick={() => setActiveView(item.view)}
+                >
+                  {item.icon}
+                  {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && item.badgeCount !== undefined && item.badgeCount > 0 && (
+                    <span className="dp-nav-count">{item.badgeCount}</span>
+                  )}
+                </button>
+              ))}
           </div>
         );
       })}

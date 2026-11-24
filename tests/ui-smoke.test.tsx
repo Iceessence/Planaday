@@ -62,8 +62,13 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
     // Click through sidebar views across all 5 phases + new History & All-in-One Scroll pages
     const viewsToCheck = [
       ['All-in-One Scroll', 'All-in-One Scroll'],
+      ['Quick Glance', 'Quick Glance'],
       ['Home', "Today's Momentum"],
+      ['Physical Planner', 'Physical-Style Digital Planner'],
+      ['Task Calendar', 'Intelligent Task Calendar'],
       ['History & Reviews', 'Completion History, Chore Punctuality'],
+      ['Reports & Analytics', 'Statistics, Reports'],
+      ['Lab Management', 'Laboratory Management Workspace'],
       ['Flow Calendar', 'Flow Calendar'],
       ['Tasks', 'Tasks & Nested Subtasks'],
       ['Chores', 'Completion-Based Chores & Room Health'],

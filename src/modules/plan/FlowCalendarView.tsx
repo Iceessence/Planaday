@@ -37,8 +37,10 @@ import { createRecord, softDeleteRecord, updateRecord } from '../../core/reposit
 import { ModalDialog } from '../../components/Common/ModalDialog';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import { DecorCanvasOverlay } from '../../components/Decor/DecorCanvas';
 import { ALARM_RINGTONES, audioEngine } from '../../core/audio';
-import type { CalendarEventPayload, LifeRecord, RecurrenceRule } from '../../core/types';
+import { createId } from '../../core/db';
+import type { CalendarEventPayload, CalendarLayerDef, CalendarViewPrefs, LifeRecord, RecurrenceRule } from '../../core/types';
 
 const EVENT_TEMPLATES = [
   { name: 'Work Meeting', emoji: '💼', category: 'Work', duration: 45, color: '#3b6ea5', style: 'soft' as const },
@@ -49,18 +51,70 @@ const EVENT_TEMPLATES = [
   { name: 'Birthday', emoji: '🎂', category: 'Social & Fun', duration: 60, color: '#b47438', style: 'outline' as const },
 ];
 
-const ZOOM_STEPS = [5, 10, 15, 30, 60] as const;
+const ZOOM_STEPS = [1, 2, 5, 10, 15, 20, 30, 45, 60, 120, 180, 240] as const;
+
+function computePxPerHour(intervalMin: number): number {
+  if (intervalMin <= 1) return 720;
+  if (intervalMin <= 2) return 420;
+  if (intervalMin <= 5) return 216;
+  if (intervalMin <= 10) return 144;
+  if (intervalMin <= 15) return 96;
+  if (intervalMin <= 20) return 78;
+  if (intervalMin <= 30) return 60;
+  if (intervalMin <= 45) return 48;
+  if (intervalMin <= 60) return 40;
+  if (intervalMin <= 120) return 26;
+  if (intervalMin <= 180) return 20;
+  return 16; // 4-hour macro view!
+}
 
 export const FlowCalendarView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, selectedEventId, setSelectedEventId } = useApp();
+
+  const calPrefs: CalendarViewPrefs = settings.calendarPrefs ?? {
+    intervalMin: 15,
+    majorGridIntervalMin: 60,
+    showMajorGrid: true,
+    showMinorGrid: true,
+    gridThicknessPx: 1,
+    majorLineColor: '#b7a995',
+    minorLineColor: '#dfd5c6',
+    gridOpacity: 0.75,
+    gridLineStyle: 'solid',
+    timeLabelEveryMin: 60,
+    adaptiveText: true,
+    minFontPx: 10,
+    maxFontPx: 14,
+    visibleStartHour: 0,
+    visibleEndHour: 24,
+    overlapPolicy: 'side_by_side',
+    dayMinWidthPx: 145,
+  };
+  const calendars: CalendarLayerDef[] = settings.calendars ?? [
+    { id: 'cal_personal', name: 'Personal', emoji: '🌿', color: '#4f7a65', visible: true },
+    { id: 'cal_work', name: 'Work', emoji: '💼', color: '#3b6ea5', visible: true },
+    { id: 'cal_lab', name: 'Laboratory', emoji: '🧪', color: '#2f7a78', visible: true },
+    { id: 'cal_family', name: 'Family', emoji: '🏡', color: '#c96f53', visible: true },
+    { id: 'cal_tasks', name: 'Tasks & Chores', emoji: '✅', color: '#a97434', visible: true },
+  ];
+
+  const updateCalPrefs = (patch: Partial<CalendarViewPrefs>) => {
+    void patchSettings({ calendarPrefs: { ...calPrefs, ...patch } });
+  };
 
   // Range, view mode (Timeline / Agenda / Month), positioning, zoom & filter/sort state
   const [calendarMode, setCalendarMode] = useState<'timeline' | 'agenda' | 'month'>('timeline');
   const [rangeDays, setRangeDays] = useState<number>(7);
   const [positionMode, setPositionMode] = useState<'ahead' | 'around' | 'before'>('ahead');
-  const [gridStepMin, setGridStepMin] = useState<(typeof ZOOM_STEPS)[number]>(15);
+  const gridStepMin = Math.max(1, Math.min(240, calPrefs.intervalMin || 15));
+  const setGridStepMin = (next: number) => updateCalPrefs({ intervalMin: Math.max(1, Math.min(240, next)) });
   const [overlapMode, setOverlapMode] = useState<OverlapMode>('equal_split');
   const [showDualTz, setShowDualTz] = useState(false);
+  const [showCalDecor, setShowCalDecor] = useState(false);
+  const [newCalName, setNewCalName] = useState('');
+  const [newCalEmoji, setNewCalEmoji] = useState('📆');
+  const [newCalColor, setNewCalColor] = useState('#6b5ca5');
+  const [selectedCalId, setSelectedCalId] = useState('cal_personal');
   const [conflictOpen, setConflictOpen] = useState(false);
   const [icsFeedUrl, setIcsFeedUrl] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -128,9 +182,17 @@ export const FlowCalendarView: React.FC = () => {
     [records]
   );
 
+  const visibleCalendarIds = useMemo(
+    () => new Set(calendars.filter((c) => c.visible).map((c) => c.id)),
+    [calendars]
+  );
+
   const filteredEvents = useMemo(() => {
     const q = calSearch.trim().toLowerCase();
     return events.filter((ev) => {
+      if (ev.payload.calendarId && visibleCalendarIds.size > 0 && !visibleCalendarIds.has(ev.payload.calendarId)) {
+        return false;
+      }
       if (calCategoryFilter !== 'all' && (ev.category || 'Personal') !== calCategoryFilter) return false;
       if (calChipFilter === 'upcoming' && ev.payload.startDate < logicalToday && !ev.recurrence) return false;
       if (calChipFilter === 'shared' && !ev.sharedWithAll && !(ev.sharedWithProfileIds?.length)) return false;
@@ -265,22 +327,36 @@ export const FlowCalendarView: React.FC = () => {
     [dayLayouts]
   );
 
-  // Pixels per hour depends on zoom step (scroll-anchor preserved!)
-  const pxPerHour = gridStepMin === 5 ? 168 : gridStepMin === 10 ? 120 : gridStepMin === 15 ? 84 : gridStepMin === 30 ? 60 : 44;
-  const totalGridHeight = 24 * pxPerHour;
+  // Visible hours window & pixels-per-hour zoom scaling (1m to 4h + custom intervals!)
+  const visibleStartHour = Math.max(0, Math.min(23, calPrefs.visibleStartHour ?? 0));
+  const visibleEndHour = Math.max(visibleStartHour + 1, Math.min(24, calPrefs.visibleEndHour ?? 24));
+  const visibleHours = visibleEndHour - visibleStartHour;
+  const visibleStartMin = visibleStartHour * 60;
+  const visibleTotalMin = visibleHours * 60;
+  const pxPerHour = computePxPerHour(gridStepMin);
+  const totalGridHeight = visibleHours * pxPerHour;
+  const adaptiveFontPx = calPrefs.adaptiveText
+    ? Math.max(
+        calPrefs.minFontPx ?? 10,
+        Math.min(calPrefs.maxFontPx ?? 14, Math.round(9 + Math.min(5, pxPerHour / 26)))
+      )
+    : 12;
 
   const changeZoom = (dir: -1 | 1) => {
-    const idx = ZOOM_STEPS.indexOf(gridStepMin);
-    const nextIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, idx + dir));
-    if (nextIdx === idx) return;
+    const nearestIdx = ZOOM_STEPS.reduce(
+      (best, val, i) => (Math.abs(val - gridStepMin) < Math.abs(ZOOM_STEPS[best] - gridStepMin) ? i : best),
+      0
+    );
+    const nextIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, nearestIdx + dir));
+    if (nextIdx === nearestIdx && ZOOM_STEPS[nearestIdx] === gridStepMin) return;
     const scroller = scrollRef.current;
     const anchorRatio = scroller ? scroller.scrollTop / Math.max(1, totalGridHeight) : 0;
     const nextStep = ZOOM_STEPS[nextIdx];
     setGridStepMin(nextStep);
     requestAnimationFrame(() => {
       if (scroller) {
-        const nextPx = nextStep === 5 ? 168 : nextStep === 10 ? 120 : nextStep === 15 ? 84 : nextStep === 30 ? 60 : 44;
-        scroller.scrollTop = anchorRatio * 24 * nextPx;
+        const nextPx = computePxPerHour(nextStep);
+        scroller.scrollTop = anchorRatio * visibleHours * nextPx;
       }
     });
   };
@@ -425,7 +501,32 @@ export const FlowCalendarView: React.FC = () => {
         prepMin || travelMin || decompressMin
           ? { prepMin: prepMin || undefined, travelMin: travelMin || undefined, decompressMin: decompressMin || undefined }
           : undefined,
+      calendarId: selectedCalId || 'cal_personal',
     };
+
+    // Enforce optional Overlap Prevention / Conflict Warning policy (Section 8.4)
+    if (!allDay && (calPrefs.overlapPolicy === 'prevent' || calPrefs.overlapPolicy === 'warn')) {
+      const sMin = timeToMinutes(startTime);
+      const eMin = timeToMinutes(endTime);
+      const conflictEv = events.find(
+        (ev) =>
+          ev.id !== editingId &&
+          !ev.payload.allDay &&
+          ev.payload.startDate === startDate &&
+          timeToMinutes(ev.payload.startTime || '09:00') < eMin &&
+          timeToMinutes(ev.payload.endTime || '10:00') > sMin
+      );
+      if (conflictEv) {
+        if (calPrefs.overlapPolicy === 'prevent') {
+          pushToast(
+            `Overlap blocked: conflicts with "${conflictEv.title}" (${conflictEv.payload.startTime}–${conflictEv.payload.endTime}). Switch Overlap Policy to Allow/Warn in Calendar Settings if intended.`,
+            { tone: 'warn' }
+          );
+          return;
+        }
+        pushToast(`Warning: overlaps "${conflictEv.title}" (${conflictEv.payload.startTime}–${conflictEv.payload.endTime})`, { tone: 'warn' });
+      }
+    }
 
     if (editingId) {
       const existing = events.find((ev) => ev.id === editingId);
@@ -789,10 +890,189 @@ export const FlowCalendarView: React.FC = () => {
           }}
         />
 
+        {/* Multi-Calendar Layer Chips (Toggle Independent or Combined Calendars — Section 8.5) */}
+        <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap', fontSize: '0.8rem' }}>
+          <span className="dp-muted">Calendars:</span>
+          {calendars.map((cal) => (
+            <button
+              key={cal.id}
+              type="button"
+              className={`dp-chip ${cal.visible ? 'active' : ''}`}
+              style={{
+                borderColor: cal.visible ? cal.color : undefined,
+                opacity: cal.visible ? 1 : 0.45,
+              }}
+              onClick={() =>
+                void patchSettings({
+                  calendars: calendars.map((c) => (c.id === cal.id ? { ...c, visible: !c.visible } : c)),
+                })
+              }
+            >
+              {cal.emoji} {cal.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`dp-btn dp-btn-sm ${showCalDecor ? 'dp-btn-primary' : ''}`}
+            style={{ marginInlineStart: 'auto' }}
+            onClick={() => setShowCalDecor((v) => !v)}
+            title="Toggle optional Ink & Stickers overlay on the Calendar"
+          >
+            ✨ {showCalDecor ? 'Hide Ink/Stickers' : 'Calendar Ink/Stickers'}
+          </button>
+        </div>
+
+        {/* Advanced Gridlines, Adaptive Text, Overlap Policy, Visible Hours & Custom Calendars Drawer */}
+        <TabSettingsDrawer
+          title="Calendar Zoom, Gridlines, Text Scaling, Overlap Rules & Multi-Calendars"
+          subtitle="Customize 1m–4h intervals, major/minor horizontal gridlines, text sizing, overlap prevention, visible hours, and custom calendars."
+        >
+          <div className="dp-stack" style={{ gap: 10, fontSize: '0.82rem' }}>
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Interval:</span>
+                <select
+                  className="dp-select"
+                  style={{ width: 'auto' }}
+                  value={gridStepMin}
+                  onChange={(e) => setGridStepMin(Number(e.target.value) || 15)}
+                >
+                  {ZOOM_STEPS.map((step) => (
+                    <option key={step} value={step}>
+                      {step < 60 ? `${step} min` : `${step / 60} hr`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Custom (m):</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={240}
+                  className="dp-input"
+                  style={{ width: 68 }}
+                  value={gridStepMin}
+                  onChange={(e) => setGridStepMin(Number(e.target.value) || 15)}
+                />
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Hours:</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  className="dp-input"
+                  style={{ width: 54 }}
+                  value={visibleStartHour}
+                  onChange={(e) => updateCalPrefs({ visibleStartHour: Math.max(0, Math.min(23, Number(e.target.value) || 0)) })}
+                />
+                <span>–</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  className="dp-input"
+                  style={{ width: 54 }}
+                  value={visibleEndHour}
+                  onChange={(e) => updateCalPrefs({ visibleEndHour: Math.max(1, Math.min(24, Number(e.target.value) || 24)) })}
+                />
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Overlap Policy:</span>
+                <select
+                  className="dp-select"
+                  style={{ width: 'auto' }}
+                  value={calPrefs.overlapPolicy}
+                  onChange={(e) => {
+                    const pol = e.target.value as CalendarViewPrefs['overlapPolicy'];
+                    updateCalPrefs({ overlapPolicy: pol });
+                    if (pol === 'side_by_side' || pol === 'auto_resize') setOverlapMode('equal_split');
+                    else if (pol === 'stack') setOverlapMode('layered_stagger');
+                    else if (pol === 'condensed') setOverlapMode('offset_columns');
+                  }}
+                >
+                  <option value="side_by_side">Side-by-Side</option>
+                  <option value="auto_resize">Auto-Resize</option>
+                  <option value="allow">Allow Overlap</option>
+                  <option value="warn">Warn on Conflict</option>
+                  <option value="prevent">Prevent Overlapping Events</option>
+                  <option value="stack">Stack Conflicting Items</option>
+                  <option value="condensed">Condensed Summaries</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <input type="checkbox" checked={calPrefs.showMajorGrid} onChange={(e) => updateCalPrefs({ showMajorGrid: e.target.checked })} />
+                <span>Major Grid</span>
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <input type="checkbox" checked={calPrefs.showMinorGrid} onChange={(e) => updateCalPrefs({ showMinorGrid: e.target.checked })} />
+                <span>Minor Grid ({gridStepMin}m)</span>
+              </label>
+              <select
+                aria-label="Gridline style"
+                className="dp-select"
+                style={{ width: 'auto' }}
+                value={calPrefs.gridLineStyle}
+                onChange={(e) => updateCalPrefs({ gridLineStyle: e.target.value as 'solid' | 'dashed' })}
+              >
+                <option value="solid">Solid Lines</option>
+                <option value="dashed">Dashed Lines</option>
+              </select>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Thickness:</span>
+                <input type="range" min={1} max={3} value={calPrefs.gridThicknessPx} onChange={(e) => updateCalPrefs({ gridThicknessPx: Number(e.target.value) })} />
+                <span>{calPrefs.gridThicknessPx}px</span>
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Opacity:</span>
+                <input type="range" min={20} max={100} value={Math.round(calPrefs.gridOpacity * 100)} onChange={(e) => updateCalPrefs({ gridOpacity: Number(e.target.value) / 100 })} />
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Major Color:</span>
+                <input type="color" value={calPrefs.majorLineColor} onChange={(e) => updateCalPrefs({ majorLineColor: e.target.value })} />
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <input type="checkbox" checked={calPrefs.adaptiveText} onChange={(e) => updateCalPrefs({ adaptiveText: e.target.checked })} />
+                <span>Adaptive Text ({calPrefs.minFontPx}–{calPrefs.maxFontPx}px)</span>
+              </label>
+              <label className="dp-row" style={{ gap: 4 }}>
+                <span className="dp-muted">Day Width:</span>
+                <input type="range" min={90} max={260} value={calPrefs.dayMinWidthPx} onChange={(e) => updateCalPrefs({ dayMinWidthPx: Number(e.target.value) })} />
+                <span>{calPrefs.dayMinWidthPx}px</span>
+              </label>
+            </div>
+
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+              <strong>Add Custom Calendar:</strong>
+              <input className="dp-input" style={{ width: 44 }} value={newCalEmoji} onChange={(e) => setNewCalEmoji(e.target.value)} aria-label="Calendar emoji" />
+              <input className="dp-input" style={{ flex: 1, minWidth: 140 }} placeholder="Calendar name (e.g., Lab QA, Spouse, Workouts)…" value={newCalName} onChange={(e) => setNewCalName(e.target.value)} />
+              <input type="color" value={newCalColor} onChange={(e) => setNewCalColor(e.target.value)} aria-label="Calendar color" />
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={() => {
+                  if (!newCalName.trim()) return;
+                  void patchSettings({
+                    calendars: [...calendars, { id: createId('cal'), name: newCalName.trim(), emoji: newCalEmoji || '📆', color: newCalColor, visible: true }],
+                  });
+                  setNewCalName('');
+                  pushToast('Added new calendar layer!');
+                }}
+              >
+                + Add Calendar
+              </button>
+            </div>
+          </div>
+        </TabSettingsDrawer>
+
         {/* Range presets (1..62d), positioning, 4-mode overlap, zoom, dual TZ */}
         <div className="dp-row" style={{ fontSize: '0.82rem' }}>
           <div className="dp-row" style={{ gap: 4 }}>
-            {[1, 3, 7, 14, 28].map((n) => (
+            {[1, 3, 5, 7, 14, 30].map((n) => (
               <button
                 key={n}
                 type="button"
@@ -840,11 +1120,24 @@ export const FlowCalendarView: React.FC = () => {
           </select>
 
           <div className="dp-row" style={{ gap: 4 }}>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => changeZoom(1)} title="Zoom out">
+            <button type="button" className="dp-btn dp-btn-sm" onClick={() => changeZoom(1)} title="Zoom out (up to 4h)">
               <ZoomOut size={13} />
             </button>
-            <span className="dp-pill">{gridStepMin}m grid</span>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => changeZoom(-1)} title="Zoom in">
+            <select
+              aria-label="Timeline interval zoom"
+              className="dp-select"
+              style={{ width: 'auto', padding: '3px 6px', fontSize: '0.78rem' }}
+              value={ZOOM_STEPS.includes(gridStepMin as (typeof ZOOM_STEPS)[number]) ? gridStepMin : ''}
+              onChange={(e) => e.target.value && setGridStepMin(Number(e.target.value))}
+            >
+              {ZOOM_STEPS.map((s) => (
+                <option key={s} value={s}>{s < 60 ? `${s}m` : `${s / 60}h`} grid</option>
+              ))}
+              {!ZOOM_STEPS.includes(gridStepMin as (typeof ZOOM_STEPS)[number]) && (
+                <option value="">{gridStepMin}m custom</option>
+              )}
+            </select>
+            <button type="button" className="dp-btn dp-btn-sm" onClick={() => changeZoom(-1)} title="Zoom in (down to 1m)">
               <ZoomIn size={13} />
             </button>
           </div>
@@ -1042,13 +1335,14 @@ export const FlowCalendarView: React.FC = () => {
 
       {/* View 3: Main Multi-Day Virtualized Flow Grid */}
       {calendarMode === 'timeline' && (
-      <div className="dp-flow-shell">
+      <div className="dp-flow-shell" style={{ position: 'relative' }}>
+        {showCalDecor && <DecorCanvasOverlay spreadKey={`calendar:${activeDate}`} />}
         <div className="dp-flow-scroll" ref={scrollRef}>
           <div
             className="dp-flow-grid"
             style={{
-              gridTemplateColumns: `${showDualTz ? 112 : 64}px repeat(${dayColumns.length}, minmax(145px, 1fr))`,
-              minWidth: `${(showDualTz ? 112 : 64) + dayColumns.length * 145}px`,
+              gridTemplateColumns: `${showDualTz ? 112 : 64}px repeat(${dayColumns.length}, minmax(${calPrefs.dayMinWidthPx || 145}px, 1fr))`,
+              minWidth: `${(showDualTz ? 112 : 64) + dayColumns.length * (calPrefs.dayMinWidthPx || 145)}px`,
             }}
           >
             {/* Corner */}
@@ -1114,9 +1408,10 @@ export const FlowCalendarView: React.FC = () => {
               );
             })}
 
-            {/* Sticky Time Ruler */}
+            {/* Sticky Time Ruler (honors visibleStartHour..visibleEndHour & sub-hour labels when zoomed in!) */}
             <div className="dp-flow-ruler" style={{ height: totalGridHeight, position: 'sticky' }}>
-              {Array.from({ length: 24 }, (_, h) => {
+              {Array.from({ length: visibleHours }, (_, idx) => {
+                const h = visibleStartHour + idx;
                 const hhmm = `${String(h).padStart(2, '0')}:00`;
                 const secondary = showDualTz
                   ? convertEventTimeZone(activeDate, hhmm, settings.defaultTimeZone, settings.secondaryTimeZone).timeHHMM
@@ -1126,7 +1421,7 @@ export const FlowCalendarView: React.FC = () => {
                     key={h}
                     style={{
                       position: 'absolute',
-                      top: h * pxPerHour,
+                      top: idx * pxPerHour,
                       insetInline: 4,
                       fontSize: '0.72rem',
                       color: 'var(--dp-muted)',
@@ -1141,24 +1436,38 @@ export const FlowCalendarView: React.FC = () => {
               })}
             </div>
 
-            {/* Day Columns */}
+            {/* Day Columns with Customizable Major + Minor Interval Gridlines */}
             {dayColumns.map((d) => {
               const layout = dayLayouts.get(d);
               const positioned = layout?.positioned ?? [];
+              const minorStepPx = Math.max(6, (gridStepMin / 60) * pxPerHour);
+              const majorStepPx = Math.max(12, ((calPrefs.majorGridIntervalMin || 60) / 60) * pxPerHour);
+              const thick = calPrefs.gridThicknessPx || 1;
+              const bgLayers: string[] = [];
+              if (calPrefs.showMajorGrid) {
+                bgLayers.push(
+                  `repeating-linear-gradient(to bottom, ${calPrefs.majorLineColor} 0 ${thick}px, transparent ${thick}px ${majorStepPx}px)`
+                );
+              }
+              if (calPrefs.showMinorGrid && gridStepMin < (calPrefs.majorGridIntervalMin || 60)) {
+                bgLayers.push(
+                  `repeating-linear-gradient(to bottom, ${calPrefs.minorLineColor} 0 1px, transparent 1px ${minorStepPx}px)`
+                );
+              }
               return (
                 <div
                   key={`col-${d}`}
                   style={{
                     position: 'relative',
                     height: totalGridHeight,
-                    borderInlineEnd: '1px solid var(--dp-border)',
-                    backgroundImage: `repeating-linear-gradient(to bottom, var(--dp-border) 0 1px, transparent 1px ${pxPerHour}px)`,
+                    borderInlineEnd: `1px ${calPrefs.gridLineStyle || 'solid'} var(--dp-border)`,
+                    backgroundImage: bgLayers.join(', ') || undefined,
                   }}
                   onClick={(e) => {
                     if (e.target !== e.currentTarget) return;
                     const rect = e.currentTarget.getBoundingClientRect();
                     const y = e.clientY - rect.top;
-                    const rawMin = Math.floor(((y / totalGridHeight) * 1440) / gridStepMin) * gridStepMin;
+                    const rawMin = visibleStartMin + Math.floor(((y / totalGridHeight) * visibleTotalMin) / gridStepMin) * gridStepMin;
                     openNewEvent(d, minutesToTime(rawMin));
                   }}
                   onDragOver={(e) => e.preventDefault()}
@@ -1166,7 +1475,7 @@ export const FlowCalendarView: React.FC = () => {
                     e.preventDefault();
                     const rect = e.currentTarget.getBoundingClientRect();
                     const y = Math.max(0, e.clientY - rect.top);
-                    const snappedMin = Math.floor(((y / totalGridHeight) * 1440) / gridStepMin) * gridStepMin;
+                    const snappedMin = visibleStartMin + Math.floor(((y / totalGridHeight) * visibleTotalMin) / gridStepMin) * gridStepMin;
                     const slotTime = minutesToTime(snappedMin);
 
                     const actionId = e.dataTransfer.getData('application/x-dayplana-action');
@@ -1187,16 +1496,24 @@ export const FlowCalendarView: React.FC = () => {
                   }}
                 >
                   {/* Live Now line on today's column */}
-                  {d === logicalToday && (
-                    <div
-                      className="dp-now-line"
-                      style={{ top: ((new Date().getHours() * 60 + new Date().getMinutes()) / 1440) * totalGridHeight }}
-                    />
-                  )}
+                  {d === logicalToday && (() => {
+                    const curM = new Date().getHours() * 60 + new Date().getMinutes();
+                    if (curM < visibleStartMin || curM > visibleStartMin + visibleTotalMin) return null;
+                    return (
+                      <div
+                        className="dp-now-line"
+                        style={{ top: ((curM - visibleStartMin) / visibleTotalMin) * totalGridHeight }}
+                      />
+                    );
+                  })()}
 
                   {positioned.map((pos) => {
-                    const topPx = (pos.startMin / 1440) * totalGridHeight + pos.topOffsetPx;
-                    const heightPx = Math.max(47, ((pos.endMin - pos.startMin) / 1440) * totalGridHeight);
+                    if (pos.endMin <= visibleStartMin || pos.startMin >= visibleStartMin + visibleTotalMin) return null;
+                    const topPx = ((pos.startMin - visibleStartMin) / visibleTotalMin) * totalGridHeight + pos.topOffsetPx;
+                    const heightPx = Math.max(
+                      gridStepMin >= 120 ? 22 : 34,
+                      ((pos.endMin - pos.startMin) / visibleTotalMin) * totalGridHeight
+                    );
                     const evColor = pos.event.color || 'var(--dp-accent)';
                     const isFilled = pos.event.payload.style === 'filled';
                     const isOutline = pos.event.payload.style === 'outline';
@@ -1243,6 +1560,7 @@ export const FlowCalendarView: React.FC = () => {
                             borderColor: evColor,
                             borderWidth: isOutline ? 2 : 1,
                             opacity: pos.event.status === 'done' ? 0.65 : 1,
+                            fontSize: `${adaptiveFontPx}px`,
                           }}
                           onDragStart={(e) => {
                             e.dataTransfer.setData(

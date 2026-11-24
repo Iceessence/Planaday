@@ -14,6 +14,39 @@ export interface ChangelogRelease {
 
 export const PLANADAY_CHANGELOG: ChangelogRelease[] = [
   {
+    version: '3.0.0',
+    date: '2026-11-24',
+    title: 'Phases 3–10 Complete — Calendar Overhaul, Task Calendar, Quick Glance, Diary 1–10, Food History, Rich Notes, Lab Workspace, Physical Digital Planner & Reports',
+    highlights: [
+      'Phase 3 — Flow Calendar Overhaul: 12 zoom intervals from 1 minute to 4 hours + custom intervals, customizable major/minor horizontal gridlines, adaptive event text scaling, 7 overlap policies (including optional overlap prevention), visible hours window, multi-calendar layers, and optional calendar Ink/Stickers.',
+      'Phase 3 — Tasks, Chores & Dedicated Intelligent Task Calendar: Drag-and-drop custom ordering, unlimited configurable Favorites, unfinished task carry-forward preserving creation age & reschedule counts, live Start/Pause task timer, distracted vs. undistracted duration logging, learned task-type averages, Preferred Daily End Time, and unlimited scheduling Contexts.',
+      'Phase 4 — Today, Quick Glance, Diary & Food History: Dedicated Quick Glance dashboard + Quick Capture Inbox; Today Upcoming Important Items, unlimited scheduled Custom Daily Note Sections & inline meals/photos; Diary upgraded to 1–10 (and custom) scales across 11 wellness metrics, optional private Bathroom Tracker, custom categories, multi-photo album & trend charts; searchable Food History synced automatically from Today & Meal Planner.',
+      'Phase 5 — Rich Notes, Anchored Decor, 6+ Clock Designs & 260+ Stickers: Per-note typography/colors/alignment/paper surfaces and paginated/2-page spread presentation modes; pixel-anchored Decorations with Above/Below text layering + Shape drawing tools (Line/Box/Oval/Pencil); 6 customizable Clock designs (Traditional/Minimal Analog, Digital, Retro LED, Modern Minimal, Decorative, Flip); 50+ new stickers including Laboratory & Science.',
+      'Phase 6 — Workspace Customization & Schedule Layouts: Collapsible sidebar groups, Simple/Standard/Advanced creation modes, and Schedule-Based Automatic Workspace Switching with manual override.',
+      'Phase 7 — Comprehensive Laboratory Management Workspace (15 Sub-Modules): Overview Dashboard, Samples & TAT, Subcontract Tracking, Lab Inventory, Purchasing & Reorders auto-linked to Lab Budget, Client-Specific Pricing Sheets & Reusable Templates with CSV/Print export, Method Research, Email Drafting, Lab Tasks, Lab Meetings auto-creating Lab Tasks, Calibration & QC with immutable revision preservation, Wet Chemistry vs. NIR Comparison (Bias, SD/SEP, RMSE, Pearson r, OLS slope/intercept, R², Scatter/Residual/Trend SVG charts), Work Hours & Breaks, and QMS/SOP/CAPA/PT/Training.',
+      'Phase 8 — Physical-Style Digital Planner: Customizable Front/Back Covers, Spiral/Ring/Book/None binding, dynamic Left/Right Side Navigation Tabs & Top Bookmarks that shift automatically as you turn pages, Zoom, Special Pages (including interactive 50-state US Travel Map, calendars, contacts, goals, habits), Ink/Stickers & optional per-page live data sync.',
+      'Phase 9–10 — Advanced Reports, Automatic Summaries & Optimization: Day/Week/Month/Quarter/Year/All/Custom date reports with prior-period comparisons, distracted vs. undistracted analytics, lab KPIs, End-of-Week/Month/Year digests, code-split Vite bundles (`lab`, `digitalPlanner`), and expanded Feature Directory.',
+    ],
+    bugFixes: [
+      'Fixed Decoration shifting bug when sections expand or collapse by introducing fixed pixel canvas anchoring (`fixedPxX`/`fixedPxY`) alongside Relative %, Section, Object, and Text anchoring modes.',
+      'Removed mandatory 3-favorite task restriction across both Tasks and Today Spread (now user-configurable: Unlimited, 3, 5, or 10).',
+    ],
+    performanceAndSync: [
+      'Added dedicated Vite code-splitting chunks (`lab`, `digitalPlanner`) so the Laboratory Workspace and Physical Planner load cleanly without bloating initial startup.',
+    ],
+    mobileAndUx: [
+      'Added Quick Glance, Physical Planner, Task Calendar, Laboratory Management, and Reports directly into the mobile navigation drawer and customizable 4-slot phone bottom bar.',
+    ],
+    storageAndData: [
+      '100% additive backward-compatible IndexedDB & SQLite record types (`food_log`, `quick_capture`, `planner_book`, `lab_*`); zero destructive migrations and zero localStorage usage.',
+    ],
+    knownLimitations: [
+      'Planaday’s Laboratory Management Workspace is an operational tracking and management aid and is NOT an accredited or regulatory-validated LIMS (e.g., ISO/IEC 17025 / 21 CFR Part 11).',
+      'Observational Diary trends and Wet Chemistry vs. NIR statistical summaries do not establish medical conclusions or formal analytical method validation.',
+      'Physical-device validation on Android Gboard/Samsung Keyboard and Doze lock-screen notifications must still be confirmed on your physical handset.',
+    ],
+  },
+  {
     version: '2.1.0',
     date: '2026-11-24',
     title: 'Planaday Rebrand, Phase 1 Reliability & Sync Overhaul, Phase 2 Mobile & Editing Upgrade',

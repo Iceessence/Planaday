@@ -14,12 +14,22 @@ export default defineConfig({
           archive: ['fflate'],
           plan: [
             './src/modules/plan/HomeDashboard.tsx',
+            './src/modules/plan/QuickGlanceView.tsx',
             './src/modules/plan/TodaySpread.tsx',
             './src/modules/plan/FlowCalendarView.tsx',
+            './src/modules/plan/TaskCalendarView.tsx',
             './src/modules/plan/PeriodPlannerView.tsx',
             './src/modules/plan/TasksView.tsx',
             './src/modules/plan/ChoresView.tsx',
             './src/modules/plan/GoalsHabitsView.tsx',
+          ],
+          lab: [
+            './src/modules/lab/LabWorkspaceView.tsx',
+            './src/modules/lab/LabWetNirView.tsx',
+          ],
+          digitalPlanner: [
+            './src/modules/planner/DigitalPlannerView.tsx',
+            './src/modules/life/ReportsView.tsx',
           ],
           mindTime: [
             './src/modules/mind/NotesView.tsx',

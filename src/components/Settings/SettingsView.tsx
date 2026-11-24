@@ -61,6 +61,11 @@ const CHIME_STYLES: Array<{ id: ChimeStyle; label: string }> = [
 
 const MODULE_META: Array<{ id: ModuleId; label: string; group: string; optional?: boolean }> = [
   { id: 'calendar', label: 'Flow Calendar', group: 'Core' },
+  { id: 'quick_glance', label: 'Quick Glance Dashboard', group: 'Core' },
+  { id: 'task_calendar', label: 'Intelligent Task Calendar', group: 'Core' },
+  { id: 'digital_planner', label: 'Physical-Style Digital Planner', group: 'Core' },
+  { id: 'reports', label: 'Advanced Reports & Analytics', group: 'Core' },
+  { id: 'lab', label: 'Comprehensive Laboratory Management', group: 'Professional Workspace' },
   { id: 'tasks', label: 'Tasks & Subtasks', group: 'Core' },
   { id: 'chores', label: 'Completion-Based Chores', group: 'Core' },
   { id: 'notes', label: 'Rich Notes & WikiLinks', group: 'Core' },
@@ -1020,16 +1025,80 @@ export const SettingsView: React.FC = () => {
                     }}
                   >
                     <option value="home">Home</option>
+                    <option value="quick_glance">Quick Glance</option>
                     <option value="today">Today</option>
+                    <option value="digital_planner">Physical Planner</option>
                     <option value="calendar">Calendar</option>
+                    <option value="task_calendar">Task Calendar</option>
                     <option value="tasks">Tasks</option>
                     <option value="chores">Chores</option>
+                    <option value="lab">Lab Workspace</option>
+                    <option value="reports">Reports</option>
                     <option value="timers">Timers</option>
                     <option value="notes">Notes</option>
                     <option value="recipes">Kitchen</option>
                     <option value="all_in_one">All-in-One</option>
                   </select>
                 </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Phase 6: Creation Disclosure Mode & Schedule-Based Automatic Workspace Layouts (Sections 18.3 & 18.4) */}
+          <div className="dp-card dp-stack" style={{ padding: 14, gap: 10 }}>
+            <h4>🧩 Creation Complexity Mode &amp; Schedule-Based Workspace Switching</h4>
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 10, fontSize: '0.84rem' }}>
+              <label className="dp-row" style={{ gap: 6 }}>
+                <span className="dp-muted">Creation Mode:</span>
+                <select
+                  className="dp-select"
+                  style={{ width: 'auto' }}
+                  value={settings.creationMode ?? 'standard'}
+                  onChange={(e) => void patchSettings({ creationMode: e.target.value as 'simple' | 'standard' | 'advanced' })}
+                >
+                  <option value="simple">Simple (Minimal fields by default)</option>
+                  <option value="standard">Standard (Expandable advanced options)</option>
+                  <option value="advanced">Advanced (Show full fields immediately)</option>
+                </select>
+              </label>
+              <label className="dp-row" style={{ gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.autoWorkspaceScheduleEnabled)}
+                  onChange={(e) => void patchSettings({ autoWorkspaceScheduleEnabled: e.target.checked, manualWorkspaceOverrideId: null })}
+                />
+                <span>Auto-switch Workspace by Time-of-Day Schedule</span>
+              </label>
+              {settings.manualWorkspaceOverrideId && (
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => void patchSettings({ manualWorkspaceOverrideId: null })}>
+                  Clear Manual Override
+                </button>
+              )}
+            </div>
+            <div className="dp-grid-2" style={{ gap: 8 }}>
+              {(settings.workspaceSchedules ?? []).map((sch) => (
+                <div key={sch.id} className="dp-card dp-between" style={{ padding: 10, gap: 8, borderInlineStart: `4px solid ${sch.color}` }}>
+                  <div style={{ fontSize: '0.82rem' }}>
+                    <strong>{sch.emoji} {sch.name}</strong>
+                    <div className="dp-muted">
+                      {sch.startTime}–{sch.endTime} · Workspace: {settings.workspaces.find((w) => w.id === sch.workspaceId)?.name ?? sch.workspaceId}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`dp-btn dp-btn-sm ${settings.manualWorkspaceOverrideId === sch.id ? 'dp-btn-primary' : ''}`}
+                    onClick={() => {
+                      void patchSettings({
+                        activeWorkspaceId: sch.workspaceId,
+                        manualWorkspaceOverrideId: sch.id,
+                        ...(sch.clockDesign && settings.clockConfig ? { clockConfig: { ...settings.clockConfig, design: sch.clockDesign } } : {}),
+                      });
+                      pushToast(`Activated "${sch.name}" layout (manual override)`);
+                    }}
+                  >
+                    Activate Now
+                  </button>
+                </div>
               ))}
             </div>
           </div>

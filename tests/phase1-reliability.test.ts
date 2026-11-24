@@ -337,7 +337,7 @@ describe('Phase 1 & Phase 2 — Sync Stress Coalescing, SQLite Backups, Mobile I
     ]);
 
     expect(PLANADAY_CHANGELOG.length).toBeGreaterThanOrEqual(2);
-    expect(PLANADAY_CHANGELOG[0].version).toBe('2.1.0');
+    expect(PLANADAY_CHANGELOG.some((r) => r.version === '2.1.0')).toBe(true);
     expect(PLANADAY_CHANGELOG[0].bugFixes.length).toBeGreaterThan(0);
     expect(PLANADAY_CHANGELOG[0].knownLimitations.length).toBeGreaterThan(0);
   });

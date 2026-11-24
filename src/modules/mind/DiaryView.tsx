@@ -1,18 +1,31 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Download, Image as ImageIcon, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, Download, Image as ImageIcon, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { createId, storeBlob } from '../../core/db';
+import { createId, getBlobObjectUrl, storeBlob } from '../../core/db';
 import { triggerBrowserDownload } from '../../core/backup';
 import { addDaysIso, formatDateLocalized } from '../../core/temporal';
 import { DIARY_PROMPTS, getDiaryPromptCategories } from '../../data/prompts';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
 import { SafeTextarea, type LocalSaveState } from '../../components/Common/SafeTextEditor';
-import type { DiaryPayload, LifeRecord, PaperMaterial } from '../../core/types';
+import type { CustomDiaryCategoryDef, DiaryPayload, LifeRecord, PaperMaterial } from '../../core/types';
 
 const DEFAULT_MOODS = ['Great', 'Good', 'Okay', 'Low', 'Rough'];
 const EMOTION_TAGS = ['Calm', 'Grateful', 'Focused', 'Energized', 'Tired', 'Anxious', 'Inspired', 'Cozy'];
+const WELLNESS_RATINGS = [
+  { key: 'moodScore', label: 'Mood' },
+  { key: 'energy', label: 'Energy' },
+  { key: 'motivation', label: 'Motivation' },
+  { key: 'stress', label: 'Stress' },
+  { key: 'happiness', label: 'Happiness' },
+  { key: 'productivity', label: 'Productivity' },
+  { key: 'focus', label: 'Focus' },
+  { key: 'anxiety', label: 'Anxiety' },
+  { key: 'physicalComfort', label: 'Physical Comfort' },
+  { key: 'sleepQuality', label: 'Sleep Quality' },
+  { key: 'wellness', label: 'General Wellness' },
+];
 
 export const DiaryView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, syncState } = useApp();
@@ -26,7 +39,22 @@ export const DiaryView: React.FC = () => {
   const [historyMoodFilter, setHistoryMoodFilter] = useState('all');
   const [historySortBy, setHistorySortBy] = useState<'date' | 'energy' | 'sleep' | 'stress'>('date');
   const [historySortDir, setHistorySortDir] = useState<'asc' | 'desc'>('desc');
+  const [showPhotoTimeline, setShowPhotoTimeline] = useState(false);
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [photoAlbum, setPhotoAlbum] = useState('Daily');
+  const [photoActivity, setPhotoActivity] = useState('');
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatKind, setNewCatKind] = useState<CustomDiaryCategoryDef['kind']>('rating');
+  const [newCatUnit, setNewCatUnit] = useState('');
+  const [bathroomNote, setBathroomNote] = useState('');
+  const [trendMetricA, setTrendMetricA] = useState('energy');
+  const [trendMetricB, setTrendMetricB] = useState('stress');
+  const [trendDays, setTrendDays] = useState(30);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
+
+  const ratingScale = settings.diaryRatingScale ?? { min: 1, max: 10, step: 1 };
+  const customCategories = settings.customDiaryCategories ?? [];
 
   const allMoods = useMemo(
     () => Array.from(new Set([...DEFAULT_MOODS, ...(settings.customMoods ?? [])])),
@@ -124,6 +152,56 @@ export const DiaryView: React.FC = () => {
   const last28 = useMemo(() => Array.from({ length: 28 }, (_, i) => addDaysIso(logicalToday, i - 27)), [logicalToday]);
   const byDate = useMemo(() => new Map(diaries.map((d) => [d.payload.date, d.payload])), [diaries]);
 
+  // Load photo thumbnails from IndexedDB blobs cleanly (revoking created ObjectURLs on unmount)
+  useEffect(() => {
+    const hashes = new Set<string>();
+    for (const p of entry.photos ?? []) hashes.add(p.blobHash);
+    if (showPhotoTimeline) {
+      for (const d of diaries.slice(0, 60)) {
+        for (const p of d.payload.photos ?? []) hashes.add(p.blobHash);
+      }
+    }
+    let alive = true;
+    const created: string[] = [];
+    (async () => {
+      const next: Record<string, string> = {};
+      for (const h of hashes) {
+        const u = await getBlobObjectUrl(h);
+        if (u) {
+          created.push(u);
+          next[h] = u;
+        }
+      }
+      if (alive) setPhotoUrls(next);
+      else created.forEach((u) => URL.revokeObjectURL(u));
+    })();
+    return () => {
+      alive = false;
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [entry.photos, showPhotoTimeline, diaries]);
+
+  // Trend series for Diary History & Trends chart (Section 13.4)
+  const trendSeries = useMemo(() => {
+    const startCutoff = addDaysIso(logicalToday, -(trendDays - 1));
+    return [...diaries]
+      .filter((d) => d.payload.date >= startCutoff)
+      .sort((a, b) => a.payload.date.localeCompare(b.payload.date))
+      .map((d) => {
+        const getVal = (key: string): number | null => {
+          const r = d.payload.ratings?.[key];
+          if (typeof r === 'number') return r;
+          if (key === 'energy' && typeof d.payload.energy === 'number') return d.payload.energy;
+          if (key === 'stress' && typeof d.payload.stress === 'number') return d.payload.stress;
+          if (key === 'sleepQuality' && typeof d.payload.sleepQuality === 'number') return d.payload.sleepQuality;
+          if (key === 'sleepHours' && typeof d.payload.sleepHours === 'number') return d.payload.sleepHours;
+          if (key === 'waterCups' && typeof d.payload.waterCups === 'number') return d.payload.waterCups;
+          return null;
+        };
+        return { date: d.payload.date, a: getVal(trendMetricA), b: getVal(trendMetricB) };
+      });
+  }, [diaries, logicalToday, trendDays, trendMetricA, trendMetricB]);
+
   return (
     <div className="dp-paper-sheet dp-stack" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-5)' }}>
       <div className="dp-between">
@@ -175,6 +253,25 @@ export const DiaryView: React.FC = () => {
               <option value="lined">Lined Journal</option>
               <option value="grid">Graph Grid</option>
               <option value="cornell">Cornell</option>
+            </select>
+          </label>
+          <label className="dp-row" style={{ gap: 6 }}>
+            <span className="dp-muted">Rating Scale:</span>
+            <select
+              aria-label="Diary rating scale"
+              className="dp-select"
+              style={{ width: 'auto' }}
+              value={`${ratingScale.min}-${ratingScale.max}-${ratingScale.step}`}
+              onChange={(e) => {
+                const [mn, mx, st] = e.target.value.split('-').map(Number);
+                void patchSettings({ diaryRatingScale: { min: mn, max: mx, step: st } });
+              }}
+            >
+              <option value="1-10-1">1 – 10 (Default)</option>
+              <option value="1-10-0.5">1 – 10 (Decimals 0.5)</option>
+              <option value="0-10-1">0 – 10</option>
+              <option value="1-5-1">1 – 5</option>
+              <option value="1-100-1">1 – 100</option>
             </select>
           </label>
           <label className="dp-row" style={{ gap: 6 }}>
@@ -266,20 +363,248 @@ export const DiaryView: React.FC = () => {
             );
           })}
         </div>
-        <div className="dp-grid-3" style={{ fontSize: '0.84rem' }}>
+        {/* 1-10 (or Custom Scale) Comprehensive Daily Ratings & Measurements (Sections 13.1 & 13.2) */}
+        <div className="dp-grid-3" style={{ fontSize: '0.82rem', gap: 10 }}>
+          {WELLNESS_RATINGS.map((m) => {
+            const cur =
+              entry.ratings?.[m.key] ??
+              (m.key === 'energy' ? entry.energy : m.key === 'stress' ? entry.stress : m.key === 'sleepQuality' ? entry.sleepQuality : undefined) ??
+              Math.round((ratingScale.min + ratingScale.max) / 2);
+            return (
+              <label key={m.key} className="dp-stack" style={{ gap: 2 }}>
+                <div className="dp-between">
+                  <span>{m.label}</span>
+                  <strong>{cur}/{ratingScale.max}</strong>
+                </div>
+                <input
+                  type="range"
+                  min={ratingScale.min}
+                  max={ratingScale.max}
+                  step={ratingScale.step}
+                  value={cur}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    const nextRatings = { ...(entry.ratings ?? {}), [m.key]: v };
+                    const extra: Partial<DiaryPayload> = { ratings: nextRatings, ratingScaleMin: ratingScale.min, ratingScaleMax: ratingScale.max };
+                    if (m.key === 'energy') extra.energy = v;
+                    if (m.key === 'stress') extra.stress = v;
+                    if (m.key === 'sleepQuality') extra.sleepQuality = v;
+                    void saveDiary(extra);
+                  }}
+                />
+              </label>
+            );
+          })}
           <label className="dp-between">
-            <span>Energy ({entry.energy ?? 3}/5)</span>
-            <input type="range" min={1} max={5} value={entry.energy ?? 3} onChange={(e) => void saveDiary({ energy: Number(e.target.value) })} />
+            <span>Sleep (hrs)</span>
+            <input
+              type="number"
+              step={0.5}
+              min={0}
+              max={24}
+              className="dp-input"
+              style={{ width: 74, padding: '3px 6px' }}
+              value={entry.sleepHours ?? ''}
+              onChange={(e) => void saveDiary({ sleepHours: Number(e.target.value) || 0 })}
+            />
           </label>
           <label className="dp-between">
-            <span>Stress ({entry.stress ?? 2}/5)</span>
-            <input type="range" min={1} max={5} value={entry.stress ?? 2} onChange={(e) => void saveDiary({ stress: Number(e.target.value) })} />
+            <span>Exercise (min)</span>
+            <input
+              type="number"
+              min={0}
+              max={600}
+              className="dp-input"
+              style={{ width: 74, padding: '3px 6px' }}
+              value={entry.exerciseMin ?? ''}
+              onChange={(e) => void saveDiary({ exerciseMin: Number(e.target.value) || 0 })}
+            />
           </label>
           <label className="dp-between">
-            <span>Sleep Quality ({entry.sleepQuality ?? 4}/5)</span>
-            <input type="range" min={1} max={5} value={entry.sleepQuality ?? 4} onChange={(e) => void saveDiary({ sleepQuality: Number(e.target.value) })} />
+            <span>Water (cups)</span>
+            <input
+              type="number"
+              min={0}
+              max={40}
+              className="dp-input"
+              style={{ width: 74, padding: '3px 6px' }}
+              value={entry.waterCups ?? 0}
+              onChange={(e) => void saveDiary({ waterCups: Number(e.target.value) || 0 })}
+            />
           </label>
         </div>
+
+        {/* Voluntary Private Bathroom Tracking & Custom User-Defined Categories (Sections 13.1 & 13.2) */}
+        <details className="dp-details">
+          <summary style={{ fontSize: '0.84rem', fontWeight: 600 }}>
+            Private Wellness: Optional Bathroom Log &amp; Custom Tracking Categories ({customCategories.length})
+          </summary>
+          <div className="dp-stack" style={{ gap: 10, marginTop: 10 }}>
+            <div className="dp-card dp-stack" style={{ padding: 10, gap: 8, background: 'var(--dp-surface-2)' }}>
+              <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+                <strong style={{ fontSize: '0.84rem' }}>Voluntary Private Bathroom Log</strong>
+                <span className="dp-muted" style={{ fontSize: '0.75rem' }}>Stored strictly in your private device/server database</span>
+              </div>
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 10, fontSize: '0.83rem' }}>
+                <div className="dp-row" style={{ gap: 5 }}>
+                  <span>Urinations: <strong>{entry.bathroom?.urinations ?? 0}</strong></span>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => {
+                      const nowT = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const b = entry.bathroom ?? { urinations: 0, bowelMovements: 0, logs: [] };
+                      void saveDiary({
+                        bathroom: {
+                          ...b,
+                          urinations: (b.urinations ?? 0) + 1,
+                          logs: [...(b.logs ?? []), { id: createId('br'), time: nowT, kind: 'urination', note: bathroomNote.trim() || undefined }],
+                        },
+                      });
+                      setBathroomNote('');
+                    }}
+                  >
+                    +1 Log Time
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => {
+                      const b = entry.bathroom ?? { urinations: 0, bowelMovements: 0, logs: [] };
+                      void saveDiary({ bathroom: { ...b, urinations: Math.max(0, (b.urinations ?? 0) - 1) } });
+                    }}
+                  >
+                    −
+                  </button>
+                </div>
+                <div className="dp-row" style={{ gap: 5 }}>
+                  <span>Bowel Movements: <strong>{entry.bathroom?.bowelMovements ?? 0}</strong></span>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => {
+                      const nowT = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const b = entry.bathroom ?? { urinations: 0, bowelMovements: 0, logs: [] };
+                      void saveDiary({
+                        bathroom: {
+                          ...b,
+                          bowelMovements: (b.bowelMovements ?? 0) + 1,
+                          logs: [...(b.logs ?? []), { id: createId('br'), time: nowT, kind: 'bowel', note: bathroomNote.trim() || undefined }],
+                        },
+                      });
+                      setBathroomNote('');
+                    }}
+                  >
+                    +1 Log Time
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => {
+                      const b = entry.bathroom ?? { urinations: 0, bowelMovements: 0, logs: [] };
+                      void saveDiary({ bathroom: { ...b, bowelMovements: Math.max(0, (b.bowelMovements ?? 0) - 1) } });
+                    }}
+                  >
+                    −
+                  </button>
+                </div>
+                <input
+                  className="dp-input"
+                  style={{ flex: 1, minWidth: 150 }}
+                  placeholder="Optional note before logging…"
+                  value={bathroomNote}
+                  onChange={(e) => setBathroomNote(e.target.value)}
+                />
+              </div>
+              {(entry.bathroom?.logs?.length ?? 0) > 0 && (
+                <div className="dp-row" style={{ flexWrap: 'wrap', gap: 5, fontSize: '0.76rem' }}>
+                  {(entry.bathroom?.logs ?? []).map((lg) => (
+                    <span key={lg.id} className="dp-pill">
+                      {lg.time} · {lg.kind === 'urination' ? 'Urine' : 'Bowel'}{lg.note ? ` (${lg.note})` : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Custom User-Created Tracking Categories */}
+            <div className="dp-stack" style={{ gap: 8 }}>
+              <strong style={{ fontSize: '0.84rem' }}>Custom Tracking Categories</strong>
+              {customCategories.map((cat) => {
+                const val = entry.customTrackers?.[cat.id];
+                return (
+                  <div key={cat.id} className="dp-between" style={{ gap: 8, fontSize: '0.83rem' }}>
+                    <span>
+                      <strong>{cat.name}</strong> {cat.unit ? <span className="dp-muted">({cat.unit})</span> : null}
+                    </span>
+                    <div className="dp-row" style={{ gap: 6 }}>
+                      {cat.kind === 'checkbox' ? (
+                        <input
+                          type="checkbox"
+                          checked={Boolean(val)}
+                          onChange={(e) => void saveDiary({ customTrackers: { ...(entry.customTrackers ?? {}), [cat.id]: e.target.checked } })}
+                        />
+                      ) : cat.kind === 'text' ? (
+                        <input
+                          className="dp-input"
+                          style={{ width: 180 }}
+                          value={String(val ?? '')}
+                          onChange={(e) => void saveDiary({ customTrackers: { ...(entry.customTrackers ?? {}), [cat.id]: e.target.value } })}
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          className="dp-input"
+                          style={{ width: 90 }}
+                          value={typeof val === 'number' ? val : ''}
+                          onChange={(e) => void saveDiary({ customTrackers: { ...(entry.customTrackers ?? {}), [cat.id]: Number(e.target.value) || 0 } })}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="dp-icon-btn"
+                        aria-label={`Remove category ${cat.name}`}
+                        onClick={() => void patchSettings({ customDiaryCategories: customCategories.filter((x) => x.id !== cat.id) })}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                <input className="dp-input" style={{ flex: 1, minWidth: 140 }} placeholder="New tracker (e.g., Caffeine, Headache, Steps)…" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} />
+                <select className="dp-select" style={{ width: 'auto' }} value={newCatKind} onChange={(e) => setNewCatKind(e.target.value as CustomDiaryCategoryDef['kind'])}>
+                  <option value="rating">Rating</option>
+                  <option value="counter">Counter</option>
+                  <option value="duration">Duration</option>
+                  <option value="measurement">Measurement</option>
+                  <option value="checkbox">Checkbox</option>
+                  <option value="text">Text Note</option>
+                </select>
+                <input className="dp-input" style={{ width: 90 }} placeholder="Unit (mg, mi)…" value={newCatUnit} onChange={(e) => setNewCatUnit(e.target.value)} />
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-primary dp-btn-sm"
+                  onClick={() => {
+                    if (!newCatName.trim()) return;
+                    void patchSettings({
+                      customDiaryCategories: [
+                        ...customCategories,
+                        { id: createId('dcat'), name: newCatName.trim(), kind: newCatKind, unit: newCatUnit.trim() || undefined },
+                      ],
+                    });
+                    setNewCatName('');
+                    setNewCatUnit('');
+                    pushToast('Added custom diary tracking category!');
+                  }}
+                >
+                  + Add Category
+                </button>
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
 
       {/* Rich Categorized Prompt Deck (50+ Prompts) + Custom Prompt Creator */}
@@ -454,11 +779,28 @@ export const DiaryView: React.FC = () => {
             accept="image/*,audio/*"
             hidden
             onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              const stored = await storeBlob(f, f.name);
-              await saveDiary({ mediaBlobIds: [...(entry.mediaBlobIds ?? []), stored.hash] });
-              pushToast(`Saved memory capsule "${f.name}"`);
+              const files = Array.from(e.target.files ?? []);
+              if (files.length === 0) return;
+              const nextHashes = [...(entry.mediaBlobIds ?? [])];
+              const nextPhotos = [...(entry.photos ?? [])];
+              for (const f of files) {
+                const stored = await storeBlob(f, f.name);
+                nextHashes.push(stored.hash);
+                if (f.type.startsWith('image/')) {
+                  nextPhotos.push({
+                    id: createId('ph'),
+                    blobHash: stored.hash,
+                    caption: photoCaption.trim() || f.name.replace(/\.[^.]+$/, ''),
+                    timestamp: new Date().toISOString(),
+                    album: photoAlbum.trim() || 'Daily',
+                    linkedActivity: photoActivity.trim() || undefined,
+                  });
+                }
+              }
+              await saveDiary({ mediaBlobIds: nextHashes, photos: nextPhotos });
+              setPhotoCaption('');
+              setPhotoActivity('');
+              pushToast(`Saved ${files.length} daily media attachment(s)!`);
               e.target.value = '';
             }}
           />
@@ -518,6 +860,131 @@ export const DiaryView: React.FC = () => {
             </button>
           </div>
         ))}
+      </div>
+
+      {/* Daily Photos Album & Chronological Photo Timeline (Section 13.3) */}
+      <div className="dp-card dp-stack" style={{ padding: 12, gap: 10 }}>
+        <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <strong>
+            <Camera size={15} style={{ verticalAlign: '-2px' }} /> Daily Photos ({entry.photos?.length ?? 0} on {activeDate})
+          </strong>
+          <div className="dp-row" style={{ gap: 6 }}>
+            <button type="button" className="dp-btn dp-btn-sm" onClick={() => setShowPhotoTimeline((v) => !v)}>
+              {showPhotoTimeline ? 'Hide Chronological Gallery' : 'Browse All Days Photos'}
+            </button>
+            <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => mediaInputRef.current?.click()}>
+              <Plus size={13} /> Add Daily Photo
+            </button>
+          </div>
+        </div>
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6, fontSize: '0.8rem' }}>
+          <input className="dp-input" style={{ flex: 1, minWidth: 140 }} placeholder="Optional photo caption…" value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} />
+          <input className="dp-input" style={{ width: 120 }} placeholder="Album (Daily)" value={photoAlbum} onChange={(e) => setPhotoAlbum(e.target.value)} />
+          <input className="dp-input" style={{ width: 150 }} placeholder="Linked activity…" value={photoActivity} onChange={(e) => setPhotoActivity(e.target.value)} />
+        </div>
+        {(entry.photos?.length ?? 0) > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+            {(entry.photos ?? []).map((ph) => (
+              <div key={ph.id} className="dp-card dp-stack" style={{ padding: 6, gap: 4 }}>
+                {photoUrls[ph.blobHash] ? (
+                  <img src={photoUrls[ph.blobHash]} alt={ph.caption || 'Daily photo'} style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 6 }} />
+                ) : (
+                  <div className="dp-muted" style={{ height: 110, display: 'grid', placeItems: 'center', fontSize: '0.76rem' }}>Loading…</div>
+                )}
+                <div style={{ fontSize: '0.76rem', fontWeight: 600 }}>{ph.caption || 'Photo'}</div>
+                <div className="dp-between" style={{ fontSize: '0.7rem' }}>
+                  <span className="dp-muted">{ph.album || 'Daily'}</span>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-ghost dp-btn-sm"
+                    style={{ padding: '0 4px', minHeight: 'auto' }}
+                    onClick={() => void saveDiary({ photos: (entry.photos ?? []).filter((x) => x.id !== ph.id) })}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {showPhotoTimeline && (
+          <div className="dp-stack" style={{ borderTop: '1px dashed var(--dp-border)', paddingTop: 8, gap: 6 }}>
+            <strong style={{ fontSize: '0.82rem' }}>Chronological Photo Browser</strong>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+              {diaries
+                .flatMap((d) => (d.payload.photos ?? []).map((ph) => ({ date: d.payload.date, ph })))
+                .slice(0, 30)
+                .map(({ date, ph }) => (
+                  <button
+                    key={`${date}-${ph.id}`}
+                    type="button"
+                    className="dp-card dp-stack"
+                    style={{ padding: 5, textAlign: 'start', cursor: 'pointer', gap: 3 }}
+                    onClick={() => setActiveDate(date)}
+                  >
+                    {photoUrls[ph.blobHash] && (
+                      <img src={photoUrls[ph.blobHash]} alt={ph.caption || date} style={{ width: '100%', height: 84, objectFit: 'cover', borderRadius: 5 }} />
+                    )}
+                    <strong style={{ fontSize: '0.72rem' }}>{date}</strong>
+                    <span className="dp-muted" style={{ fontSize: '0.7rem' }}>{ph.caption}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Diary History & Trends Comparison Chart (Section 13.4) */}
+      <div className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>
+        <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <strong>📈 Diary Trends &amp; Observational Comparison</strong>
+          <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap', fontSize: '0.8rem' }}>
+            <select aria-label="Metric A" className="dp-select" style={{ width: 'auto' }} value={trendMetricA} onChange={(e) => setTrendMetricA(e.target.value)}>
+              {WELLNESS_RATINGS.map((w) => <option key={w.key} value={w.key}>{w.label}</option>)}
+              <option value="sleepHours">Sleep Hours</option>
+              <option value="waterCups">Water Cups</option>
+            </select>
+            <span>vs</span>
+            <select aria-label="Metric B" className="dp-select" style={{ width: 'auto' }} value={trendMetricB} onChange={(e) => setTrendMetricB(e.target.value)}>
+              {WELLNESS_RATINGS.map((w) => <option key={w.key} value={w.key}>{w.label}</option>)}
+              <option value="sleepHours">Sleep Hours</option>
+              <option value="waterCups">Water Cups</option>
+            </select>
+            <select aria-label="Trend window" className="dp-select" style={{ width: 'auto' }} value={trendDays} onChange={(e) => setTrendDays(Number(e.target.value))}>
+              <option value={14}>Last 14d</option>
+              <option value={30}>Last 30d</option>
+              <option value={90}>Last 90d</option>
+              <option value={365}>Last 365d</option>
+            </select>
+          </div>
+        </div>
+        {trendSeries.length >= 2 ? (
+          <svg viewBox="0 0 600 130" style={{ width: '100%', maxHeight: 140, background: 'var(--dp-surface-2)', borderRadius: 8 }}>
+            {(() => {
+              const maxVal = Math.max(ratingScale.max, ...trendSeries.flatMap((p) => [p.a ?? 0, p.b ?? 0]), 1);
+              const xStep = 560 / Math.max(1, trendSeries.length - 1);
+              const ptsA = trendSeries
+                .map((p, i) => (p.a !== null ? `${20 + i * xStep},${115 - (p.a / maxVal) * 95}` : null))
+                .filter(Boolean)
+                .join(' ');
+              const ptsB = trendSeries
+                .map((p, i) => (p.b !== null ? `${20 + i * xStep},${115 - (p.b / maxVal) * 95}` : null))
+                .filter(Boolean)
+                .join(' ');
+              return (
+                <>
+                  <polyline fill="none" stroke="#3b6ea5" strokeWidth="2.5" points={ptsA} />
+                  <polyline fill="none" stroke="#c96f53" strokeWidth="2.5" strokeDasharray="5 3" points={ptsB} />
+                </>
+              );
+            })()}
+          </svg>
+        ) : (
+          <p className="dp-muted" style={{ margin: 0, fontSize: '0.8rem' }}>Log at least 2 days to see trend comparison lines.</p>
+        )}
+        <span className="dp-muted" style={{ fontSize: '0.74rem' }}>
+          Blue solid = {trendMetricA} · Coral dashed = {trendMetricB}. Observational self-tracking display only — correlations are not medical conclusions.
+        </span>
       </div>
 
       {/* 28-Day Mood Heatmap */}

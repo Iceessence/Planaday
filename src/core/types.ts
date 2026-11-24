@@ -13,8 +13,11 @@ export type OperatingMode = 'docker-sync' | 'offline-phone' | 'offline-computer'
 
 export type ModuleId =
   | 'home'
+  | 'quick_glance'
   | 'today'
   | 'calendar'
+  | 'task_calendar'
+  | 'digital_planner'
   | 'tasks'
   | 'chores'
   | 'notes'
@@ -33,17 +36,23 @@ export type ModuleId =
   | 'travel'
   | 'people'
   | 'home_assets'
+  | 'lab'
+  | 'reports'
   | 'ai';
 
 export type NavView =
   | 'all_in_one'
+  | 'quick_glance'
   | 'home'
   | 'today'
+  | 'digital_planner'
   | 'planner'
   | 'calendar'
+  | 'task_calendar'
   | 'tasks'
   | 'chores'
   | 'history'
+  | 'reports'
   | 'events'
   | 'notes'
   | 'thoughts'
@@ -67,6 +76,7 @@ export type NavView =
   | 'media'
   | 'travel'
   | 'home_assets'
+  | 'lab'
   | 'spaces'
   | 'custom_tab'
   | 'insights'
@@ -97,6 +107,7 @@ export type RecordType =
   | 'pantry_lot'
   | 'pantry_zone'
   | 'meal_plan'
+  | 'food_log'
   | 'grocery_item'
   | 'person'
   | 'household_member'
@@ -127,7 +138,25 @@ export type RecordType =
   | 'saved_view'
   | 'period_reflection'
   | 'triage_item'
-  | 'context_mode';
+  | 'context_mode'
+  | 'quick_capture'
+  | 'planner_book'
+  | 'planner_page'
+  | 'lab_sample'
+  | 'lab_subcontract'
+  | 'lab_inventory'
+  | 'lab_order'
+  | 'lab_budget'
+  | 'lab_price_entry'
+  | 'lab_price_template'
+  | 'lab_research'
+  | 'lab_email_draft'
+  | 'lab_task'
+  | 'lab_meeting'
+  | 'lab_calibration'
+  | 'lab_wet_nir'
+  | 'lab_work_hour'
+  | 'lab_qms_item';
 
 export interface EntityLink {
   targetId: string;
@@ -194,16 +223,41 @@ export interface SubtaskItem {
   children?: SubtaskItem[];
 }
 
+export interface DurationCompletionLog {
+  id: string;
+  startedAt?: string | null;
+  completedAt: string;
+  actualMinutes: number;
+  estimatedMinutes?: number;
+  breakMinutes?: number;
+  distracted: boolean;
+  distractionMinutes?: number;
+  distractionNote?: string;
+  notes?: string;
+  isEstimatedStart?: boolean;
+}
+
 export interface TaskPayload {
   notes?: string;
   subtasks: SubtaskItem[];
-  pinnedTop3Date?: string | null; // YYYY-MM-DD if pinned to Today's Top Three
+  pinnedTop3Date?: string | null; // YYYY-MM-DD if pinned to Today's Favorites
+  favoriteCategory?: string;
+  favoriteOrder?: number;
+  sortOrder?: number;
+  customPriorityRank?: number; // optional numeric priority (1..100)
+  taskType?: string; // reusable task type for learned average duration
+  originalDueDate?: string | null;
+  rescheduleCount?: number;
+  contextId?: string | null; // scheduling context (Work, Home, Lab, etc.)
   blockedByIds?: string[];
   waitingFor?: string;
   actualMinutes?: number;
+  startedAt?: string | null;
   completedAt?: string | null;
+  completionLogs?: DurationCompletionLog[];
   boardColumn?: 'backlog' | 'next' | 'in_progress' | 'done';
   sourceProvenance?: string;
+  manualStartTime?: string | null; // HH:MM manual override on Task Calendar
 }
 
 export interface ChoreCompletionEntry {
@@ -215,6 +269,10 @@ export interface ChoreCompletionEntry {
   daysDelta?: number; // <= 0 on time/early, > 0 days late
   assigneeId?: string | null;
   minutesSpent?: number;
+  breakMinutes?: number;
+  distracted?: boolean;
+  distractionMinutes?: number;
+  distractionNote?: string;
   notes?: string;
 }
 
@@ -227,6 +285,8 @@ export interface ChorePayload {
   elapsedHoursTarget?: number;
   activeSeasons?: Array<'spring' | 'summer' | 'fall' | 'winter'>;
   difficulty: 1 | 2 | 3 | 4 | 5;
+  sortOrder?: number;
+  contextId?: string | null;
   checklist: Array<{ id: string; text: string; done: boolean }>;
   linkedSupplies: string[];
   lastCompletedDate?: string | null;
@@ -286,6 +346,7 @@ export interface CalendarEventPayload {
   actualNote?: string;
   isActualLog?: boolean;
   retrospective?: EventRetrospective | null;
+  calendarId?: string; // multi-calendar layer id (e.g. cal_personal, cal_work, cal_lab)
 }
 
 export interface GoalMilestone {
@@ -323,6 +384,16 @@ export interface NotePayload {
   sketchBlobId?: string | null;
   voiceMemoBlobIds?: string[];
   touchedDates?: string[];
+  // Phase 5 Rich Formatting & Presentation Options
+  presentationMode?: 'scroll' | 'pages' | 'spread' | 'notebook' | 'planner';
+  paperStyle?: 'blank' | 'lined' | 'grid' | 'dot';
+  fontFamily?: 'inherit' | 'serif' | 'sans' | 'mono' | 'handwriting';
+  fontSizePx?: number;
+  lineSpacing?: number;
+  paragraphSpacing?: number;
+  textAlign?: 'left' | 'center' | 'right';
+  textColor?: string;
+  bgColor?: string;
 }
 
 export interface ThoughtPayload {
@@ -331,15 +402,33 @@ export interface ThoughtPayload {
   filedRanges?: Array<{ targetId: string; targetType: RecordType; excerpt: string; filedAt: string }>;
 }
 
+export interface DiaryPhotoEntry {
+  id: string;
+  blobHash: string;
+  caption?: string;
+  timestamp: string;
+  album?: string;
+  tags?: string[];
+  linkedActivity?: string;
+}
+
+export interface BathroomLogEntry {
+  id: string;
+  time: string; // HH:MM
+  kind: 'urination' | 'bowel';
+  note?: string;
+}
+
 export interface DiaryPayload {
   date: string; // YYYY-MM-DD
   mood?: 'Great' | 'Good' | 'Okay' | 'Low' | 'Rough' | string;
   emotions?: string[];
-  energy?: number; // 1..5
-  stress?: number; // 1..5
+  energy?: number; // legacy 1..5 or 1..10
+  stress?: number; // legacy 1..5 or 1..10
   sleepHours?: number;
-  sleepQuality?: number; // 1..5
+  sleepQuality?: number;
   waterCups?: number;
+  exerciseMin?: number;
   mealsNote?: string;
   weatherNote?: string;
   summary?: string;
@@ -354,6 +443,33 @@ export interface DiaryPayload {
   blankMode?: boolean;
   mediaBlobIds?: string[];
   extraEntries?: Array<{ id: string; time: string; text: string; mood?: string }>;
+  // Phase 4 Comprehensive 1-10 Ratings, Custom Categories, Bathroom Tracking, Daily Sections & Rich Photos
+  ratings?: Record<string, number>;
+  ratingScaleMin?: number;
+  ratingScaleMax?: number;
+  customTrackers?: Record<string, string | number | boolean>;
+  bathroom?: {
+    urinations: number;
+    bowelMovements: number;
+    notes?: string;
+    logs?: BathroomLogEntry[];
+  };
+  dailyNoteSections?: Record<string, string>;
+  photos?: DiaryPhotoEntry[];
+}
+
+export interface FoodLogPayload {
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
+  mealCategory: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'drink' | string;
+  foodName: string;
+  portionQty?: number;
+  portionUnit?: string;
+  ingredients?: string[];
+  recipeId?: string | null;
+  rating?: number; // 0..5
+  photoBlobHash?: string | null;
+  notes?: string;
 }
 
 export interface RecipeIngredient {
@@ -451,15 +567,20 @@ export interface GroceryItemPayload {
 
 export interface DecorItemPayload {
   spreadKey: string; // e.g., today:2026-11-23, week:2026-W48, month:2026-11
-  kind: 'sticker' | 'washi' | 'sticky_note' | 'stamp' | 'ink';
+  kind: 'sticker' | 'washi' | 'sticky_note' | 'stamp' | 'ink' | 'shape';
   anchorId: string;
+  anchorMode?: 'page' | 'section' | 'object' | 'text' | 'canvas';
+  layerPosition?: 'above' | 'below';
   relX: number; // 0..1 normalized
   relY: number; // 0..1 normalized
+  fixedPxX?: number; // pixel anchor for 'canvas' / resize-immune mode
+  fixedPxY?: number;
   scale: number;
   rotation: number;
   opacity: number;
   zIndex: number;
   locked: boolean;
+  lockEditing?: boolean;
   stickerId?: string;
   customBlobId?: string;
   emoji?: string;
@@ -469,12 +590,14 @@ export interface DecorItemPayload {
   widthPct?: number;
   heightPct?: number;
   stampText?: 'DONE' | 'PRIORITY' | 'MOVED' | 'CANCELED' | string;
+  shapeKind?: 'line' | 'arrow' | 'rect' | 'ellipse';
+  shapeCoords?: { x1: number; y1: number; x2: number; y2: number };
   inkPaths?: Array<{
     id?: string;
     color: string;
     width: number;
     opacity?: number;
-    tool?: 'pen' | 'fine' | 'marker' | 'highlighter' | 'dashed';
+    tool?: 'pen' | 'pencil' | 'fine' | 'marker' | 'highlighter' | 'dashed';
     highlighter?: boolean;
     points: Array<[number, number]>;
   }>;
@@ -632,6 +755,101 @@ export interface CustomTabDef {
   widgets: CustomTabWidget[];
 }
 
+export interface CalendarLayerDef {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  visible: boolean;
+}
+
+export interface CalendarViewPrefs {
+  intervalMin: number; // 1, 2, 5, 10, 15, 20, 30, 45, 60, 120, 180, 240, or custom
+  majorGridIntervalMin: number; // e.g., 60
+  showMajorGrid: boolean;
+  showMinorGrid: boolean;
+  gridThicknessPx: number;
+  majorLineColor: string;
+  minorLineColor: string;
+  gridOpacity: number; // 0.1..1
+  gridLineStyle: 'solid' | 'dashed';
+  timeLabelEveryMin: number; // 15, 30, 60, 120, 240
+  adaptiveText: boolean;
+  minFontPx: number;
+  maxFontPx: number;
+  visibleStartHour: number; // 0..23
+  visibleEndHour: number; // 1..24
+  overlapPolicy: 'allow' | 'side_by_side' | 'auto_resize' | 'prevent' | 'warn' | 'stack' | 'condensed';
+  dayMinWidthPx: number;
+}
+
+export interface SchedulingContextDef {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  days: number[]; // 0=Sun..6=Sat
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+}
+
+export interface DailyNoteSectionDef {
+  id: string;
+  title: string;
+  emoji: string;
+  visible: boolean;
+  schedule: 'daily' | 'weekdays' | 'weekends';
+}
+
+export interface CustomDiaryCategoryDef {
+  id: string;
+  name: string;
+  kind: 'rating' | 'counter' | 'duration' | 'measurement' | 'checkbox' | 'text';
+  unit?: string;
+  min?: number;
+  max?: number;
+}
+
+export type ClockDesignId =
+  | 'analog_traditional'
+  | 'analog_minimal'
+  | 'digital'
+  | 'retro_digital'
+  | 'modern_minimal'
+  | 'decorative';
+
+export interface ClockVisualConfig {
+  design: ClockDesignId;
+  showSeconds: boolean;
+  sizePx: number;
+  accentColor: string;
+  bgColor: string;
+  borderStyle: 'solid' | 'double' | 'none';
+  numberStyle: 'arabic' | 'roman' | 'dots' | 'none';
+}
+
+export interface WorkspaceScheduleRule {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  workspaceId: string;
+  days: number[]; // 0..6
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  defaultView?: NavView;
+  hiddenViews?: NavView[];
+  taskContextId?: string | null;
+  clockDesign?: ClockDesignId;
+}
+
+export interface ReusableTaskTypeDef {
+  id: string;
+  name: string;
+  defaultEstimateMin: number;
+  category?: string;
+}
+
 export interface AppSettings {
   id: 'app-settings';
   deviceId: string;
@@ -650,6 +868,8 @@ export interface AppSettings {
   mobileLayoutMode: MobileLayoutMode;
   uiScalePct: number; // 80..130
   hiddenSidebarViews: NavView[];
+  collapsedSidebarGroups?: string[];
+  creationMode?: 'simple' | 'standard' | 'advanced';
   operatingMode: OperatingMode;
   syncServerUrl: string; // Primary URL: empty in same-origin Docker browser, or e.g. http://192.168.88.31:3000
   syncFallbackUrl: string; // Optional Tailscale / Remote fallback URL: e.g. http://100.x.y.z:3000 or https://host.ts.net
@@ -672,6 +892,29 @@ export interface AppSettings {
   customNotebooks: Array<{ id: string; name: string; color: string }>;
   customMealFavorites: string[];
   defaultCurrency: string;
+  // Phase 3 Calendar, Tasks & Intelligent Scheduling
+  calendars?: CalendarLayerDef[];
+  calendarPrefs?: CalendarViewPrefs;
+  maxFavorites?: number | null; // null = unlimited; default 3
+  autoCarryOverTasks?: boolean;
+  preferredDailyEndTime?: string; // e.g. '21:00'
+  allowSchedulePastEndTime?: boolean;
+  schedulingContexts?: SchedulingContextDef[];
+  reusableTaskTypes?: ReusableTaskTypeDef[];
+  // Phase 4 Today, Quick Glance & Diary Customization
+  customDailyNoteSections?: DailyNoteSectionDef[];
+  todayUpcomingDays?: number;
+  todayCompactMode?: boolean;
+  diaryRatingScale?: { min: number; max: number; step: number };
+  customDiaryCategories?: CustomDiaryCategoryDef[];
+  quickGlanceWidgets?: string[];
+  quickGlanceActions?: string[];
+  // Phase 5 Clock Designs
+  clockConfig?: ClockVisualConfig;
+  // Phase 6 Schedule-Based Workspace Layouts
+  workspaceSchedules?: WorkspaceScheduleRule[];
+  autoWorkspaceScheduleEnabled?: boolean;
+  manualWorkspaceOverrideId?: string | null;
   // Personalization
   themePresetId: string;
   customTokens: ThemeTokens;

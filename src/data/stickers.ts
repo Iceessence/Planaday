@@ -22,7 +22,11 @@ export type StickerCategory =
   | 'Reminders'
   | 'Seasonal'
   | 'Love & Milestones'
-  | 'Planning';
+  | 'Planning'
+  | 'Laboratory & Science'
+  | 'Weather & Sky'
+  | 'Shapes & Badges'
+  | 'Moods & Reactions';
 
 export const STICKER_CATEGORIES: StickerCategory[] = [
   'Birthdays',
@@ -41,6 +45,10 @@ export const STICKER_CATEGORIES: StickerCategory[] = [
   'Seasonal',
   'Love & Milestones',
   'Planning',
+  'Laboratory & Science',
+  'Weather & Sky',
+  'Shapes & Badges',
+  'Moods & Reactions',
 ];
 
 function cpToEmoji(codepoints: string): string {
@@ -345,6 +353,78 @@ const RAW_CATALOG: RawSpec[] = [
       ['Documents', 'U+1F4C4'],
       ['Write', 'U+270F'],
       ['Calculate', 'U+1F9EE'],
+    ],
+  ],
+  [
+    'Laboratory & Science',
+    [
+      ['Test tube', 'U+1F9EA'],
+      ['Alembic', 'U+2697'],
+      ['Microscope', 'U+1F52C'],
+      ['Petri dish', 'U+1F9EB'],
+      ['DNA helix', 'U+1F9EC'],
+      ['Lab coat', 'U+1F97C'],
+      ['Safety goggles', 'U+1F97D'],
+      ['Balance scale', 'U+2696'],
+      ['Thermometer', 'U+1F321'],
+      ['Atom', 'U+269B'],
+      ['Biohazard', 'U+2623'],
+      ['Clipboard QC', 'U+1F4CB'],
+      ['Chart trend', 'U+1F4C8'],
+      ['Magnet', 'U+1F9F2'],
+    ],
+  ],
+  [
+    'Weather & Sky',
+    [
+      ['Bright sun', 'U+2600'],
+      ['Partly sunny', 'U+26C5'],
+      ['Rain cloud', 'U+1F327'],
+      ['Lightning', 'U+26A1'],
+      ['Snowflake', 'U+2744'],
+      ['Rainbow', 'U+1F308'],
+      ['Crescent moon', 'U+1F319'],
+      ['Shooting star', 'U+1F320'],
+      ['Comet', 'U+2604'],
+      ['Wind', 'U+1F32C'],
+      ['Fog', 'U+1F32B'],
+      ['Sunrise', 'U+1F305'],
+    ],
+  ],
+  [
+    'Shapes & Badges',
+    [
+      ['Gold star', 'U+2B50'],
+      ['Check badge', 'U+2705'],
+      ['Red circle', 'U+1F534'],
+      ['Blue circle', 'U+1F535'],
+      ['Green circle', 'U+1F7E2'],
+      ['Yellow diamond', 'U+1F538'],
+      ['Purple heart', 'U+1F49C'],
+      ['Pushpin', 'U+1F4CC'],
+      ['Flag goal', 'U+1F6A9'],
+      ['Trophy', 'U+1F3C6'],
+      ['Medal', 'U+1F3C5'],
+      ['Crown', 'U+1F451'],
+      ['Sparkle', 'U+2728'],
+      ['Fire streak', 'U+1F525'],
+    ],
+  ],
+  [
+    'Moods & Reactions',
+    [
+      ['Beaming smile', 'U+1F604'],
+      ['Warm calm', 'U+1F60C'],
+      ['Star struck', 'U+1F929'],
+      ['Thinking', 'U+1F914'],
+      ['Tired', 'U+1F634'],
+      ['Determined', 'U+1F4AA'],
+      ['Party mind', 'U+1F92F'],
+      ['Grateful hands', 'U+1F64F'],
+      ['Thumbs up', 'U+1F44D'],
+      ['Clapping', 'U+1F44F'],
+      ['Brain focus', 'U+1F9E0'],
+      ['Coffee boost', 'U+2615'],
     ],
   ],
 ];

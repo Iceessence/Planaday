@@ -60,6 +60,7 @@ export const NotesView: React.FC = () => {
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [newNotebookName, setNewNotebookName] = useState('');
+  const [notePageIdx, setNotePageIdx] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -727,6 +728,13 @@ export const NotesView: React.FC = () => {
                 <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('\n- [ ] Action item\n')}>
                   <CheckSquare size={13} /> Checklist
                 </button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('**bold**')}><strong>B</strong></button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('*italic*')}><em>I</em></button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('<u>underline</u>')}><u>U</u></button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('~~strike~~')}><s>S</s></button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('==highlight==')}>🖍 Hi-Lite</button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('\n---\n')}>— Divider</button>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('\n1. First item\n2. Second item\n')}>1. List</button>
                 <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('\n> [!NOTE] Callout\n> ')}>Callout</button>
                 <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('\n| Column A | Column B |\n| --- | --- |\n| Value | Value |\n')}>Table</button>
                 <button type="button" className="dp-btn dp-btn-sm" onClick={() => insertSnippet('\n```ts\n// code block\n```\n')}>Code</button>
@@ -757,6 +765,139 @@ export const NotesView: React.FC = () => {
                 </button>
               </div>
 
+              {/* Per-Note Rich Typography, Paper & Presentation Mode Bar (Sections 4.1 & 4.2) */}
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6, fontSize: '0.78rem', padding: '6px 8px', background: 'var(--dp-surface-2)', borderRadius: 8 }}>
+                <select
+                  aria-label="Note presentation mode"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '2px 6px' }}
+                  value={activeNote.payload.presentationMode ?? 'scroll'}
+                  onChange={(e) => {
+                    setNotePageIdx(0);
+                    void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, presentationMode: e.target.value as NotePayload['presentationMode'] },
+                    }), { skipRevision: true });
+                  }}
+                >
+                  <option value="scroll">Mode: Continuous Scroll</option>
+                  <option value="pages">Mode: Individual Pages</option>
+                  <option value="spread">Mode: 2-Page Book Spread</option>
+                  <option value="notebook">Mode: Traditional Notebook</option>
+                  <option value="planner">Mode: Planner Layout</option>
+                </select>
+                <select
+                  aria-label="Note paper style"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '2px 6px' }}
+                  value={activeNote.payload.paperStyle ?? 'blank'}
+                  onChange={(e) =>
+                    void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, paperStyle: e.target.value as NotePayload['paperStyle'] },
+                    }), { skipRevision: true })
+                  }
+                >
+                  <option value="blank">Paper: Blank</option>
+                  <option value="lined">Paper: Lined</option>
+                  <option value="grid">Paper: Grid</option>
+                  <option value="dot">Paper: Dot-Grid</option>
+                </select>
+                <select
+                  aria-label="Note font family"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '2px 6px' }}
+                  value={activeNote.payload.fontFamily ?? 'inherit'}
+                  onChange={(e) =>
+                    void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, fontFamily: e.target.value as NotePayload['fontFamily'] },
+                    }), { skipRevision: true })
+                  }
+                >
+                  <option value="inherit">Font: Theme</option>
+                  <option value="serif">Serif</option>
+                  <option value="sans">Sans-Serif</option>
+                  <option value="mono">Monospace</option>
+                  <option value="handwriting">Handwriting</option>
+                </select>
+                <select
+                  aria-label="Note font size"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '2px 6px' }}
+                  value={activeNote.payload.fontSizePx ?? 16}
+                  onChange={(e) =>
+                    void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, fontSizePx: Number(e.target.value) || 16 },
+                    }), { skipRevision: true })
+                  }
+                >
+                  {[13, 14, 16, 18, 20, 22, 26].map((sz) => <option key={sz} value={sz}>{sz}px</option>)}
+                </select>
+                <select
+                  aria-label="Note alignment"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '2px 6px' }}
+                  value={activeNote.payload.textAlign ?? 'left'}
+                  onChange={(e) =>
+                    void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, textAlign: e.target.value as NotePayload['textAlign'] },
+                    }), { skipRevision: true })
+                  }
+                >
+                  <option value="left">Align Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+                <label className="dp-row" style={{ gap: 3 }}>
+                  <span className="dp-muted">Text:</span>
+                  <input
+                    type="color"
+                    aria-label="Note text color"
+                    value={activeNote.payload.textColor || '#2a241d'}
+                    onChange={(e) =>
+                      void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                        ...c,
+                        payload: { ...c.payload, textColor: e.target.value },
+                      }), { skipRevision: true })
+                    }
+                    style={{ width: 22, height: 22, padding: 0, border: 'none' }}
+                  />
+                </label>
+                <label className="dp-row" style={{ gap: 3 }}>
+                  <span className="dp-muted">Bg:</span>
+                  <input
+                    type="color"
+                    aria-label="Note background tint"
+                    value={activeNote.payload.bgColor || '#fcf9f2'}
+                    onChange={(e) =>
+                      void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                        ...c,
+                        payload: { ...c.payload, bgColor: e.target.value },
+                      }), { skipRevision: true })
+                    }
+                    style={{ width: 22, height: 22, padding: 0, border: 'none' }}
+                  />
+                </label>
+                {(activeNote.payload.textColor || activeNote.payload.bgColor) && (
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-ghost dp-btn-sm"
+                    style={{ padding: '1px 5px', fontSize: '0.72rem' }}
+                    onClick={() =>
+                      void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                        ...c,
+                        payload: { ...c.payload, textColor: undefined, bgColor: undefined },
+                      }), { skipRevision: true })
+                    }
+                  >
+                    Reset Colors
+                  </button>
+                )}
+              </div>
+
               {/* [[WikiLink]] Autocomplete Bar */}
               {autocompleteQuery !== null && (
                 <div className="dp-row" style={{ padding: 6, background: 'var(--dp-surface-2)', borderRadius: 6 }}>
@@ -781,72 +922,147 @@ export const NotesView: React.FC = () => {
                 </div>
               )}
 
-              {viewMode === 'edit' ? (
-                <textarea
-                  ref={textareaRef}
-                  className="dp-textarea"
-                  autoCorrect="on"
-                  autoCapitalize="sentences"
-                  spellCheck={true}
-                  style={{
-                    minHeight: 320,
-                    fontFamily: 'var(--dp-font-body)',
-                    lineHeight: 'var(--dp-line-height, 1.65)',
-                    fontSize: 'max(16px, 1rem)',
-                  }}
-                  placeholder="Write freely in Markdown with [[WikiLinks]], @mentions, #tags, checklists (- [ ])…"
-                  value={bodyBuffer.value}
-                  onChange={(e) => handleContentChange(e.target.value)}
-                  onCompositionStart={bodyBuffer.handleCompositionStart}
-                  onCompositionEnd={(e) => bodyBuffer.handleCompositionEnd(e.currentTarget.value)}
-                  onBlur={bodyBuffer.handleBlur}
-                />
-              ) : (
-                <div className="dp-stack" style={{ minHeight: 310, padding: 10 }}>
-                  {bodyBuffer.value.split(/\r?\n/).map((line, idx) => {
-                    const checkMatch = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.*)$/);
-                    if (checkMatch) {
-                      const checked = checkMatch[2].toLowerCase() === 'x';
-                      const label = checkMatch[3];
-                      return (
-                        <div key={idx} className="dp-between" style={{ marginInlineStart: checkMatch[1].length * 8 }}>
-                          <label className="dp-row" style={{ cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                const lines = bodyBuffer.value.split(/\r?\n/);
-                                lines[idx] = `${checkMatch[1]}- [${checked ? ' ' : 'x'}] ${label}`;
-                                handleContentChange(lines.join('\n'));
-                              }}
-                            />
-                            <span style={{ textDecoration: checked ? 'line-through' : undefined }}>{label}</span>
-                          </label>
-                          <button
-                            type="button"
-                            className="dp-btn dp-btn-ghost dp-btn-sm"
-                            onClick={async () => {
-                              await createRecord<TaskPayload>(
-                                'task',
-                                label,
-                                { subtasks: [], boardColumn: 'next', sourceProvenance: `note:${activeNote.id}` },
-                                { doDate: logicalToday, links: [{ targetId: activeNote.id, targetType: 'note', relation: 'attached_note' }] }
+              {(() => {
+                const fontMap: Record<string, string> = {
+                  inherit: 'var(--dp-font-body)',
+                  serif: 'Georgia, "Times New Roman", serif',
+                  sans: 'system-ui, -apple-system, sans-serif',
+                  mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  handwriting: '"Segoe Script", "Bradley Hand", cursive',
+                };
+                const paperBg =
+                  activeNote.payload.paperStyle === 'lined'
+                    ? 'repeating-linear-gradient(to bottom, transparent 0 27px, color-mix(in oklch, var(--dp-border) 65%, transparent) 27px 28px)'
+                    : activeNote.payload.paperStyle === 'grid'
+                      ? 'linear-gradient(to right, color-mix(in oklch, var(--dp-border) 50%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in oklch, var(--dp-border) 50%, transparent) 1px, transparent 1px)'
+                      : activeNote.payload.paperStyle === 'dot'
+                        ? 'radial-gradient(color-mix(in oklch, var(--dp-muted) 45%, transparent) 1px, transparent 1px)'
+                        : undefined;
+                const noteStyle: React.CSSProperties = {
+                  minHeight: 320,
+                  fontFamily: fontMap[activeNote.payload.fontFamily ?? 'inherit'],
+                  lineHeight: activeNote.payload.lineSpacing ?? 1.75,
+                  fontSize: `max(16px, ${activeNote.payload.fontSizePx ?? 16}px)`,
+                  textAlign: activeNote.payload.textAlign ?? 'left',
+                  color: activeNote.payload.textColor || undefined,
+                  backgroundColor: activeNote.payload.bgColor || undefined,
+                  backgroundImage: paperBg,
+                  backgroundSize: activeNote.payload.paperStyle === 'grid' || activeNote.payload.paperStyle === 'dot' ? '22px 22px' : undefined,
+                  paddingInline: activeNote.payload.presentationMode === 'notebook' ? 28 : undefined,
+                  borderInlineStart: activeNote.payload.presentationMode === 'notebook' ? '3px double #d97c7c' : undefined,
+                };
+                const pres = activeNote.payload.presentationMode ?? 'scroll';
+
+                if (viewMode === 'edit') {
+                  return (
+                    <textarea
+                      ref={textareaRef}
+                      className="dp-textarea"
+                      autoCorrect="on"
+                      autoCapitalize="sentences"
+                      spellCheck={true}
+                      style={noteStyle}
+                      placeholder="Write freely in Markdown with [[WikiLinks]], @mentions, #tags, checklists (- [ ]), --- page breaks…"
+                      value={bodyBuffer.value}
+                      onChange={(e) => handleContentChange(e.target.value)}
+                      onCompositionStart={bodyBuffer.handleCompositionStart}
+                      onCompositionEnd={(e) => bodyBuffer.handleCompositionEnd(e.currentTarget.value)}
+                      onBlur={bodyBuffer.handleBlur}
+                    />
+                  );
+                }
+
+                // Paginated / Spread / Continuous Rich Preview
+                const rawPages =
+                  pres === 'pages' || pres === 'spread'
+                    ? bodyBuffer.value.split(/\r?\n---\r?\n/)
+                    : [bodyBuffer.value];
+                const safePageIdx = Math.min(notePageIdx, Math.max(0, rawPages.length - 1));
+                const pagesToShow =
+                  pres === 'spread'
+                    ? [rawPages[safePageIdx] ?? '', rawPages[safePageIdx + 1] ?? '']
+                    : [rawPages[safePageIdx] ?? ''];
+
+                return (
+                  <div className="dp-stack" style={{ gap: 8 }}>
+                    {(pres === 'pages' || pres === 'spread') && (
+                      <div className="dp-between" style={{ fontSize: '0.8rem' }}>
+                        <button
+                          type="button"
+                          className="dp-btn dp-btn-sm"
+                          disabled={safePageIdx === 0}
+                          onClick={() => setNotePageIdx((i) => Math.max(0, i - (pres === 'spread' ? 2 : 1)))}
+                        >
+                          ← Prev Page
+                        </button>
+                        <span className="dp-pill">
+                          Page {safePageIdx + 1}{pres === 'spread' && rawPages[safePageIdx + 1] !== undefined ? `–${safePageIdx + 2}` : ''} of {rawPages.length} (add <code>---</code> for manual page breaks)
+                        </span>
+                        <button
+                          type="button"
+                          className="dp-btn dp-btn-sm"
+                          disabled={safePageIdx + (pres === 'spread' ? 2 : 1) >= rawPages.length}
+                          onClick={() => setNotePageIdx((i) => Math.min(rawPages.length - 1, i + (pres === 'spread' ? 2 : 1)))}
+                        >
+                          Next Page →
+                        </button>
+                      </div>
+                    )}
+                    <div className={pres === 'spread' ? 'dp-grid-2' : 'dp-stack'} style={{ gap: 12 }}>
+                      {pagesToShow.map((pageText, pIdx) => (
+                        <div key={pIdx} className="dp-card dp-stack" style={{ ...noteStyle, padding: 14, minHeight: 300 }}>
+                          {pageText.split(/\r?\n/).map((line, idx) => {
+                            const checkMatch = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.*)$/);
+                            if (checkMatch) {
+                              const checked = checkMatch[2].toLowerCase() === 'x';
+                              const label = checkMatch[3];
+                              return (
+                                <div key={idx} className="dp-between" style={{ marginInlineStart: checkMatch[1].length * 8 }}>
+                                  <label className="dp-row" style={{ cursor: 'pointer' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        const lines = bodyBuffer.value.split(/\r?\n/);
+                                        const globalIdx = lines.indexOf(line);
+                                        if (globalIdx >= 0) {
+                                          lines[globalIdx] = `${checkMatch[1]}- [${checked ? ' ' : 'x'}] ${label}`;
+                                          handleContentChange(lines.join('\n'));
+                                        }
+                                      }}
+                                    />
+                                    <span style={{ textDecoration: checked ? 'line-through' : undefined }}>{label}</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    className="dp-btn dp-btn-ghost dp-btn-sm"
+                                    onClick={async () => {
+                                      await createRecord<TaskPayload>(
+                                        'task',
+                                        label,
+                                        { subtasks: [], boardColumn: 'next', sourceProvenance: `note:${activeNote.id}` },
+                                        { doDate: logicalToday, links: [{ targetId: activeNote.id, targetType: 'note', relation: 'attached_note' }] }
+                                      );
+                                      pushToast(`Linked "${label}" as real Task`, { canUndo: true });
+                                    }}
+                                  >
+                                    Link as Task
+                                  </button>
+                                </div>
                               );
-                              pushToast(`Linked "${label}" as real Task`, { canUndo: true });
-                            }}
-                          >
-                            Link as Task
-                          </button>
+                            }
+                            if (line.startsWith('# ')) return <h2 key={idx} style={{ margin: '4px 0' }}>{line.slice(2)}</h2>;
+                            if (line.startsWith('## ')) return <h3 key={idx} style={{ margin: '4px 0' }}>{line.slice(3)}</h3>;
+                            if (line.startsWith('> ')) return <blockquote key={idx} style={{ margin: 0, paddingInlineStart: 12, borderInlineStart: '3px solid var(--dp-accent)' }}>{line.slice(2)}</blockquote>;
+                            if (line.trim() === '---') return <hr key={idx} style={{ border: 'none', borderTop: '1px solid var(--dp-border)', margin: '8px 0' }} />;
+                            return <p key={idx} style={{ margin: '2px 0' }}>{line || '\u00A0'}</p>;
+                          })}
                         </div>
-                      );
-                    }
-                    if (line.startsWith('# ')) return <h2 key={idx}>{line.slice(2)}</h2>;
-                    if (line.startsWith('## ')) return <h3 key={idx}>{line.slice(3)}</h3>;
-                    if (line.startsWith('> ')) return <blockquote key={idx} style={{ margin: 0, paddingInlineStart: 12, borderInlineStart: '3px solid var(--dp-accent)' }}>{line.slice(2)}</blockquote>;
-                    return <p key={idx} style={{ margin: '2px 0' }}>{line || '\u00A0'}</p>;
-                  })}
-                </div>
-              )}
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Inline Attachments, Sketch & Voice Memos */}
               {(activeNote.payload.attachmentBlobIds?.length || activeNote.payload.sketchBlobId || activeNote.payload.voiceMemoBlobIds?.length) ? (

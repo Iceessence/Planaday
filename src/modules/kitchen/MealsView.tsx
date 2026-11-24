@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ShoppingCart, Trash2, Utensils } from 'lucide-react';
+import { History, Plus, Search, ShoppingCart, Trash2, Utensils } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { addDaysIso, formatDateLocalized } from '../../core/temporal';
 import {
@@ -7,8 +7,8 @@ import {
   moveMealPlanDate,
   scheduleMealWithPrepReminder,
 } from '../../core/kitchenActions';
-import { softDeleteRecord } from '../../core/repository';
-import type { LifeRecord, MealPlanPayload, PantryLotPayload, RecipePayload } from '../../core/types';
+import { createRecord, softDeleteRecord } from '../../core/repository';
+import type { FoodLogPayload, LifeRecord, MealPlanPayload, PantryLotPayload, RecipePayload } from '../../core/types';
 
 const SLOTS: Array<MealPlanPayload['slot']> = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -17,6 +17,120 @@ export const MealsView: React.FC = () => {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [customMealText, setCustomMealText] = useState('');
   const [addPrepReminder, setAddPrepReminder] = useState(true);
+  const [subTab, setSubTab] = useState<'planner' | 'history'>('planner');
+
+  // Food History & Logging State (Section 14)
+  const [logFoodName, setLogFoodName] = useState('');
+  const [logMealCat, setLogMealCat] = useState('lunch');
+  const [logPortionQty, setLogPortionQty] = useState(1);
+  const [logPortionUnit, setLogPortionUnit] = useState('serving');
+  const [logIngredients, setLogIngredients] = useState('');
+  const [logRating, setLogRating] = useState(4);
+  const [logNotes, setLogNotes] = useState('');
+  const [histQuery, setHistQuery] = useState('');
+  const [histCatFilter, setHistCatFilter] = useState('all');
+  const [histFrom, setHistFrom] = useState(() => addDaysIso(logicalToday, -30));
+  const [histTo, setHistTo] = useState(logicalToday);
+
+  const foodLogs = useMemo(
+    () =>
+      (records.filter((r) => r.type === 'food_log') as Array<LifeRecord<FoodLogPayload>>).sort((a, b) =>
+        `${b.payload.date} ${b.payload.time || ''}`.localeCompare(`${a.payload.date} ${a.payload.time || ''}`)
+      ),
+    [records]
+  );
+
+  // Unified Food History combining explicit food_log entries + planned meals (zero duplicate re-entry!)
+  const unifiedFoodHistory = useMemo(() => {
+    const items: Array<{
+      id: string;
+      source: 'food_log' | 'meal_plan';
+      date: string;
+      time: string;
+      category: string;
+      name: string;
+      portion?: string;
+      ingredients: string[];
+      rating?: number;
+      notes?: string;
+    }> = [];
+    for (const fl of foodLogs) {
+      items.push({
+        id: fl.id,
+        source: 'food_log',
+        date: fl.payload.date,
+        time: fl.payload.time || '',
+        category: fl.payload.mealCategory || 'meal',
+        name: fl.payload.foodName || fl.title,
+        portion: fl.payload.portionQty ? `${fl.payload.portionQty} ${fl.payload.portionUnit || 'serving'}` : undefined,
+        ingredients: fl.payload.ingredients ?? [],
+        rating: fl.payload.rating,
+        notes: fl.payload.notes,
+      });
+    }
+    const existingKeys = new Set(items.map((i) => `${i.date}|${i.category}|${i.name.toLowerCase()}`));
+    for (const mp of records.filter((r) => r.type === 'meal_plan') as Array<LifeRecord<MealPlanPayload>>) {
+      const k = `${mp.payload.date}|${mp.payload.slot}|${mp.title.toLowerCase()}`;
+      if (existingKeys.has(k)) continue;
+      items.push({
+        id: mp.id,
+        source: 'meal_plan',
+        date: mp.payload.date,
+        time: '',
+        category: mp.payload.slot,
+        name: mp.title,
+        portion: mp.payload.servings ? `${mp.payload.servings} serving(s)` : undefined,
+        ingredients: [],
+        notes: mp.payload.notes,
+      });
+    }
+    return items.sort((a, b) => b.date.localeCompare(a.date));
+  }, [foodLogs, records]);
+
+  const filteredFoodHistory = useMemo(() => {
+    const q = histQuery.trim().toLowerCase();
+    return unifiedFoodHistory.filter((it) => {
+      if (histFrom && it.date < histFrom) return false;
+      if (histTo && it.date > histTo) return false;
+      if (histCatFilter !== 'all' && it.category.toLowerCase() !== histCatFilter) return false;
+      if (q) {
+        const hay = `${it.name} ${it.category} ${it.ingredients.join(' ')} ${it.notes ?? ''} ${it.date}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [unifiedFoodHistory, histQuery, histCatFilter, histFrom, histTo]);
+
+  const foodInsights = useMemo(() => {
+    const monthCutoff = addDaysIso(logicalToday, -30);
+    const freqMap = new Map<string, { name: string; count: number; lastDate: string }>();
+    const bySlot = new Map<string, Map<string, number>>();
+    for (const it of unifiedFoodHistory) {
+      const key = it.name.trim().toLowerCase();
+      if (it.date >= monthCutoff) {
+        const cur = freqMap.get(key) ?? { name: it.name, count: 0, lastDate: it.date };
+        cur.count++;
+        if (it.date > cur.lastDate) cur.lastDate = it.date;
+        freqMap.set(key, cur);
+      }
+      const sm = bySlot.get(it.category.toLowerCase()) ?? new Map<string, number>();
+      sm.set(it.name, (sm.get(it.name) ?? 0) + 1);
+      bySlot.set(it.category.toLowerCase(), sm);
+    }
+    const topMonth = Array.from(freqMap.values()).sort((a, b) => b.count - a.count).slice(0, 6);
+    const topFor = (slot: string) => {
+      const m = bySlot.get(slot);
+      if (!m) return '—';
+      const sorted = Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+      return sorted[0] ? `${sorted[0][0]} (${sorted[0][1]}×)` : '—';
+    };
+    return {
+      topMonth,
+      topBreakfast: topFor('breakfast'),
+      topLunch: topFor('lunch'),
+      topDinner: topFor('dinner'),
+    };
+  }, [unifiedFoodHistory, logicalToday]);
 
   const recipes = useMemo(
     () => records.filter((r) => r.type === 'recipe') as Array<LifeRecord<RecipePayload>>,
@@ -90,7 +204,13 @@ export const MealsView: React.FC = () => {
             Drag meals between days (prep reminders move automatically) · Generate net aisle-sorted groceries in 1 click
           </p>
         </div>
-        <div className="dp-row">
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <button type="button" className={`dp-btn dp-btn-sm ${subTab === 'planner' ? 'dp-btn-primary' : ''}`} onClick={() => setSubTab('planner')}>
+            <Utensils size={14} /> Weekly Planner
+          </button>
+          <button type="button" className={`dp-btn dp-btn-sm ${subTab === 'history' ? 'dp-btn-primary' : ''}`} onClick={() => setSubTab('history')}>
+            <History size={14} /> Food History ({unifiedFoodHistory.length})
+          </button>
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(addDaysIso(activeDate, -7))}>← Prev Week</button>
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(logicalToday)}>This Week</button>
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(addDaysIso(activeDate, 7))}>Next Week →</button>
@@ -113,6 +233,128 @@ export const MealsView: React.FC = () => {
         </div>
       </div>
 
+      {subTab === 'history' ? (
+        <div className="dp-stack" style={{ gap: 14 }}>
+          {/* Quick Food Log Entry */}
+          <form
+            className="dp-card dp-stack"
+            style={{ padding: 12, gap: 8 }}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!logFoodName.trim()) return;
+              await createRecord<FoodLogPayload>('food_log', logFoodName.trim(), {
+                date: activeDate,
+                time: new Date().toTimeString().slice(0, 5),
+                mealCategory: logMealCat,
+                foodName: logFoodName.trim(),
+                portionQty: logPortionQty,
+                portionUnit: logPortionUnit,
+                ingredients: logIngredients.split(',').map((s) => s.trim()).filter(Boolean),
+                rating: logRating,
+                notes: logNotes.trim() || undefined,
+              });
+              setLogFoodName('');
+              setLogIngredients('');
+              setLogNotes('');
+              pushToast(`Logged ${logMealCat} to Food History!`);
+            }}
+          >
+            <strong>Log Meal or Drink for {activeDate}</strong>
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <input className="dp-input" style={{ flex: 2, minWidth: 160 }} placeholder="Food / meal / drink…" value={logFoodName} onChange={(e) => setLogFoodName(e.target.value)} />
+              <input list="dp-meal-cats" className="dp-input" style={{ width: 120 }} value={logMealCat} onChange={(e) => setLogMealCat(e.target.value)} />
+              <datalist id="dp-meal-cats">
+                <option value="breakfast" />
+                <option value="lunch" />
+                <option value="dinner" />
+                <option value="snack" />
+                <option value="drink" />
+              </datalist>
+              <input type="number" step={0.25} min={0.25} className="dp-input" style={{ width: 68 }} value={logPortionQty} onChange={(e) => setLogPortionQty(Number(e.target.value) || 1)} />
+              <input className="dp-input" style={{ width: 92 }} value={logPortionUnit} onChange={(e) => setLogPortionUnit(e.target.value)} placeholder="unit (oz/cup)" />
+              <select className="dp-select" style={{ width: 'auto' }} value={logRating} onChange={(e) => setLogRating(Number(e.target.value))}>
+                {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{'★'.repeat(r)}</option>)}
+              </select>
+              <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm"><Plus size={14} /> Log</button>
+            </div>
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <input className="dp-input" style={{ flex: 1 }} placeholder="Ingredients (comma separated)…" value={logIngredients} onChange={(e) => setLogIngredients(e.target.value)} />
+              <input className="dp-input" style={{ flex: 1 }} placeholder="Preparation notes…" value={logNotes} onChange={(e) => setLogNotes(e.target.value)} />
+            </div>
+          </form>
+
+          {/* Instant Food History Insights */}
+          <div className="dp-grid-3" style={{ gap: 10 }}>
+            <div className="dp-card dp-stack" style={{ padding: 12, gap: 4 }}>
+              <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Most Common Breakfast</span>
+              <strong>{foodInsights.topBreakfast}</strong>
+            </div>
+            <div className="dp-card dp-stack" style={{ padding: 12, gap: 4 }}>
+              <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Most Common Lunch</span>
+              <strong>{foodInsights.topLunch}</strong>
+            </div>
+            <div className="dp-card dp-stack" style={{ padding: 12, gap: 4 }}>
+              <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Most Common Dinner</span>
+              <strong>{foodInsights.topDinner}</strong>
+            </div>
+          </div>
+
+          {foodInsights.topMonth.length > 0 && (
+            <div className="dp-card dp-row" style={{ padding: 10, flexWrap: 'wrap', gap: 6, fontSize: '0.82rem' }}>
+              <strong>Most Frequent (Last 30d):</strong>
+              {foodInsights.topMonth.map((m) => (
+                <button key={m.name} type="button" className="dp-pill highlight" style={{ cursor: 'pointer' }} onClick={() => setHistQuery(m.name)}>
+                  {m.name} · {m.count}× (last {m.lastDate})
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Search & Date-Range Filter */}
+          <div className="dp-card dp-row" style={{ padding: 10, flexWrap: 'wrap', gap: 8 }}>
+            <Search size={15} className="dp-muted" />
+            <input className="dp-input" style={{ flex: 2, minWidth: 180 }} placeholder='Search foods, ingredients, or "last time I ate…"' value={histQuery} onChange={(e) => setHistQuery(e.target.value)} />
+            <select className="dp-select" style={{ width: 'auto' }} value={histCatFilter} onChange={(e) => setHistCatFilter(e.target.value)}>
+              <option value="all">All Categories</option>
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+              <option value="drink">Drink</option>
+            </select>
+            <input type="date" className="dp-input" style={{ width: 'auto' }} value={histFrom} onChange={(e) => setHistFrom(e.target.value)} />
+            <span>to</span>
+            <input type="date" className="dp-input" style={{ width: 'auto' }} value={histTo} onChange={(e) => setHistTo(e.target.value)} />
+            <button type="button" className="dp-btn dp-btn-sm" onClick={() => { setHistFrom(addDaysIso(logicalToday, -7)); setHistTo(logicalToday); }}>
+              Last 7d
+            </button>
+          </div>
+
+          <div className="dp-stack" style={{ gap: 6 }}>
+            {filteredFoodHistory.length === 0 ? (
+              <p className="dp-muted">No matching food history records in this date range.</p>
+            ) : (
+              filteredFoodHistory.map((it) => (
+                <div key={it.id} className="dp-card dp-between" style={{ padding: '8px 12px', flexWrap: 'wrap', gap: 6 }}>
+                  <div>
+                    <strong>{it.name}</strong>{' '}
+                    <span className="dp-pill">{it.category}</span>{' '}
+                    {it.portion && <span className="dp-pill">{it.portion}</span>}{' '}
+                    {it.rating ? <span style={{ color: 'var(--dp-accent)' }}>{'★'.repeat(it.rating)}</span> : null}
+                    <div className="dp-muted" style={{ fontSize: '0.78rem' }}>
+                      {it.date}{it.time ? ` · ${it.time}` : ''}{it.ingredients.length ? ` · Ingredients: ${it.ingredients.join(', ')}` : ''}{it.notes ? ` · ${it.notes}` : ''}
+                    </div>
+                  </div>
+                  <button type="button" className="dp-icon-btn" onClick={() => void softDeleteRecord(it.id)} title="Move to Trash">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Picker & Template Bar */}
       <div className="dp-card dp-row" style={{ padding: 12 }}>
         <select
@@ -284,6 +526,8 @@ export const MealsView: React.FC = () => {
           );
         })}
       </div>
+      </>
+      )}
     </div>
   );
 };

@@ -25,7 +25,7 @@ const WASHI_COLORS = ['#c96f53', '#5e8c78', '#c79b43', '#6b5ca5', '#3b6ea5', '#d
 const RUBBER_STAMPS = ['DONE', 'PRIORITY', 'MOVED', 'CANCELED'] as const;
 const INK_PALETTE = ['#2a241d', '#a97434', '#2e5c8a', '#b5453a', '#3e7a5d', '#6b5ca5', '#d98a9c', '#e6b800'];
 
-type InkTool = 'pen' | 'fine' | 'marker' | 'highlighter' | 'dashed' | 'eraser';
+type InkTool = 'pen' | 'pencil' | 'fine' | 'marker' | 'highlighter' | 'dashed' | 'line' | 'rect' | 'ellipse' | 'eraser';
 
 function pointToSegmentDistSq(
   px: number,
@@ -269,6 +269,9 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
 
   const placeDecor = async (partial: Partial<DecorItemPayload>, title: string, opts?: { silent?: boolean }) => {
     const zIndex = decorItems.reduce((m, x) => Math.max(m, x.payload.zIndex ?? 1), 1) + 1;
+    const rect = layerRef.current?.getBoundingClientRect();
+    const rx = partial.relX ?? 0.72;
+    const ry = partial.relY ?? 0.14;
     const created = await createRecord<DecorItemPayload>(
       'decor_item',
       title,
@@ -276,13 +279,18 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
         spreadKey,
         kind: partial.kind ?? 'sticker',
         anchorId: spreadKey,
-        relX: partial.relX ?? 0.72,
-        relY: partial.relY ?? 0.14,
+        anchorMode: partial.anchorMode ?? 'canvas', // Fixed px anchor prevents drift when sections expand!
+        layerPosition: partial.layerPosition ?? 'above',
+        relX: rx,
+        relY: ry,
+        fixedPxX: partial.fixedPxX ?? (rect ? Math.round(rx * rect.width) : undefined),
+        fixedPxY: partial.fixedPxY ?? (rect ? Math.round(ry * rect.height) : undefined),
         scale: partial.scale ?? 1,
         rotation: partial.rotation ?? 0,
         opacity: partial.opacity ?? 1,
         zIndex,
         locked: false,
+        lockEditing: false,
         ...partial,
       },
       {},
@@ -291,7 +299,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
     if (!opts?.silent) {
       setSelectedId(created.id);
       setDrawerOpen(false);
-      pushToast(`Placed "${title}" — drag or use arrow keys to position`, { canUndo: true });
+      pushToast(`Placed "${title}" — anchored cleanly against layout resizing`, { canUndo: true });
     }
   };
 
@@ -431,10 +439,14 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             {(
               [
                 ['pen', 'Pen', <PenTool size={12} key="p" />],
+                ['pencil', 'Pencil', null],
                 ['fine', 'Fine', null],
                 ['marker', 'Marker', null],
                 ['highlighter', 'Hi-Lite', <Highlighter size={12} key="h" />],
                 ['dashed', 'Dashed', null],
+                ['line', '╱ Line', null],
+                ['rect', '▭ Box', null],
+                ['ellipse', '◯ Oval', null],
                 ['eraser', 'Eraser', <Eraser size={12} key="e" />],
               ] as const
             ).map(([toolId, label, icon]) => (
@@ -617,9 +629,21 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             const d = draggingRef.current;
             draggingRef.current = null;
             setDragPos(null);
+            const rect = layerRef.current?.getBoundingClientRect();
+            const pxX = rect ? Math.round(d.curRelX * rect.width) : undefined;
+            const pxY = rect ? Math.round(d.curRelY * rect.height) : undefined;
             await updateRecord<DecorItemPayload>(
               d.id,
-              (c) => ({ ...c, payload: { ...c.payload, relX: d.curRelX, relY: d.curRelY } }),
+              (c) => ({
+                ...c,
+                payload: {
+                  ...c.payload,
+                  relX: d.curRelX,
+                  relY: d.curRelY,
+                  fixedPxX: pxX ?? c.payload.fixedPxX,
+                  fixedPxY: pxY ?? c.payload.fixedPxY,
+                },
+              }),
               { skipUndo: true }
             );
           }
@@ -636,25 +660,62 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             clearLiveCanvas();
 
             if (pts.length >= 2) {
-              await placeDecor(
-                {
-                  kind: 'ink',
-                  relX: 0,
-                  relY: 0,
-                  inkPaths: [
-                    {
-                      color: inkColor,
-                      width: effectiveInkWidth,
-                      opacity: effectiveInkOpacity,
-                      tool: inkTool === 'eraser' ? 'pen' : inkTool,
-                      highlighter: inkTool === 'highlighter',
-                      points: pts,
-                    },
-                  ],
-                },
-                inkTool === 'highlighter' ? 'Highlighter Stroke' : 'Ink Stroke',
-                { silent: true }
-              );
+              const isShape = inkTool === 'line' || inkTool === 'rect' || inkTool === 'ellipse';
+              if (isShape) {
+                const start = pts[0];
+                const end = pts[pts.length - 1];
+                const shapePts: Array<[number, number]> =
+                  inkTool === 'line'
+                    ? [start, end]
+                    : inkTool === 'rect'
+                      ? [start, [end[0], start[1]], end, [start[0], end[1]], start]
+                      : Array.from({ length: 25 }, (_, i) => {
+                          const ang = (i / 24) * Math.PI * 2;
+                          const cx = (start[0] + end[0]) / 2;
+                          const cy = (start[1] + end[1]) / 2;
+                          const rx = Math.abs(end[0] - start[0]) / 2;
+                          const ry = Math.abs(end[1] - start[1]) / 2;
+                          return [Number((cx + Math.cos(ang) * rx).toFixed(4)), Number((cy + Math.sin(ang) * ry).toFixed(4))] as [number, number];
+                        });
+                await placeDecor(
+                  {
+                    kind: 'ink',
+                    relX: 0,
+                    relY: 0,
+                    inkPaths: [
+                      {
+                        color: inkColor,
+                        width: effectiveInkWidth,
+                        opacity: effectiveInkOpacity,
+                        tool: 'pen',
+                        points: shapePts,
+                      },
+                    ],
+                  },
+                  `Shape: ${inkTool}`,
+                  { silent: true }
+                );
+              } else {
+                await placeDecor(
+                  {
+                    kind: 'ink',
+                    relX: 0,
+                    relY: 0,
+                    inkPaths: [
+                      {
+                        color: inkColor,
+                        width: effectiveInkWidth,
+                        opacity: inkTool === 'pencil' ? Math.min(0.65, effectiveInkOpacity) : effectiveInkOpacity,
+                        tool: inkTool === 'eraser' ? 'pen' : inkTool,
+                        highlighter: inkTool === 'highlighter',
+                        points: pts,
+                      },
+                    ],
+                  },
+                  inkTool === 'highlighter' ? 'Highlighter Stroke' : 'Ink Stroke',
+                  { silent: true }
+                );
+              }
             }
           }
         }}
@@ -700,6 +761,12 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             const isSel = selectedId === item.id;
             const curX = dragPos?.id === item.id ? dragPos.relX : p.relX;
             const curY = dragPos?.id === item.id ? dragPos.relY : p.relY;
+            const useFixedPx =
+              !dragPos &&
+              (p.anchorMode === 'canvas' || p.anchorMode === 'section' || p.anchorMode === 'object') &&
+              typeof p.fixedPxX === 'number' &&
+              typeof p.fixedPxY === 'number';
+            const effZ = p.layerPosition === 'below' ? 0 : Math.max(1, p.zIndex);
             return (
               <div
                 key={item.id}
@@ -708,11 +775,11 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
                 aria-label={`${p.kind}: ${item.title}`}
                 className={`dp-decor-item ${p.locked ? 'locked' : ''}`}
                 style={{
-                  left: `${curX * 100}%`,
-                  top: `${curY * 100}%`,
+                  left: useFixedPx ? `${p.fixedPxX}px` : `${curX * 100}%`,
+                  top: useFixedPx ? `${p.fixedPxY}px` : `${curY * 100}%`,
                   transform: `translate(-50%, -50%) scale(${p.scale}) rotate(${p.rotation}deg)`,
                   opacity: p.opacity,
-                  zIndex: p.zIndex,
+                  zIndex: effZ,
                   outline: isSel ? '2px dashed var(--dp-accent)' : undefined,
                   borderRadius: 6,
                   pointerEvents: inkMode ? 'none' : 'auto',
@@ -817,6 +884,72 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           >
             <RotateCw size={12} />
           </button>
+          <button
+            type="button"
+            className="dp-btn dp-btn-sm"
+            title="Toggle Above vs Below text layer"
+            onClick={() =>
+              void updateRecord<DecorItemPayload>(selectedItem.id, (c) => ({
+                ...c,
+                payload: { ...c.payload, layerPosition: c.payload.layerPosition === 'below' ? 'above' : 'below' },
+              }))
+            }
+          >
+            {selectedItem.payload.layerPosition === 'below' ? '↓ Below' : '↑ Above'}
+          </button>
+          <button
+            type="button"
+            className="dp-btn dp-btn-sm"
+            title="Bring to front"
+            onClick={() => {
+              const maxZ = decorItems.reduce((m, x) => Math.max(m, x.payload.zIndex ?? 1), 1);
+              void updateRecord<DecorItemPayload>(selectedItem.id, (c) => ({ ...c, payload: { ...c.payload, zIndex: maxZ + 1, layerPosition: 'above' } }));
+            }}
+          >
+            Front
+          </button>
+          <button
+            type="button"
+            className="dp-btn dp-btn-sm"
+            title="Send to back"
+            onClick={() =>
+              void updateRecord<DecorItemPayload>(selectedItem.id, (c) => ({ ...c, payload: { ...c.payload, zIndex: 1, layerPosition: 'below' } }))
+            }
+          >
+            Back
+          </button>
+          <select
+            aria-label="Anchor mode"
+            className="dp-select"
+            style={{ width: 'auto', padding: '1px 5px', fontSize: '0.72rem' }}
+            value={selectedItem.payload.anchorMode ?? 'canvas'}
+            onChange={(e) =>
+              void updateRecord<DecorItemPayload>(selectedItem.id, (c) => ({
+                ...c,
+                payload: { ...c.payload, anchorMode: e.target.value as DecorItemPayload['anchorMode'] },
+              }))
+            }
+          >
+            <option value="canvas">Anchor: Fixed Px</option>
+            <option value="page">Anchor: Relative %</option>
+            <option value="section">Anchor: Section</option>
+            <option value="object">Anchor: Object</option>
+            <option value="text">Anchor: Text Block</option>
+          </select>
+          <input
+            type="range"
+            aria-label="Decor opacity"
+            min={20}
+            max={100}
+            style={{ width: 52 }}
+            value={Math.round((selectedItem.payload.opacity ?? 1) * 100)}
+            onChange={(e) =>
+              void updateRecord<DecorItemPayload>(selectedItem.id, (c) => ({
+                ...c,
+                payload: { ...c.payload, opacity: Number(e.target.value) / 100 },
+              }))
+            }
+          />
           <button
             type="button"
             className="dp-btn dp-btn-sm"

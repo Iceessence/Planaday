@@ -1,6 +1,6 @@
 // Planaday Offline-First Service Worker
 // Precaches core shell & dynamically caches built JS/CSS/font assets for 100% offline Phone & Computer modes.
-const CACHE_NAME = 'planaday-shell-v2-1';
+const CACHE_NAME = 'planaday-shell-v3-0';
 const CORE_ASSETS = [
   '/',
   '/index.html',

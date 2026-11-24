@@ -540,6 +540,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applySettingsToDocument(next);
   }, []);
 
+  // Phase 6: Schedule-Based Automatic Workspace Layout Switching (Section 18.4)
+  useEffect(() => {
+    if (!settings.autoWorkspaceScheduleEnabled || settings.manualWorkspaceOverrideId) return;
+    const evaluateSchedule = () => {
+      const now = new Date();
+      const wd = now.getDay();
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const match = (settings.workspaceSchedules ?? []).find(
+        (s) => s.days.includes(wd) && hhmm >= s.startTime && hhmm < s.endTime
+      );
+      if (match && match.workspaceId !== settings.activeWorkspaceId) {
+        void patchSettings({
+          activeWorkspaceId: match.workspaceId,
+          ...(match.clockDesign && settings.clockConfig ? { clockConfig: { ...settings.clockConfig, design: match.clockDesign } } : {}),
+        });
+      }
+    };
+    evaluateSchedule();
+    const id = window.setInterval(evaluateSchedule, 60_000);
+    return () => window.clearInterval(id);
+  }, [
+    settings.autoWorkspaceScheduleEnabled,
+    settings.manualWorkspaceOverrideId,
+    settings.workspaceSchedules,
+    settings.activeWorkspaceId,
+    settings.clockConfig,
+    patchSettings,
+  ]);
+
   const triggerSyncNow = useCallback(async () => {
     await runSyncCycle();
     const h = await getStorageHealth();

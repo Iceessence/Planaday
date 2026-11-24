@@ -30,10 +30,13 @@ export const ChoresView: React.FC = () => {
   const [choreSearch, setChoreSearch] = useState('');
   const [roomFilter, setRoomFilter] = useState('all');
   const [dueFilter, setDueFilter] = useState<'all' | 'overdue' | 'due_today' | 'fresh'>('all');
-  const [sortBy, setSortBy] = useState<'due' | 'freshness' | 'room' | 'difficulty' | 'title'>('due');
+  const [sortBy, setSortBy] = useState<'custom' | 'due' | 'freshness' | 'room' | 'difficulty' | 'title'>('due');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [replayDate, setReplayDate] = useState(activeDate);
   const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
+  const [dragChoreId, setDragChoreId] = useState<string | null>(null);
+  const [logChoreMin, setLogChoreMin] = useState<Record<string, number>>({});
+  const [logChoreDistracted, setLogChoreDistracted] = useState<Record<string, boolean>>({});
 
   const chores = useMemo(
     () => records.filter((r) => r.type === 'chore') as Array<LifeRecord<ChorePayload>>,
@@ -62,6 +65,12 @@ export const ChoresView: React.FC = () => {
     });
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...list].sort((a, b) => {
+      if (sortBy === 'custom') {
+        const oa = a.payload.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const ob = b.payload.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        if (oa !== ob) return (oa - ob) * dir;
+        return a.title.localeCompare(b.title) * dir;
+      }
       if (sortBy === 'title') return a.title.localeCompare(b.title) * dir;
       if (sortBy === 'room') return a.payload.room.localeCompare(b.payload.room) * dir;
       if (sortBy === 'difficulty') return ((a.payload.difficulty || 1) - (b.payload.difficulty || 1)) * dir;
@@ -329,6 +338,7 @@ export const ChoresView: React.FC = () => {
         sortBy={sortBy}
         onSortByChange={(v) => setSortBy(v as typeof sortBy)}
         sortOptions={[
+          { value: 'custom', label: 'Custom Drag Order' },
           { value: 'due', label: 'Next Due Date' },
           { value: 'freshness', label: 'Room Freshness %' },
           { value: 'room', label: 'Room' },
@@ -389,7 +399,31 @@ export const ChoresView: React.FC = () => {
         {filtered.map((c) => {
           const state = computeChoreFreshnessAtDate(c.payload, replayDate);
           return (
-            <div key={c.id} className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>
+            <div
+              key={c.id}
+              draggable
+              onDragStart={() => setDragChoreId(c.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={async (e) => {
+                e.preventDefault();
+                if (!dragChoreId || dragChoreId === c.id) return;
+                const ids = filtered.map((x) => x.id);
+                const from = ids.indexOf(dragChoreId);
+                const to = ids.indexOf(c.id);
+                if (from >= 0 && to >= 0) {
+                  ids.splice(from, 1);
+                  ids.splice(to, 0, dragChoreId);
+                  for (let i = 0; i < ids.length; i++) {
+                    await updateRecord<ChorePayload>(ids[i], (cur) => ({ ...cur, payload: { ...cur.payload, sortOrder: i } }), { skipUndo: true });
+                  }
+                  setSortBy('custom');
+                  pushToast('Saved custom chore order!');
+                }
+                setDragChoreId(null);
+              }}
+              className="dp-card dp-stack"
+              style={{ padding: 12, gap: 8 }}
+            >
               <div className="dp-between">
                 <div>
                   <strong>
@@ -436,12 +470,49 @@ export const ChoresView: React.FC = () => {
                       Log use ({c.payload.usageCount ?? 0}/{c.payload.usageTarget ?? 5})
                     </button>
                   )}
+                  <label className="dp-row" style={{ gap: 3, fontSize: '0.76rem' }} title="Optional actual minutes taken">
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      className="dp-input"
+                      style={{ width: 54, padding: '2px 5px', fontSize: '0.76rem' }}
+                      value={logChoreMin[c.id] ?? c.estimateMin ?? 15}
+                      onChange={(e) => setLogChoreMin((p) => ({ ...p, [c.id]: Number(e.target.value) || 10 }))}
+                    />
+                    <span className="dp-muted">m</span>
+                  </label>
+                  <label className="dp-row" style={{ gap: 3, fontSize: '0.75rem', cursor: 'pointer' }} title="Mark if distracted while doing this chore">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(logChoreDistracted[c.id])}
+                      onChange={(e) => setLogChoreDistracted((p) => ({ ...p, [c.id]: e.target.checked }))}
+                    />
+                    <span className="dp-muted">Distracted</span>
+                  </label>
                   <button
                     type="button"
                     className="dp-btn dp-btn-primary dp-btn-sm"
                     onClick={async () => {
+                      const mins = logChoreMin[c.id] ?? c.estimateMin ?? 15;
+                      const dist = Boolean(logChoreDistracted[c.id]);
                       await completeActionAtomically(c.id, { completedDateIso: logicalToday });
-                      pushToast(`Completed "${c.title}" — next due recalculated from ${logicalToday}`, { canUndo: true });
+                      await updateRecord<ChorePayload>(
+                        c.id,
+                        (cur) => {
+                          const comps = [...(cur.payload.completions ?? [])];
+                          if (comps.length > 0) {
+                            comps[comps.length - 1] = {
+                              ...comps[comps.length - 1],
+                              minutesSpent: mins,
+                              distracted: dist,
+                            };
+                          }
+                          return { ...cur, payload: { ...cur.payload, completions: comps } };
+                        },
+                        { skipUndo: true }
+                      );
+                      pushToast(`Completed "${c.title}" (${mins}m${dist ? ', distracted' : ''}) — next due recalculated`, { canUndo: true });
                     }}
                   >
                     <Check size={14} /> Done Today

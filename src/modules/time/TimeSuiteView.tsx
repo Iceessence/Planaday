@@ -37,7 +37,8 @@ import {
 import { recordsToCsv, triggerBrowserDownload } from '../../core/backup';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
-import type { CalendarEventPayload, ChimeStyle, LifeRecord } from '../../core/types';
+import { ClockWidget, CLOCK_DESIGN_OPTIONS } from '../../components/Common/ClockWidget';
+import type { CalendarEventPayload, ChimeStyle, ClockVisualConfig, LifeRecord } from '../../core/types';
 
 export interface StopwatchLap {
   index: number;
@@ -447,56 +448,50 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
         </div>
       </TabSettingsDrawer>
 
-      {/* --- TAB 1: LOCAL CLOCK, WORLD CLOCK SLIDER & NIGHTSTAND MODE --- */}
-      {tab === 'clock' && (
+      {/* --- TAB 1: LOCAL CLOCK (6+ CUSTOM DESIGNS), WORLD CLOCK SLIDER & NIGHTSTAND MODE --- */}
+      {tab === 'clock' && (() => {
+        const clkCfg: ClockVisualConfig = settings.clockConfig ?? {
+          design: 'analog_traditional',
+          showSeconds: true,
+          sizePx: 168,
+          accentColor: '#a97434',
+          bgColor: '#fcf9f2',
+          borderStyle: 'solid',
+          numberStyle: 'arabic',
+        };
+        const patchClock = (p: Partial<ClockVisualConfig>) => void patchSettings({ clockConfig: { ...clkCfg, ...p } });
+        return (
         <div className="dp-stack">
           <div className="dp-grid-2">
-            <div className="dp-card dp-stack" style={{ alignItems: 'center', textAlign: 'center', padding: 20 }}>
-              <div className="dp-row">
-                {(['analog', 'digital', 'flip'] as const).map((s) => (
-                  <button key={s} type="button" className={`dp-btn dp-btn-sm ${clockStyle === s ? 'dp-btn-primary' : ''}`} onClick={() => setClockStyle(s)}>
-                    {s}
+            <div className="dp-card dp-stack" style={{ alignItems: 'center', textAlign: 'center', padding: 20, gap: 12 }}>
+              <div className="dp-row" style={{ flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}>
+                {CLOCK_DESIGN_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`dp-btn dp-btn-sm ${clockStyle !== 'flip' && clkCfg.design === opt.id ? 'dp-btn-primary' : ''}`}
+                    onClick={() => {
+                      setClockStyle('analog');
+                      patchClock({ design: opt.id });
+                    }}
+                  >
+                    {opt.label}
                   </button>
                 ))}
+                <button type="button" className={`dp-btn dp-btn-sm ${clockStyle === 'flip' ? 'dp-btn-primary' : ''}`} onClick={() => setClockStyle('flip')}>
+                  Retro Flip
+                </button>
                 <button type="button" className="dp-btn dp-btn-sm" onClick={() => setNightstandOpen(true)}>
                   <Moon size={14} /> Nightstand
                 </button>
               </div>
 
-              {clockStyle === 'analog' && (
-                <svg viewBox="0 0 200 200" width={180} height={180} aria-label="Analog clock">
-                  <circle cx="100" cy="100" r="92" fill="var(--dp-surface-2)" stroke="var(--dp-border)" strokeWidth="4" />
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <line
-                      key={i}
-                      x1="100"
-                      y1="16"
-                      x2="100"
-                      y2="25"
-                      stroke="var(--dp-muted)"
-                      strokeWidth="2.5"
-                      transform={`rotate(${i * 30} 100 100)`}
-                    />
-                  ))}
-                  <line x1="100" y1="100" x2="100" y2="52" stroke="var(--dp-ink)" strokeWidth="5" strokeLinecap="round" transform={`rotate(${hourDeg} 100 100)`} />
-                  <line x1="100" y1="100" x2="100" y2="34" stroke="var(--dp-ink)" strokeWidth="3.2" strokeLinecap="round" transform={`rotate(${minDeg} 100 100)`} />
-                  <line x1="100" y1="108" x2="100" y2="26" stroke="var(--dp-accent)" strokeWidth="1.8" strokeLinecap="round" transform={`rotate(${secDeg} 100 100)`} />
-                  <circle cx="100" cy="100" r="4.5" fill="var(--dp-accent)" />
-                </svg>
-              )}
-
-              {clockStyle === 'digital' && (
-                <div style={{ fontSize: '3.1rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontFamily: 'var(--dp-font-mono)' }}>
-                  {now.toLocaleTimeString(settings.locale, { hour12: settings.timeFormat === '12h' })}
-                </div>
-              )}
-
-              {clockStyle === 'flip' && (
+              {clockStyle === 'flip' ? (
                 <div className="dp-row" style={{ gap: 10 }}>
                   {[
                     String(settings.timeFormat === '12h' ? now.getHours() % 12 || 12 : now.getHours()).padStart(2, '0'),
                     String(now.getMinutes()).padStart(2, '0'),
-                    String(now.getSeconds()).padStart(2, '0'),
+                    ...(clkCfg.showSeconds ? [String(now.getSeconds()).padStart(2, '0')] : []),
                   ].map((part, idx) => (
                     <div
                       key={idx}
@@ -515,7 +510,41 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                     </div>
                   ))}
                 </div>
+              ) : (
+                <ClockWidget config={clkCfg} timeFormat={settings.timeFormat} timeZone={settings.defaultTimeZone} />
               )}
+
+              {/* Clock Visual Customizer (Size, Seconds, 12h/24h, Colors, Border, Numerals — Section 17) */}
+              <div className="dp-row" style={{ flexWrap: 'wrap', justifyContent: 'center', gap: 8, fontSize: '0.78rem' }}>
+                <label className="dp-row" style={{ gap: 4 }}>
+                  <input type="checkbox" checked={clkCfg.showSeconds} onChange={(e) => patchClock({ showSeconds: e.target.checked })} />
+                  <span>Seconds</span>
+                </label>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => void patchSettings({ timeFormat: settings.timeFormat === '12h' ? '24h' : '12h' })}
+                >
+                  {settings.timeFormat.toUpperCase()}
+                </button>
+                <label className="dp-row" style={{ gap: 3 }}>
+                  <span className="dp-muted">Size:</span>
+                  <input type="range" min={100} max={240} value={clkCfg.sizePx} onChange={(e) => patchClock({ sizePx: Number(e.target.value) })} style={{ width: 64 }} />
+                </label>
+                <select aria-label="Clock numerals" className="dp-select" style={{ width: 'auto', padding: '2px 5px' }} value={clkCfg.numberStyle} onChange={(e) => patchClock({ numberStyle: e.target.value as ClockVisualConfig['numberStyle'] })}>
+                  <option value="arabic">123 Arabic</option>
+                  <option value="roman">XII Roman</option>
+                  <option value="dots">Dots</option>
+                  <option value="none">Minimal Ticks</option>
+                </select>
+                <select aria-label="Clock border" className="dp-select" style={{ width: 'auto', padding: '2px 5px' }} value={clkCfg.borderStyle} onChange={(e) => patchClock({ borderStyle: e.target.value as ClockVisualConfig['borderStyle'] })}>
+                  <option value="solid">Solid Ring</option>
+                  <option value="double">Double Ring</option>
+                  <option value="none">Borderless</option>
+                </select>
+                <input type="color" aria-label="Clock accent color" value={clkCfg.accentColor} onChange={(e) => patchClock({ accentColor: e.target.value })} style={{ width: 22, height: 22, border: 'none', padding: 0 }} />
+                <input type="color" aria-label="Clock background color" value={clkCfg.bgColor} onChange={(e) => patchClock({ bgColor: e.target.value })} style={{ width: 22, height: 22, border: 'none', padding: 0 }} />
+              </div>
 
               <span className="dp-muted">{settings.defaultTimeZone}</span>
             </div>
@@ -597,7 +626,8 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* --- TAB 2: SMART ALARMS & WAKE-UP ROUTINES --- */}
       {tab === 'alarms' && (

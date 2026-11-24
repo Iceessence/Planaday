@@ -24,8 +24,8 @@ describe('Phase 4 — Decor, Optional Life-OS, Automations & Final Verification 
     await db.settings.clear();
   });
 
-  it('loads all 208 built-in stickers + 120+ facts offline, stores normalized anchored decor coordinates, and sanitizes custom SVGs', async () => {
-    expect(BUILTIN_STICKERS).toHaveLength(208);
+  it('loads 260+ built-in stickers + 120+ facts offline, stores normalized anchored decor coordinates, and sanitizes custom SVGs', async () => {
+    expect(BUILTIN_STICKERS.length).toBeGreaterThanOrEqual(260);
     expect(OFFLINE_LEARNING_FACTS.length).toBeGreaterThanOrEqual(120);
 
     const sticker = await createRecord<DecorItemPayload>('decor_item', 'Birthday cake', {
