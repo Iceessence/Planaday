@@ -1,6 +1,11 @@
 node_modules/
 dist/
 dist-server/
+desktop/node_modules/
+desktop/release/
+desktop/web/
+android/
+ios/
 dayplana-data/
 .env
 *.log

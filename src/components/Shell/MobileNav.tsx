@@ -20,9 +20,11 @@ const TAB_LABELS: Record<string, { label: string; icon: React.ReactNode }> = {
 };
 
 const ALL_MORE_VIEWS: Array<[NavView, string]> = [
+  ['all_in_one', 'All-in-One Scroll (Every Tab)'],
   ['home', 'Home Dashboard'],
   ['planner', 'Week / Month / Year'],
   ['chores', 'Chores'],
+  ['history', 'History & Reviews'],
   ['notes', 'Notes & Graph'],
   ['thoughts', 'Thought Inbox'],
   ['diary', 'Diary & Reflection'],

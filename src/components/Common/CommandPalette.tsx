@@ -32,11 +32,13 @@ export const CommandPalette: React.FC = () => {
 
   const actions = useMemo<PaletteAction[]>(() => {
     const navItems: Array<[NavView, string]> = [
+      ['all_in_one', 'Go to All-in-One Scroll (Every Tab on One Page)'],
       ['home', 'Go to Home Dashboard'],
       ['today', 'Go to Today Open-Book Spread'],
       ['calendar', 'Go to Flow Calendar'],
       ['tasks', 'Go to Tasks'],
       ['chores', 'Go to Chores'],
+      ['history', 'Go to Completion History & Event Reviews'],
       ['notes', 'Go to Rich Notes & Knowledge Graph'],
       ['thoughts', 'Go to Thought Inbox'],
       ['diary', 'Go to Diary & Reflection'],

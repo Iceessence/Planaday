@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Download,
@@ -45,7 +45,7 @@ const EVENT_TEMPLATES = [
 const ZOOM_STEPS = [5, 10, 15, 30, 60] as const;
 
 export const FlowCalendarView: React.FC = () => {
-  const { settings, records, activeDate, setActiveDate, logicalToday, pushToast } = useApp();
+  const { settings, records, activeDate, setActiveDate, logicalToday, pushToast, selectedEventId, setSelectedEventId } = useApp();
 
   // Range, positioning, zoom & 4-mode overlap state (Sections 07.01, 07.02)
   const [rangeDays, setRangeDays] = useState<number>(7);
@@ -240,6 +240,17 @@ export const FlowCalendarView: React.FC = () => {
     setRecurUntil(ev.recurrence?.until ?? '');
     setEditorOpen(true);
   };
+
+  // Auto-open specific event when clicked from Today Spread, Home, or History!
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const found = events.find((ev) => ev.id === selectedEventId);
+    if (found) {
+      openEditEvent(found, activeDate || found.payload.startDate);
+      setSelectedEventId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId, events]);
 
   const dstCheck = useMemo(() => {
     if (allDay || floating) return null;

@@ -19,6 +19,7 @@ export const HomeDashboard: React.FC = () => {
     activeDate,
     setActiveDate,
     setActiveView,
+    openEventInCalendar,
     setQuickCaptureOpen,
     runningTimers,
     startCountdownTimer,
@@ -136,14 +137,20 @@ export const HomeDashboard: React.FC = () => {
             </p>
           ) : (
             upcomingEvents.map(({ ev, date }) => (
-              <div key={`${ev.id}-${date}`} className="dp-between" style={{ fontSize: '0.9rem' }}>
+              <button
+                key={`${ev.id}-${date}`}
+                type="button"
+                className="dp-btn dp-btn-ghost dp-between"
+                style={{ fontSize: '0.9rem', width: '100%', padding: '5px 8px' }}
+                onClick={() => openEventInCalendar(ev.id, date)}
+              >
                 <span>
                   {ev.payload.emoji || '📌'} <strong>{ev.title}</strong>
                 </span>
                 <span className="dp-pill">
                   {date} {ev.payload.startTime ? formatTimeDisplay(ev.payload.startTime, settings.timeFormat) : 'All day'}
                 </span>
-              </div>
+              </button>
             ))
           )}
         </section>

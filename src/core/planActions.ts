@@ -1,7 +1,7 @@
 import { createId, db, getOrInitSettings } from './db';
 import { batchApplyChanges, createRecord } from './repository';
 import { computeNextChoreDueDate } from './recurrence';
-import { addDaysIso } from './temporal';
+import { addDaysIso, diffDaysIso } from './temporal';
 import type {
   CalendarEventPayload,
   ChorePayload,
@@ -125,6 +125,9 @@ export async function completeActionAtomically(
 
     if (target.type === 'chore') {
       const cp = target.payload as unknown as ChorePayload;
+      const scheduledDue = cp.nextDueDate || options.completedDateIso;
+      const daysDelta = diffDaysIso(scheduledDue, options.completedDateIso);
+      const wasOnTime = daysDelta <= 0;
       const nextDueDate = computeNextChoreDueDate(cp, options.completedDateIso);
       const nextChore: LifeRecord = {
         ...target,
@@ -145,6 +148,9 @@ export async function completeActionAtomically(
               id: createId('cmp'),
               completedAt: now,
               completedDate: options.completedDateIso,
+              scheduledDueDate: scheduledDue,
+              wasOnTime,
+              daysDelta,
               assigneeId: options.assigneeId ?? target.assigneeId ?? null,
               minutesSpent: options.minutesLogged ?? target.estimateMin ?? 15,
             },
@@ -444,20 +450,26 @@ export function layoutDayEvents(
 }
 
 /**
- * Finds 30+ minute free gaps between workWindowStart (default 08:00) and workWindowEnd (default 20:00).
+ * Finds 30+ minute free gaps between workWindowStart and workWindowEnd.
+ * When `minStartMin` is supplied (e.g., current time on Today), ONLY shows gaps AFTER `minStartMin`!
  */
 export function findFreeTimeGaps(
   dayEvents: Array<{ startMin: number; endMin: number }>,
   workStartMin = 8 * 60,
-  workEndMin = 20 * 60,
-  minGapMin = 30
+  workEndMin = 21 * 60,
+  minGapMin = 30,
+  minStartMin?: number
 ): Array<{ startMin: number; endMin: number; durationMin: number }> {
+  const effectiveStart =
+    minStartMin !== undefined ? Math.max(workStartMin, Math.ceil(minStartMin / 5) * 5) : workStartMin;
+  if (effectiveStart >= workEndMin) return [];
+
   const sorted = [...dayEvents]
-    .filter((e) => e.endMin > workStartMin && e.startMin < workEndMin)
+    .filter((e) => e.endMin > effectiveStart && e.startMin < workEndMin)
     .sort((a, b) => a.startMin - b.startMin);
 
   const gaps: Array<{ startMin: number; endMin: number; durationMin: number }> = [];
-  let cursor = workStartMin;
+  let cursor = effectiveStart;
 
   for (const ev of sorted) {
     if (ev.startMin > cursor) {
@@ -470,4 +482,63 @@ export function findFreeTimeGaps(
     gaps.push({ startMin: cursor, endMin: workEndMin, durationMin: workEndMin - cursor });
   }
   return gaps;
+}
+
+export interface ChorePunctualityStats {
+  totalTracked: number;
+  onTimeCount: number;
+  lateCount: number;
+  onTimePct: number | null;
+  perChore: Array<{
+    choreId: string;
+    title: string;
+    room: string;
+    total: number;
+    onTime: number;
+    onTimePct: number | null;
+  }>;
+}
+
+export function computeChorePunctualityStats(
+  chores: Array<LifeRecord<ChorePayload>>
+): ChorePunctualityStats {
+  let totalTracked = 0;
+  let onTimeCount = 0;
+  let lateCount = 0;
+
+  const perChore = chores.map((c) => {
+    const completions = c.payload.completions ?? [];
+    let cTotal = 0;
+    let cOnTime = 0;
+    for (const entry of completions) {
+      cTotal++;
+      // Explicit wasOnTime or infer from scheduledDueDate if present; legacy entries without scheduledDueDate default to on-time
+      const onTime =
+        entry.wasOnTime !== undefined
+          ? entry.wasOnTime
+          : entry.scheduledDueDate
+            ? entry.completedDate <= entry.scheduledDueDate
+            : true;
+      if (onTime) cOnTime++;
+    }
+    totalTracked += cTotal;
+    onTimeCount += cOnTime;
+    lateCount += cTotal - cOnTime;
+    return {
+      choreId: c.id,
+      title: c.title,
+      room: c.payload.room || 'General',
+      total: cTotal,
+      onTime: cOnTime,
+      onTimePct: cTotal > 0 ? Math.round((cOnTime / cTotal) * 100) : null,
+    };
+  });
+
+  return {
+    totalTracked,
+    onTimeCount,
+    lateCount,
+    onTimePct: totalTracked > 0 ? Math.round((onTimeCount / totalTracked) * 100) : null,
+    perChore,
+  };
 }

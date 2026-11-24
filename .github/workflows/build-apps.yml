@@ -1,0 +1,101 @@
+name: Build Native Phone (Android APK) & Windows Desktop Apps
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Java 21 (for Android Gradle build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install web deps & build Dayplana PWA
+        run: |
+          npm ci || npm install
+          npm run build:client
+
+      - name: Add Capacitor Android + Local Notifications (for lock-screen alarms)
+        run: |
+          npm install --no-save @capacitor/core @capacitor/cli @capacitor/android @capacitor/local-notifications
+          npx cap add android
+          npx cap sync android
+
+      - name: Enable exact alarm, notification & LAN cleartext permissions in AndroidManifest
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/AndroidManifest.xml";
+            let xml = fs.readFileSync(p, "utf8");
+            const perms = [
+              "<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />",
+              "<uses-permission android:name=\"android.permission.SCHEDULE_EXACT_ALARM\" />",
+              "<uses-permission android:name=\"android.permission.RECEIVE_BOOT_COMPLETED\" />",
+              "<uses-permission android:name=\"android.permission.VIBRATE\" />",
+              "<uses-permission android:name=\"android.permission.WAKE_LOCK\" />"
+            ].join("\n    ");
+            xml = xml.replace("<application", perms + "\n    <application");
+            if (!xml.includes("usesCleartextTraffic")) {
+              xml = xml.replace("<application", "<application android:usesCleartextTraffic=\"true\"");
+            }
+            fs.writeFileSync(p, xml);
+          '
+
+      - name: Build Android APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Upload Downloadable Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dayplana-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  desktop-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Build Dayplana web bundle
+        run: |
+          npm ci || npm install
+          npm run build:client
+
+      - name: Copy built web bundle into desktop wrapper
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse -Force dist desktop/web
+
+      - name: Install desktop dependencies & package portable Windows .exe
+        working-directory: desktop
+        run: |
+          npm install
+          npm run dist:win
+
+      - name: Upload Downloadable Windows Desktop App (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dayplana-Windows-Desktop-App
+          path: desktop/release/*.exe

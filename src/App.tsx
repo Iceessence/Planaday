@@ -33,11 +33,14 @@ import { FinanceView } from './modules/life/FinanceView';
 import { LearningMediaView } from './modules/life/LearningMediaView';
 import { TravelPeopleHomeView } from './modules/life/TravelPeopleHomeView';
 import { StudioExtrasView } from './modules/life/StudioExtrasView';
+import { HistoryView } from './modules/life/HistoryView';
+import { AllInOneView } from './modules/life/AllInOneView';
 import { DecorCanvasOverlay } from './components/Decor/DecorCanvas';
 
 const ActiveWorkspaceStage: React.FC = () => {
   const { activeView } = useApp();
 
+  if (activeView === 'all_in_one') return <AllInOneView />;
   if (activeView === 'settings') return <SettingsView />;
   if (activeView === 'trash') return <TrashView />;
   if (activeView === 'home') return <HomeDashboard />;
@@ -46,6 +49,7 @@ const ActiveWorkspaceStage: React.FC = () => {
   if (activeView === 'planner') return <PeriodPlannerView />;
   if (activeView === 'tasks') return <TasksView />;
   if (activeView === 'chores') return <ChoresView />;
+  if (activeView === 'history') return <HistoryView />;
   if (activeView === 'goals') return <GoalsHabitsView mode="goals" />;
   if (activeView === 'habits') return <GoalsHabitsView mode="habits" />;
   if (activeView === 'notes') return <NotesView />;

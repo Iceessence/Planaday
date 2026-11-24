@@ -8,6 +8,7 @@ import { SyncDatabase, type IncomingOp } from './db.js';
 import { ServerBlobStore } from './blobs.js';
 import { fetchAndParseRecipeUrl } from './recipeProxy.js';
 import { fetchRemoteIcs, lookupBarcodeOpenFoodFacts } from './icsProxy.js';
+import { ServerAlarmScheduler } from './alarmScheduler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +24,8 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
 
   const syncDb = new SyncDatabase(dataDir);
   const blobStore = new ServerBlobStore(dataDir);
+  const alarmScheduler = new ServerAlarmScheduler(syncDb);
+  alarmScheduler.start();
 
   const app = Fastify({
     logger: false,
@@ -172,6 +175,24 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     return lookupBarcodeOpenFoodFacts(req.params.code);
   });
 
+  app.get('/api/push-config', async () => alarmScheduler.getConfig());
+
+  app.post<{ Body: { ntfyPushUrl?: string; timeZone?: string } }>('/api/push-config', async (req) => {
+    const updated = alarmScheduler.setConfig(req.body ?? {});
+    return { ok: true, config: updated };
+  });
+
+  app.post('/api/push-config/test', async () => {
+    const cfg = alarmScheduler.getConfig();
+    if (!cfg.ntfyPushUrl) return { ok: false, error: 'Configure an ntfy push URL first.' };
+    const res = await fetch(cfg.ntfyPushUrl, {
+      method: 'POST',
+      headers: { Title: 'Dayplana Push Test', Priority: 'high', Tags: 'white_check_mark' },
+      body: 'Background alarms & timers from your Dayplana Docker server are connected!',
+    });
+    return { ok: res.ok, status: res.status };
+  });
+
   // Serve built Vite PWA statically when dist/ exists
   if (fs.existsSync(staticDir)) {
     await app.register(fastifyStatic, {
@@ -189,6 +210,7 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
   }
 
   app.addHook('onClose', async () => {
+    alarmScheduler.stop();
     syncDb.close();
   });
 

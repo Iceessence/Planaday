@@ -1,0 +1,15 @@
+{
+  "appId": "com.dayplana.planner",
+  "appName": "Dayplana",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#a97434",
+      "sound": "default"
+    }
+  }
+}

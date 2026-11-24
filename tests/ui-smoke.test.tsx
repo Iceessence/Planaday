@@ -52,14 +52,17 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
       await new Promise((r) => setTimeout(r, 120));
     });
 
-    // Today Open-Book Spread renders with sample data & Daily Learning Fact
-    expect(container.textContent).toContain('Time-Block Schedule');
+    // Today Open-Book Spread renders with inline Add-to-Today, Still Upcoming Today & Daily Learning Fact
+    expect(container.textContent).toContain('Add to Today:');
+    expect(container.textContent).toContain('Still Upcoming Today');
     expect(container.textContent).toContain('Top Three Priorities');
     expect(container.textContent).toContain('Daily Tracker Strip');
     expect(container.textContent).toContain('Fact #');
 
-    // Click through sidebar views across all 5 phases to verify zero crashes & zero stubs
+    // Click through sidebar views across all 5 phases + new History & All-in-One Scroll pages
     const viewsToCheck = [
+      ['All-in-One Scroll', 'All-in-One Scroll'],
+      ['History & Reviews', 'Completion History, Chore Punctuality'],
       ['Flow Calendar', 'Flow Calendar'],
       ['Tasks', 'Tasks & Nested Subtasks'],
       ['Chores', 'Completion-Based Chores & Room Health'],

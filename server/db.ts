@@ -171,6 +171,24 @@ export class SyncDatabase {
     return { recordCount: countRow.c, seq: this.getCurrentSeq() };
   }
 
+  public getActiveRecordsByType(type: string): ServerLifeRecord[] {
+    const rows = this.db
+      .prepare('SELECT json_data FROM records WHERE type = ? AND deleted_at IS NULL')
+      .all(type) as Array<{ json_data: string }>;
+    return rows.map((r) => JSON.parse(r.json_data) as ServerLifeRecord);
+  }
+
+  public getMeta(key: string): string | null {
+    const row = this.db.prepare('SELECT value FROM sync_meta WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+  }
+
+  public setMeta(key: string, value: string): void {
+    this.db
+      .prepare('INSERT INTO sync_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .run(key, value);
+  }
+
   public close(): void {
     this.db.close();
   }

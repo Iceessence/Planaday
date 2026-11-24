@@ -133,6 +133,8 @@ export function createDefaultSettings(): AppSettings {
     aiEndpoint: 'http://localhost:11434',
     aiApiKey: '',
     aiModel: 'llama3.2',
+    notificationsEnabled: true,
+    ntfyPushUrl: '',
     shortcuts: {
       commandPalette: 'Mod+K',
       quickCapture: 'N',

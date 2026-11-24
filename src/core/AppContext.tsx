@@ -24,6 +24,11 @@ import {
   subscribeSyncState,
   type SyncStateSnapshot,
 } from './sync';
+import {
+  cancelNativeNotification,
+  fireLocalAlert,
+  scheduleNativeNotification,
+} from './nativeAlarms';
 import type { AppSettings, LifeRecord, ModuleId, NavView, SyncConflict } from './types';
 
 export interface ToastItem {
@@ -85,6 +90,11 @@ interface AppContextValue {
   isModuleEnabled: (mod: ModuleId) => boolean;
   selectedNoteId: string | null;
   setSelectedNoteId: (id: string | null) => void;
+  selectedEventId: string | null;
+  setSelectedEventId: (id: string | null) => void;
+  openEventInCalendar: (eventId: string, dateIso?: string) => void;
+  canInstallPwa: boolean;
+  triggerInstallPwa: () => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -133,6 +143,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [zenOpen, setZenOpen] = useState(false);
   const [zenFocusText, setZenFocusText] = useState('');
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
+  const firedAlertsRef = React.useRef<Set<string>>(new Set());
   const [syncState, setSyncState] = useState<SyncStateSnapshot>({
     status: 'standalone',
     pendingCount: 0,
@@ -200,16 +213,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applySettingsToDocument(settings);
   }, [settings]);
 
-  // Subscribe to sync updates + online reconnect auto-flush
+  // Subscribe to sync updates + online reconnect auto-flush + PWA install prompt
   useEffect(() => {
     const unsub = subscribeSyncState(setSyncState);
     const onOnline = () => {
       void runSyncCycle();
     };
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as unknown as { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> });
+    };
     window.addEventListener('online', onOnline);
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
     return () => {
       unsub();
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
     };
   }, []);
 
@@ -294,7 +313,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       kind: RunningTimer['kind'] = 'countdown',
       linkedRecordId: string | null = null
     ) => {
+      const safeSec = Math.max(1, Math.round(durationSec));
       const now = Date.now();
+      const targetEndMs = now + safeSec * 1000;
       const id = createId('tmr');
       const nowIso = new Date(now).toISOString();
       const rec: LifeRecord = {
@@ -309,9 +330,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         tags: [],
         links: linkedRecordId ? [{ targetId: linkedRecordId, relation: 'scheduled_from' }] : [],
         payload: {
-          durationSec,
-          targetEndMs: now + durationSec * 1000,
-          remainingSecWhenPaused: durationSec,
+          durationSec: safeSec,
+          targetEndMs,
+          remainingSecWhenPaused: safeSec,
           kind,
           linkedRecordId,
           startedAtIso: nowIso,
@@ -320,7 +341,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deviceId: settings.deviceId,
       };
       await db.records.put(rec);
-      pushToast(`Started timer: ${label}`);
+      await db.outbox.put({
+        opId: createId('op'),
+        recordId: id,
+        operation: 'upsert',
+        record: rec,
+        baseRev: 0,
+        createdAt: nowIso,
+        attempts: 0,
+      });
+      await scheduleNativeNotification(id, `Timer Done: ${label}`, `Your Dayplana timer "${label}" finished!`, targetEndMs);
+      const mins = Math.floor(safeSec / 60);
+      const secs = safeSec % 60;
+      const fmt = mins > 0 ? `${mins}m${secs ? ` ${secs}s` : ''}` : `${secs}s`;
+      pushToast(`Started timer: ${label} (${fmt})`);
       return id;
     },
     [settings.activeWorkspaceId, settings.deviceId, pushToast]
@@ -333,16 +367,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = Date.now();
     if (p.targetEndMs !== null) {
       const rem = Math.max(0, Math.round((p.targetEndMs - now) / 1000));
+      await cancelNativeNotification(timerId);
       await db.records.put({
         ...rec,
         updatedAt: new Date(now).toISOString(),
         payload: { ...p, targetEndMs: null, remainingSecWhenPaused: rem },
       });
     } else {
+      const nextEnd = now + Math.max(1, p.remainingSecWhenPaused || 60) * 1000;
+      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Dayplana timer "${rec.title}" finished!`, nextEnd);
       await db.records.put({
         ...rec,
         updatedAt: new Date(now).toISOString(),
-        payload: { ...p, targetEndMs: now + (p.remainingSecWhenPaused || 60) * 1000 },
+        payload: { ...p, targetEndMs: nextEnd },
       });
     }
   }, []);
@@ -353,6 +390,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const p = rec.payload as unknown as RunningTimer;
     const now = Date.now();
     const nextEnd = p.targetEndMs !== null ? Math.max(now, p.targetEndMs) + addSec * 1000 : null;
+    if (nextEnd) {
+      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Dayplana timer "${rec.title}" finished!`, nextEnd);
+    }
     await db.records.put({
       ...rec,
       updatedAt: new Date(now).toISOString(),
@@ -368,6 +408,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dismissTimer = useCallback(async (timerId: string) => {
     const rec = await db.records.get(timerId);
     if (!rec) return;
+    await cancelNativeNotification(timerId);
     const p = rec.payload as unknown as RunningTimer;
     const now = Date.now();
     const activeSeconds = Math.max(
@@ -393,6 +434,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date(now).toISOString(),
     });
   }, [logicalToday]);
+
+  // Live watcher: fires chime + OS notification when any active countdown hits 00:00 or enabled Alarm hits HH:MM
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const nowMs = Date.now();
+      for (const t of runningTimers) {
+        if (t.targetEndMs !== null && t.targetEndMs <= nowMs && nowMs - t.targetEndMs < 15000) {
+          const key = `tmr:${t.id}:${t.targetEndMs}`;
+          if (!firedAlertsRef.current.has(key)) {
+            firedAlertsRef.current.add(key);
+            fireLocalAlert(`Timer Finished: ${t.label}`, 'Tap to stop or add time in Dayplana.', 'complete');
+            pushToast(`⏰ Timer finished: ${t.label}`);
+          }
+        }
+      }
+      const d = new Date(nowMs);
+      const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
+      for (const a of alarms) {
+        const p = a.payload as { time?: string; enabled?: boolean; skipNext?: boolean };
+        if (p.enabled && !p.skipNext && p.time === hhmm) {
+          const key = `alm:${a.id}:${logicalToday}:${hhmm}`;
+          if (!firedAlertsRef.current.has(key)) {
+            firedAlertsRef.current.add(key);
+            fireLocalAlert(`Dayplana Alarm: ${a.title}`, `Alarm ringing at ${hhmm}`, 'bell');
+            pushToast(`⏰ Alarm ringing: ${a.title} (${hhmm})`);
+          }
+        }
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [runningTimers, records, logicalToday, pushToast]);
+
+  const openEventInCalendar = useCallback((eventId: string, dateIso?: string) => {
+    if (dateIso) setActiveDate(dateIso);
+    setSelectedEventId(eventId);
+    setActiveView('calendar');
+  }, []);
+
+  const triggerInstallPwa = useCallback(async () => {
+    if (!installPrompt) return false;
+    await installPrompt.prompt();
+    const res = await installPrompt.userChoice;
+    if (res.outcome === 'accepted') setInstallPrompt(null);
+    return res.outcome === 'accepted';
+  }, [installPrompt]);
 
   const isModuleEnabled = useCallback(
     (mod: ModuleId) => settings.enabledModules[mod] !== false,
@@ -487,6 +574,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isModuleEnabled,
         selectedNoteId,
         setSelectedNoteId,
+        selectedEventId,
+        setSelectedEventId,
+        openEventInCalendar,
+        canInstallPwa: Boolean(installPrompt),
+        triggerInstallPwa,
       }}
     >
       {children}

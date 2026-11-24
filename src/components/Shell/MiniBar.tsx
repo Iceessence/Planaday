@@ -54,7 +54,16 @@ export const MiniBar: React.FC = () => {
             <button
               type="button"
               className="dp-icon-btn"
-              style={{ width: 26, height: 22, fontSize: '0.7rem' }}
+              style={{ width: 30, height: 22, fontSize: '0.68rem' }}
+              title="Add 10 seconds"
+              onClick={() => void extendTimer(t.id, 10)}
+            >
+              +10s
+            </button>
+            <button
+              type="button"
+              className="dp-icon-btn"
+              style={{ width: 28, height: 22, fontSize: '0.68rem' }}
               title="Add 1 minute"
               onClick={() => void extendTimer(t.id, 60)}
             >

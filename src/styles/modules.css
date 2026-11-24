@@ -17,7 +17,7 @@
 }
 
 .dp-book-page {
-  padding: var(--dp-space-5);
+  padding: 44px var(--dp-space-5) var(--dp-space-5);
   min-height: 620px;
   position: relative;
   border: none;

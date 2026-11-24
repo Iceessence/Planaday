@@ -33,12 +33,14 @@ export type ModuleId =
   | 'ai';
 
 export type NavView =
+  | 'all_in_one'
   | 'home'
   | 'today'
   | 'planner'
   | 'calendar'
   | 'tasks'
   | 'chores'
+  | 'history'
   | 'events'
   | 'notes'
   | 'thoughts'
@@ -198,6 +200,9 @@ export interface ChoreCompletionEntry {
   id: string;
   completedAt: string; // ISO
   completedDate: string; // YYYY-MM-DD
+  scheduledDueDate?: string; // YYYY-MM-DD when it was due
+  wasOnTime?: boolean;
+  daysDelta?: number; // <= 0 on time/early, > 0 days late
   assigneeId?: string | null;
   minutesSpent?: number;
   notes?: string;
@@ -230,6 +235,13 @@ export interface EventBufferWings {
   decompressMin?: number;
 }
 
+export interface EventRetrospective {
+  outcome: 'Great' | 'Good' | 'Okay' | 'Tough';
+  rating: 1 | 2 | 3 | 4 | 5;
+  note?: string;
+  loggedAt: string;
+}
+
 export interface CalendarEventPayload {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
@@ -256,6 +268,7 @@ export interface CalendarEventPayload {
   actualStartTime?: string;
   actualEndTime?: string;
   isActualLog?: boolean;
+  retrospective?: EventRetrospective | null;
 }
 
 export interface GoalMilestone {
@@ -568,6 +581,9 @@ export interface AppSettings {
   aiEndpoint: string;
   aiApiKey: string;
   aiModel: string;
+  // Background alarm & timer push notifications (native Capacitor / Desktop / Docker ntfy)
+  notificationsEnabled: boolean;
+  ntfyPushUrl: string; // e.g., https://ntfy.sh/my-private-dayplana-alerts
   // Keyboard shortcut overrides
   shortcuts: Record<string, string>;
   // Favorites & recents for stickers

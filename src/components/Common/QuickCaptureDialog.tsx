@@ -38,8 +38,8 @@ export const QuickCaptureDialog: React.FC = () => {
     if (!input.trim()) return;
 
     if (finalType === 'timer') {
-      const mins = parsed.durationMin ?? 15;
-      await startCountdownTimer(parsed.title, mins * 60, 'countdown');
+      const totalSec = parsed.durationSec ?? (parsed.durationMin ? parsed.durationMin * 60 : 15 * 60);
+      await startCountdownTimer(parsed.title, totalSec, 'countdown');
       setInput('');
       setOverrideType('auto');
       setQuickCaptureOpen(false);
@@ -228,7 +228,13 @@ export const QuickCaptureDialog: React.FC = () => {
               </span>
               {parsed.date && <span className="dp-pill">📅 {parsed.date}</span>}
               {parsed.startTime && <span className="dp-pill">🕒 {parsed.startTime}</span>}
-              {parsed.durationMin && <span className="dp-pill">⏱ {parsed.durationMin}m</span>}
+              {parsed.durationSec ? (
+                <span className="dp-pill">
+                  ⏱ {parsed.durationSec >= 60 ? `${Math.floor(parsed.durationSec / 60)}m ${parsed.durationSec % 60}s` : `${parsed.durationSec}s`}
+                </span>
+              ) : parsed.durationMin ? (
+                <span className="dp-pill">⏱ {parsed.durationMin}m</span>
+              ) : null}
               {parsed.location && <span className="dp-pill">📍 {parsed.location}</span>}
               {parsed.recurrence && <span className="dp-pill">🔁 {parsed.recurrence.freq}</span>}
               {parsed.tags.map((t) => (

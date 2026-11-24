@@ -19,6 +19,12 @@ import { COMMON_TIMEZONES, convertEventTimeZone } from '../../core/temporal';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { createId, db, storeBlob } from '../../core/db';
 import { audioEngine, type SoundscapeChannel } from '../../core/audio';
+import {
+  detectRuntimePlatform,
+  requestAlarmNotificationPermission,
+  scheduleNativeNotification,
+  syncPushConfigToServer,
+} from '../../core/nativeAlarms';
 import { recordsToCsv, triggerBrowserDownload } from '../../core/backup';
 import { ModalDialog } from '../../components/Common/ModalDialog';
 import type { CalendarEventPayload, LifeRecord } from '../../core/types';
@@ -62,6 +68,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
 }) => {
   const {
     settings,
+    patchSettings,
     records,
     logicalToday,
     pushToast,
@@ -72,6 +79,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     dismissTimer,
     setActiveView,
   } = useApp();
+  const runtimeInfo = useMemo(() => detectRuntimePlatform(), []);
 
   const [tab, setTab] = useState<'clock' | 'alarms' | 'timers' | 'stopwatch'>(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -102,9 +110,11 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
   const [challengeAnswer, setChallengeAnswer] = useState('');
   const [mathPair] = useState(() => [14, 19]);
 
-  // Timers, Pomodoro, Soundscapes & Interval Builder state
+  // Timers, Pomodoro, Soundscapes & Interval Builder state (supports Hours + Minutes + Seconds!)
   const [timerLabel, setTimerLabel] = useState('Deep Work');
+  const [timerHours, setTimerHours] = useState(0);
   const [timerMin, setTimerMin] = useState(25);
+  const [timerSec, setTimerSec] = useState(0);
   const [pomoFocus, setPomoFocus] = useState(25);
   const [pomoShort, setPomoShort] = useState(5);
   const [pomoLong, setPomoLong] = useState(15);
@@ -376,10 +386,67 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
       {/* --- TAB 2: SMART ALARMS & WAKE-UP ROUTINES --- */}
       {tab === 'alarms' && (
         <div className="dp-stack">
-          <div className="dp-banner" style={{ margin: 0 }}>
-            <span>
-              <strong>Platform Clarity:</strong> In web/PWA mode, locked-screen OS alarms are subject to browser background suspension. Keep Dayplana open in Nightstand mode or enable Docker sync notifications for lock-screen fallback.
-            </span>
+          <div className="dp-card dp-stack" style={{ padding: 14, background: 'var(--dp-surface-2)' }}>
+            <div className="dp-between">
+              <strong>
+                Background Alarm Delivery ({runtimeInfo.platform === 'capacitor-native' ? 'Native Mobile OS Alarms Active ✓' : runtimeInfo.platform === 'electron-desktop' ? 'Native Desktop App Active ✓' : 'Browser + Docker Push Relay'})
+              </strong>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={async () => {
+                  const ok = await requestAlarmNotificationPermission();
+                  pushToast(ok ? 'Notification permission granted!' : 'Permission denied in browser settings.');
+                }}
+              >
+                Enable OS Notifications
+              </button>
+            </div>
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+              {runtimeInfo.canWakeWhenBrowserClosed
+                ? 'Running as a native app — alarms schedule directly on your OS and fire even when closed or locked.'
+                : 'To make alarms wake your phone even when Chrome is completely closed: install the native Dayplana Android APK / Desktop app, OR enter a free ntfy.sh topic below so your Docker server pushes alarms directly to your phone!'}
+            </p>
+            <div className="dp-row">
+              <input
+                className="dp-input"
+                style={{ flex: 2 }}
+                placeholder="Optional ntfy push URL (e.g., https://ntfy.sh/my-private-dayplana-alarms)"
+                value={settings.ntfyPushUrl || ''}
+                onChange={(e) => void patchSettings({ ntfyPushUrl: e.target.value })}
+              />
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={async () => {
+                  const saved = await syncPushConfigToServer(
+                    settings.syncServerUrl,
+                    settings.ntfyPushUrl || '',
+                    settings.defaultTimeZone
+                  );
+                  pushToast(saved ? 'Synced background push URL to Docker server!' : 'Saved locally (connect Docker server to activate background push).');
+                }}
+              >
+                Save Push Relay
+              </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={async () => {
+                  try {
+                    const base = settings.syncServerUrl.trim().replace(/\/+$/, '');
+                    await syncPushConfigToServer(base, settings.ntfyPushUrl || '', settings.defaultTimeZone);
+                    const r = await fetch(`${base}/api/push-config/test`, { method: 'POST' });
+                    const j = (await r.json()) as { ok?: boolean; error?: string };
+                    pushToast(j.ok ? 'Test push sent to your phone!' : j.error || 'Push test failed');
+                  } catch {
+                    pushToast('Could not reach Docker push test endpoint.', { tone: 'warn' });
+                  }
+                }}
+              >
+                Send Test Push
+              </button>
+            </div>
           </div>
 
           <form
@@ -387,7 +454,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
             style={{ padding: 12 }}
             onSubmit={async (e) => {
               e.preventDefault();
-              await createRecord('alarm', alarmTitle.trim() || 'Alarm', {
+              const created = await createRecord('alarm', alarmTitle.trim() || 'Alarm', {
                 time: alarmTime,
                 profile: alarmProfile,
                 enabled: true,
@@ -397,6 +464,12 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                 maxSnoozes: alarmMaxSnooze,
                 skipNext: false,
               });
+              // Schedule next OS native alarm when running inside Capacitor Android/iOS app
+              const [hh, mm] = alarmTime.split(':').map(Number);
+              const nextFire = new Date();
+              nextFire.setHours(hh || 7, mm || 0, 0, 0);
+              if (nextFire.getTime() <= Date.now()) nextFire.setDate(nextFire.getDate() + 1);
+              await scheduleNativeNotification(created.id, `Dayplana Alarm: ${created.title}`, `${alarmTime} (${alarmProfile})`, nextFire.getTime());
               pushToast(`Saved ${alarmProfile} alarm for ${alarmTime}`);
             }}
           >
@@ -523,39 +596,74 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
       {tab === 'timers' && (
         <div className="dp-stack">
           <div className="dp-grid-2">
-            {/* Simultaneous Timers */}
+            {/* Simultaneous Timers (Hours, Minutes & Seconds!) */}
             <div className="dp-card dp-stack">
-              <h4>Simultaneous Countdowns (Persist Across Refresh)</h4>
+              <h4>Simultaneous Countdowns (Hours, Minutes & Seconds)</h4>
               <div className="dp-row">
-                <input className="dp-input" style={{ flex: 2 }} value={timerLabel} onChange={(e) => setTimerLabel(e.target.value)} placeholder="Label (e.g., Oven, Washer)" />
-                <input type="number" min={1} max={720} className="dp-input" style={{ width: 76 }} value={timerMin} onChange={(e) => setTimerMin(Number(e.target.value) || 5)} />
-                <button type="button" className="dp-btn dp-btn-primary" onClick={() => void startCountdownTimer(timerLabel || 'Timer', timerMin * 60)}>
+                <input className="dp-input" style={{ flex: 2, minWidth: 140 }} value={timerLabel} onChange={(e) => setTimerLabel(e.target.value)} placeholder="Label (e.g., Oven, Plank, Tea)" />
+                <input type="number" aria-label="Hours" min={0} max={23} className="dp-input" style={{ width: 58 }} value={timerHours} onChange={(e) => setTimerHours(Math.max(0, Number(e.target.value) || 0))} />
+                <span className="dp-muted" style={{ fontSize: '0.8rem' }}>h</span>
+                <input type="number" aria-label="Minutes" min={0} max={599} className="dp-input" style={{ width: 62 }} value={timerMin} onChange={(e) => setTimerMin(Math.max(0, Number(e.target.value) || 0))} />
+                <span className="dp-muted" style={{ fontSize: '0.8rem' }}>m</span>
+                <input type="number" aria-label="Seconds" min={0} max={59} className="dp-input" style={{ width: 62 }} value={timerSec} onChange={(e) => setTimerSec(Math.max(0, Math.min(59, Number(e.target.value) || 0)))} />
+                <span className="dp-muted" style={{ fontSize: '0.8rem' }}>s</span>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-primary"
+                  onClick={() => {
+                    const total = timerHours * 3600 + timerMin * 60 + timerSec;
+                    if (total <= 0) return;
+                    void startCountdownTimer(timerLabel || 'Timer', total);
+                  }}
+                >
                   Start
                 </button>
               </div>
-              <div className="dp-row">
-                {[3, 5, 10, 15, 25, 45, 60].map((m) => (
-                  <button key={m} type="button" className="dp-btn dp-btn-sm" onClick={() => void startCountdownTimer(`${m}m Timer`, m * 60)}>
-                    {m}m
+              <div className="dp-row" style={{ gap: 5 }}>
+                {(
+                  [
+                    [15, '15s'],
+                    [30, '30s'],
+                    [45, '45s'],
+                    [60, '1m'],
+                    [180, '3m'],
+                    [300, '5m'],
+                    [600, '10m'],
+                    [900, '15m'],
+                    [1500, '25m'],
+                    [3600, '60m'],
+                  ] as const
+                ).map(([sec, lbl]) => (
+                  <button key={lbl} type="button" className="dp-btn dp-btn-sm" onClick={() => void startCountdownTimer(`${lbl} Timer`, sec)}>
+                    {lbl}
                   </button>
                 ))}
               </div>
               {runningTimers.map((t) => {
                 const remSec = t.targetEndMs !== null ? Math.round((t.targetEndMs - now.getTime()) / 1000) : t.remainingSecWhenPaused;
+                const abs = Math.abs(remSec);
+                const hh = Math.floor(abs / 3600);
+                const mm = Math.floor((abs % 3600) / 60);
+                const ss = abs % 60;
+                const formatted =
+                  hh > 0
+                    ? `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+                    : `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
                 return (
                   <div key={t.id} className="dp-between" style={{ padding: 10, borderRadius: 8, background: 'var(--dp-surface-2)' }}>
                     <div>
                       <strong>{t.label}</strong>
-                      <div style={{ fontFamily: 'var(--dp-font-mono)', color: remSec < 0 ? 'var(--dp-danger)' : undefined }}>
-                        {remSec < 0 ? `Overdue +${Math.abs(remSec)}s` : `${Math.floor(remSec / 60)}m ${remSec % 60}s`}
+                      <div style={{ fontFamily: 'var(--dp-font-mono)', fontSize: '1.05rem', color: remSec < 0 ? 'var(--dp-danger)' : undefined }}>
+                        {remSec < 0 ? `Overdue +${formatted}` : formatted}
                       </div>
                     </div>
-                    <div className="dp-row">
+                    <div className="dp-row" style={{ gap: 5 }}>
                       <button type="button" className="dp-btn dp-btn-sm" onClick={() => void toggleTimerPause(t.id)}>
                         {t.targetEndMs ? <Pause size={13} /> : <Play size={13} />}
                       </button>
+                      <button type="button" className="dp-btn dp-btn-sm" onClick={() => void extendTimer(t.id, 10)}>+10s</button>
+                      <button type="button" className="dp-btn dp-btn-sm" onClick={() => void extendTimer(t.id, 30)}>+30s</button>
                       <button type="button" className="dp-btn dp-btn-sm" onClick={() => void extendTimer(t.id, 60)}>+1m</button>
-                      <button type="button" className="dp-btn dp-btn-sm" onClick={() => void extendTimer(t.id, 300)}>+5m</button>
                       <button type="button" className="dp-btn dp-btn-sm" onClick={() => void dismissTimer(t.id)}>Log & Stop</button>
                     </div>
                   </div>

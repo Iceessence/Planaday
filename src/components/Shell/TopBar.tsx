@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Command,
+  Download,
   Feather,
   Plus,
   Redo2,
@@ -24,6 +25,8 @@ export const TopBar: React.FC = () => {
     setZenOpen,
     undo,
     redo,
+    canInstallPwa,
+    triggerInstallPwa,
   } = useApp();
 
   const syncLabel =
@@ -85,6 +88,18 @@ export const TopBar: React.FC = () => {
       </button>
 
       <div className="dp-topbar-spacer" />
+
+      {canInstallPwa && (
+        <button
+          type="button"
+          className="dp-btn dp-btn-primary dp-btn-sm"
+          onClick={() => void triggerInstallPwa()}
+          title="Install Dayplana as a standalone app"
+        >
+          <Download size={14} />
+          <span className="dp-hide-xs">Install App</span>
+        </button>
+      )}
 
       <button
         type="button"

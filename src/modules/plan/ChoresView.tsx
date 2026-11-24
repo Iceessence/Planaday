@@ -3,7 +3,7 @@ import { CalendarPlus, Check, Download, Pause, Play, Plus } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { computeChoreFreshnessAtDate, computeRoomHealthSummary } from '../../core/recurrence';
-import { completeActionAtomically, scheduleActionOnCalendar } from '../../core/planActions';
+import { completeActionAtomically, computeChorePunctualityStats, scheduleActionOnCalendar } from '../../core/planActions';
 import { recordsToCsv, triggerBrowserDownload } from '../../core/backup';
 import { addDaysIso } from '../../core/temporal';
 import type { ChorePayload, LifeRecord } from '../../core/types';
@@ -28,6 +28,8 @@ export const ChoresView: React.FC = () => {
   );
 
   const roomHealth = useMemo(() => computeRoomHealthSummary(chores, replayDate), [chores, replayDate]);
+  const punctuality = useMemo(() => computeChorePunctualityStats(chores), [chores]);
+  const punctualityById = useMemo(() => new Map(punctuality.perChore.map((x) => [x.choreId, x])), [punctuality]);
 
   const filtered = useMemo(() => {
     return chores.filter((c) => {
@@ -90,6 +92,11 @@ export const ChoresView: React.FC = () => {
           <h2>Completion-Based Chores & Room Health</h2>
           <p className="dp-muted" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>
             Completing a chore late recalculates the next due date from your actual completion date.
+            {punctuality.onTimePct !== null && (
+              <>
+                {' '}· Overall On-Time Rate: <strong>{punctuality.onTimePct}%</strong> ({punctuality.onTimeCount}/{punctuality.totalTracked} completed on time)
+              </>
+            )}
           </p>
         </div>
         <div className="dp-row">
@@ -212,6 +219,11 @@ export const ChoresView: React.FC = () => {
                       Due: {state.effectiveDueDate}
                     </span>
                     <span className="dp-pill">{c.payload.choreMode.replace('_', ' ')}</span>
+                    {punctualityById.get(c.id)?.onTimePct !== null && punctualityById.get(c.id)?.onTimePct !== undefined && (
+                      <span className="dp-pill highlight">
+                        On-time: {punctualityById.get(c.id)!.onTimePct}% ({punctualityById.get(c.id)!.onTime}/{punctualityById.get(c.id)!.total})
+                      </span>
+                    )}
                     {c.payload.linkedSupplies?.length > 0 && (
                       <span className="dp-muted" style={{ fontSize: '0.78rem' }}>
                         Supplies: {c.payload.linkedSupplies.join(', ')}

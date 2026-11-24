@@ -7,6 +7,7 @@ export interface ParsedCapture {
   date?: string;
   startTime?: string;
   durationMin?: number;
+  durationSec?: number;
   location?: string;
   tags: string[];
   recurrence?: RecurrenceRule | null;
@@ -78,17 +79,31 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
     return '';
   });
 
-  // Extract duration: "for 45m", "for 1h", "15m", "90min"
+  // Extract duration: supports hours, minutes, AND seconds (e.g. "timer 45s", "timer 1m 30s", "for 45m")
   let durationMin: number | undefined;
-  const durRegex = targetType === 'timer'
-    ? /\b(?:for\s+)?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b/i
-    : /\bfor\s+(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b/i;
-  const durMatch = text.match(durRegex);
-  if (durMatch) {
-    const num = Number(durMatch[1]);
-    const unit = durMatch[2].toLowerCase();
-    durationMin = unit.startsWith('h') ? Math.round(num * 60) : Math.round(num);
-    text = text.replace(durMatch[0], '');
+  let durationSec: number | undefined;
+  const compoundTimerRegex = /\b(?:for\s+)?(?:(\d+)\s*(?:h|hr|hrs|hour|hours)\s*)?(?:(\d+)\s*(?:m|min|mins|minute|minutes)\s*)?(?:(\d+)\s*(?:s|sec|secs|second|seconds))\b/i;
+  const secMatch = targetType === 'timer' ? text.match(compoundTimerRegex) : null;
+  if (secMatch && (secMatch[1] || secMatch[2] || secMatch[3])) {
+    const h = Number(secMatch[1] || 0);
+    const m = Number(secMatch[2] || 0);
+    const s = Number(secMatch[3] || 0);
+    durationSec = h * 3600 + m * 60 + s;
+    durationMin = Math.round(durationSec / 60);
+    text = text.replace(secMatch[0], '');
+  } else {
+    const durRegex =
+      targetType === 'timer'
+        ? /\b(?:for\s+)?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b/i
+        : /\bfor\s+(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b/i;
+    const durMatch = text.match(durRegex);
+    if (durMatch) {
+      const num = Number(durMatch[1]);
+      const unit = durMatch[2].toLowerCase();
+      durationMin = unit.startsWith('h') ? Math.round(num * 60) : Math.round(num);
+      durationSec = unit.startsWith('h') ? Math.round(num * 3600) : Math.round(num * 60);
+      text = text.replace(durMatch[0], '');
+    }
   }
 
   // Extract recurrence: "every Tue & Thu" or "every day" or "every week"
@@ -171,8 +186,8 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
   if (targetType === 'event' && !startTime && !explicitPrefix) {
     ambiguousNotes.push('No explicit time found — will default to all-day unless you pick a time.');
   }
-  if (targetType === 'timer' && !durationMin) {
-    ambiguousNotes.push('Specify a duration (e.g. 15m) for the countdown timer.');
+  if (targetType === 'timer' && !durationSec && !durationMin) {
+    ambiguousNotes.push('Specify a duration (e.g. 45s, 1m 30s, or 15m) for the countdown timer.');
   }
 
   const title = text.replace(/\s+/g, ' ').trim() || (targetType === 'timer' ? 'Quick Timer' : 'Untitled');
@@ -183,6 +198,7 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
     date,
     startTime,
     durationMin,
+    durationSec,
     location,
     tags,
     recurrence,
