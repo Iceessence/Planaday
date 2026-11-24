@@ -520,6 +520,7 @@ export interface RevisionRecord {
   timestamp: string;
   title: string;
   content: string;
+  label?: string; // Optional user-named checkpoint label
 }
 
 export interface TimeLedgerEntry {
@@ -569,11 +570,17 @@ export interface EventCategoryDef {
 
 export type ChimeStyle = 'soft' | 'bell' | 'marimba' | 'classic_alarm' | 'woodblock' | 'bright';
 
+export type MobileLayoutMode = 'adaptive' | 'portrait' | 'portrait_landscape' | 'desktop_zoom';
+
 export interface NotificationPreferences {
   enabled: boolean;
   soundEnabled: boolean;
   osPushEnabled: boolean;
   ntfyRelayEnabled: boolean;
+  vibrateEnabled?: boolean;
+  quietHoursEnabled?: boolean;
+  quietHoursStart?: string; // HH:MM e.g. '22:00'
+  quietHoursEnd?: string; // HH:MM e.g. '07:00'
   volume: number; // 0..100
   chimeStyle: ChimeStyle;
   notifyTimers: boolean;
@@ -640,6 +647,8 @@ export interface AppSettings {
   // Custom Branding & Deep Personalization
   plannerTitle: string;
   cardRadius: 'sharp' | 'soft' | 'cozy';
+  mobileLayoutMode: MobileLayoutMode;
+  uiScalePct: number; // 80..130
   hiddenSidebarViews: NavView[];
   operatingMode: OperatingMode;
   syncServerUrl: string; // Primary URL: empty in same-origin Docker browser, or e.g. http://192.168.88.31:3000

@@ -31,6 +31,7 @@ import { getDailyFact, getFactTopics } from '../../data/facts';
 import { ModalDialog } from '../../components/Common/ModalDialog';
 import { WeatherCard } from '../../components/Common/WeatherCard';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import { SafeInput, SafeTextarea } from '../../components/Common/SafeTextEditor';
 import type {
   CalendarEventPayload,
   ChorePayload,
@@ -1139,36 +1140,39 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
           {renderDecorOverlay?.(`today:${activeDate}:right`)}
 
           <div className="dp-section-title">
-            <span>Daily Notes & Margin Scratchpad</span>
-            <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Synced live to Diary</span>
+            <span>Daily Notes &amp; Margin Scratchpad</span>
+            <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Auto-saved locally · Synced to Diary</span>
           </div>
-          <textarea
+          <SafeTextarea
+            recordKey={`today:${activeDate}:dailyNotes`}
+            externalValue={diary.dailyNotes ?? ''}
+            onCommit={(val) => saveDiaryField({ dailyNotes: val })}
             className="dp-textarea"
             style={{ minHeight: 130, background: 'transparent' }}
             placeholder="Jot freeform notes, meeting highlights, or sketches for today…"
-            value={diary.dailyNotes ?? ''}
-            onChange={(e) => void saveDiaryField({ dailyNotes: e.target.value })}
           />
 
           <div className="dp-grid-2" style={{ gap: 10 }}>
             <label className="dp-stack" style={{ gap: 4 }}>
               <strong style={{ fontSize: '0.88rem' }}>Tonight</strong>
-              <textarea
+              <SafeTextarea
+                recordKey={`today:${activeDate}:tonight`}
+                externalValue={diary.tonight ?? ''}
+                onCommit={(val) => saveDiaryField({ tonight: val })}
                 className="dp-textarea"
                 style={{ minHeight: 68, background: 'transparent' }}
                 placeholder="Evening wind-down or dinner plan…"
-                value={diary.tonight ?? ''}
-                onChange={(e) => void saveDiaryField({ tonight: e.target.value })}
               />
             </label>
             <label className="dp-stack" style={{ gap: 4 }}>
               <strong style={{ fontSize: '0.88rem' }}>Gratitude</strong>
-              <textarea
+              <SafeTextarea
+                recordKey={`today:${activeDate}:gratitude`}
+                externalValue={diary.gratitude ?? ''}
+                onCommit={(val) => saveDiaryField({ gratitude: val })}
                 className="dp-textarea"
                 style={{ minHeight: 68, background: 'transparent' }}
                 placeholder="One calm thing you appreciated today…"
-                value={diary.gratitude ?? ''}
-                onChange={(e) => void saveDiaryField({ gratitude: e.target.value })}
               />
             </label>
           </div>
@@ -1231,8 +1235,20 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
               </label>
             </div>
             <div className="dp-grid-2" style={{ gap: 8 }}>
-              <input className="dp-input" placeholder="Meals quick note…" value={diary.mealsNote ?? ''} onChange={(e) => void saveDiaryField({ mealsNote: e.target.value })} />
-              <input className="dp-input" placeholder="Weather note…" value={diary.weatherNote ?? ''} onChange={(e) => void saveDiaryField({ weatherNote: e.target.value })} />
+              <SafeInput
+                recordKey={`today:${activeDate}:mealsNote`}
+                externalValue={diary.mealsNote ?? ''}
+                onCommit={(val) => saveDiaryField({ mealsNote: val })}
+                className="dp-input"
+                placeholder="Meals quick note…"
+              />
+              <SafeInput
+                recordKey={`today:${activeDate}:weatherNote`}
+                externalValue={diary.weatherNote ?? ''}
+                onCommit={(val) => saveDiaryField({ weatherNote: val })}
+                className="dp-input"
+                placeholder="Weather note…"
+              />
             </div>
           </div>
 

@@ -127,7 +127,7 @@ export function triggerBrowserDownload(blobOrText: Blob | string, filename: stri
 export async function saveDirectToDiskFolder(): Promise<{ ok: boolean; filename: string; method: 'fs-access' | 'download' }> {
   const zipBlob = await exportFullZipBackup();
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  const filename = `dayplana-backup-${stamp}.zip`;
+  const filename = `planaday-backup-${stamp}.zip`;
 
   const win = window as unknown as {
     showDirectoryPicker?: (opts?: { mode?: string }) => Promise<{

@@ -155,7 +155,7 @@ export const TopBar: React.FC = () => {
     setTestMsg(lines.join('\n'));
     if (anyOk) {
       await triggerSyncNow();
-      pushToast('Connected & synced with Dayplana server!');
+      pushToast('Connected & synced with Planaday server!');
     }
     setTesting(false);
   };
@@ -257,7 +257,7 @@ export const TopBar: React.FC = () => {
             type="button"
             className="dp-btn dp-btn-primary dp-btn-sm dp-desktop-only"
             onClick={() => void triggerInstallPwa()}
-            title="Install Dayplana as a standalone app"
+            title="Install Planaday as a standalone app"
           >
             <Download size={14} />
             <span>Install App</span>

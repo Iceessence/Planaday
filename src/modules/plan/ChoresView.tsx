@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarPlus, Check, Download, Pause, Play, Plus } from 'lucide-react';
+import { CalendarPlus, Check, Download, Pause, Pencil, Play, Plus } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { computeChoreFreshnessAtDate, computeRoomHealthSummary } from '../../core/recurrence';
@@ -8,6 +8,7 @@ import { recordsToCsv, triggerBrowserDownload } from '../../core/backup';
 import { addDaysIso } from '../../core/temporal';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import { SafeInput } from '../../components/Common/SafeTextEditor';
 import type { ChorePayload, LifeRecord } from '../../core/types';
 
 export const ChoresView: React.FC = () => {
@@ -32,6 +33,7 @@ export const ChoresView: React.FC = () => {
   const [sortBy, setSortBy] = useState<'due' | 'freshness' | 'room' | 'difficulty' | 'title'>('due');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [replayDate, setReplayDate] = useState(activeDate);
+  const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
 
   const chores = useMemo(
     () => records.filter((r) => r.type === 'chore') as Array<LifeRecord<ChorePayload>>,
@@ -125,7 +127,7 @@ export const ChoresView: React.FC = () => {
         c.payload.completions?.length ?? 0,
       ])
     );
-    triggerBrowserDownload(csv, `dayplana-chores-${logicalToday}.csv`, 'text/csv');
+    triggerBrowserDownload(csv, `planaday-chores-${logicalToday}.csv`, 'text/csv');
     pushToast('Exported chores CSV');
   };
 
@@ -487,6 +489,14 @@ export const ChoresView: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    className={`dp-btn dp-btn-sm ${editingChoreId === c.id ? 'dp-btn-primary' : ''}`}
+                    title="Edit chore details"
+                    onClick={() => setEditingChoreId(editingChoreId === c.id ? null : c.id)}
+                  >
+                    <Pencil size={13} /> {editingChoreId === c.id ? 'Done Editing' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
                     className="dp-btn dp-btn-danger dp-btn-sm"
                     onClick={async () => {
                       await softDeleteRecord(c.id);
@@ -497,6 +507,219 @@ export const ChoresView: React.FC = () => {
                   </button>
                 </div>
               </div>
+              {editingChoreId === c.id && (
+                <div className="dp-stack" style={{ gap: 8, padding: 10, borderRadius: 8, background: 'var(--dp-surface-muted)' }}>
+                  <strong style={{ fontSize: '0.82rem' }}>✏️ Edit Chore Settings</strong>
+                  <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                    <SafeInput
+                      className="dp-input"
+                      recordKey={`${c.id}:title`}
+                      externalValue={c.title}
+                      onCommit={(val) => {
+                        const trimmed = val.trim();
+                        if (trimmed && trimmed !== c.title) {
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({ ...cur, title: trimmed }));
+                        }
+                      }}
+                      style={{ flex: 2, minWidth: 160 }}
+                      placeholder="Chore name…"
+                      aria-label="Edit chore title"
+                    />
+                    <SafeInput
+                      className="dp-input"
+                      recordKey={`${c.id}:room`}
+                      externalValue={c.payload.room}
+                      onCommit={(val) => {
+                        const trimmed = val.trim() || 'General';
+                        void updateRecord<ChorePayload>(c.id, (cur) => ({
+                          ...cur,
+                          category: trimmed,
+                          payload: { ...cur.payload, room: trimmed },
+                        }));
+                      }}
+                      style={{ flex: 1, minWidth: 120 }}
+                      placeholder="Room / Zone…"
+                      aria-label="Edit chore room"
+                    />
+                    <label className="dp-row" style={{ gap: 4, fontSize: '0.82rem' }}>
+                      <span className="dp-muted">Every</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={3650}
+                        className="dp-input"
+                        style={{ width: 68 }}
+                        value={c.payload.intervalDays}
+                        onChange={(e) =>
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({
+                            ...cur,
+                            payload: { ...cur.payload, intervalDays: Math.max(1, Math.min(3650, Number(e.target.value) || 1)) },
+                          }))
+                        }
+                      />
+                      <span className="dp-muted">days</span>
+                    </label>
+                  </div>
+                  <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8, fontSize: '0.82rem' }}>
+                    <select
+                      aria-label="Edit chore recurrence mode"
+                      className="dp-select"
+                      style={{ width: 'auto' }}
+                      value={c.payload.choreMode}
+                      onChange={(e) =>
+                        void updateRecord<ChorePayload>(c.id, (cur) => ({
+                          ...cur,
+                          payload: { ...cur.payload, choreMode: e.target.value as ChorePayload['choreMode'] },
+                        }))
+                      }
+                    >
+                      <option value="after_completion">After Completion</option>
+                      <option value="fixed">Fixed Schedule</option>
+                      <option value="weekdays">Weekdays Only</option>
+                      <option value="monthly_nth">Monthly / Last Weekend</option>
+                      <option value="usage_counter">Usage Counter</option>
+                      <option value="elapsed_hours">Elapsed Hours</option>
+                      <option value="seasonal">Active Seasons</option>
+                    </select>
+                    <select
+                      aria-label="Edit chore energy"
+                      className="dp-select"
+                      style={{ width: 'auto' }}
+                      value={c.energy ?? 'low'}
+                      onChange={(e) =>
+                        void updateRecord<ChorePayload>(c.id, (cur) => ({
+                          ...cur,
+                          energy: e.target.value as LifeRecord['energy'],
+                        }))
+                      }
+                    >
+                      <option value="low">Low Energy</option>
+                      <option value="medium">Medium Energy</option>
+                      <option value="high">High Energy</option>
+                    </select>
+                    <label className="dp-row" style={{ gap: 4 }}>
+                      <span className="dp-muted">Est:</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={240}
+                        className="dp-input"
+                        style={{ width: 64 }}
+                        value={c.estimateMin ?? 15}
+                        onChange={(e) =>
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({
+                            ...cur,
+                            estimateMin: Math.max(2, Number(e.target.value) || 10),
+                          }))
+                        }
+                      />
+                      <span className="dp-muted">min</span>
+                    </label>
+                    <label className="dp-row" style={{ gap: 4 }}>
+                      <span className="dp-muted">Diff:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={5}
+                        className="dp-input"
+                        style={{ width: 54 }}
+                        value={c.payload.difficulty}
+                        onChange={(e) =>
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({
+                            ...cur,
+                            payload: {
+                              ...cur.payload,
+                              difficulty: Math.max(1, Math.min(5, Number(e.target.value) || 1)) as 1 | 2 | 3 | 4 | 5,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="dp-row" style={{ gap: 4 }}>
+                      <span className="dp-muted">Next Due:</span>
+                      <input
+                        type="date"
+                        className="dp-input"
+                        style={{ width: 'auto' }}
+                        value={c.payload.nextDueDate}
+                        onChange={(e) =>
+                          e.target.value &&
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({
+                            ...cur,
+                            payload: { ...cur.payload, nextDueDate: e.target.value },
+                          }))
+                        }
+                      />
+                    </label>
+                    <SafeInput
+                      className="dp-input"
+                      recordKey={`${c.id}:supplies`}
+                      externalValue={(c.payload.linkedSupplies ?? []).join(', ')}
+                      onCommit={(val) =>
+                        void updateRecord<ChorePayload>(c.id, (cur) => ({
+                          ...cur,
+                          payload: {
+                            ...cur.payload,
+                            linkedSupplies: val
+                              .split(',')
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                          },
+                        }))
+                      }
+                      style={{ flex: 1, minWidth: 140 }}
+                      placeholder="Supplies (comma separated)…"
+                      aria-label="Edit linked supplies"
+                    />
+                    <label className="dp-row" style={{ gap: 4, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={c.payload.notifyEnabled !== false}
+                        onChange={(e) =>
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({
+                            ...cur,
+                            payload: { ...cur.payload, notifyEnabled: e.target.checked },
+                          }))
+                        }
+                      />
+                      <span>🔔 Notify</span>
+                    </label>
+                    <input
+                      type="time"
+                      aria-label="Edit per-chore reminder time"
+                      className="dp-input"
+                      style={{ width: 118 }}
+                      value={c.payload.customReminderTime ?? ''}
+                      onChange={(e) =>
+                        void updateRecord<ChorePayload>(c.id, (cur) => ({
+                          ...cur,
+                          payload: { ...cur.payload, customReminderTime: e.target.value || null },
+                        }))
+                      }
+                    />
+                    <label className="dp-row" style={{ gap: 4, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(c.sharedWithAll)}
+                        onChange={(e) =>
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({ ...cur, sharedWithAll: e.target.checked }))
+                        }
+                      />
+                      <span>🏡 Family</span>
+                    </label>
+                    <label className="dp-row" style={{ gap: 4, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(c.isImportant)}
+                        onChange={(e) =>
+                          void updateRecord<ChorePayload>(c.id, (cur) => ({ ...cur, isImportant: e.target.checked }))
+                        }
+                      />
+                      <span>★ Important</span>
+                    </label>
+                  </div>
+                </div>
+              )}
               <div className="dp-progress-track">
                 <div
                   className="dp-progress-fill"

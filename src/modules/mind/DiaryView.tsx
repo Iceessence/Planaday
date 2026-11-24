@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, Image as ImageIcon, Plus, Shuffle, Sparkles, Trash2 } from 'lucide-react';
+import { Download, Image as ImageIcon, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { createId, storeBlob } from '../../core/db';
@@ -8,13 +8,15 @@ import { addDaysIso, formatDateLocalized } from '../../core/temporal';
 import { DIARY_PROMPTS, getDiaryPromptCategories } from '../../data/prompts';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import { SafeTextarea, type LocalSaveState } from '../../components/Common/SafeTextEditor';
 import type { DiaryPayload, LifeRecord, PaperMaterial } from '../../core/types';
 
 const DEFAULT_MOODS = ['Great', 'Good', 'Okay', 'Low', 'Rough'];
 const EMOTION_TAGS = ['Calm', 'Grateful', 'Focused', 'Energized', 'Tired', 'Anxious', 'Inspired', 'Cozy'];
 
 export const DiaryView: React.FC = () => {
-  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast } = useApp();
+  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, syncState } = useApp();
+  const [diarySaveState, setDiarySaveState] = useState<LocalSaveState>('clean');
   const [promptCategory, setPromptCategory] = useState('All');
   const [promptIdx, setPromptIdx] = useState(0);
   const [customMood, setCustomMood] = useState('');
@@ -115,7 +117,7 @@ export const DiaryView: React.FC = () => {
           .join('\n');
       })
       .join('\n\n---\n\n');
-    triggerBrowserDownload(md, `dayplana-diary-${logicalToday}.md`, 'text/markdown');
+    triggerBrowserDownload(md, `planaday-diary-${logicalToday}.md`, 'text/markdown');
     pushToast('Exported chronological Diary Markdown');
   };
 
@@ -375,29 +377,77 @@ export const DiaryView: React.FC = () => {
         <div className="dp-grid-2">
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Summary</strong>
-            <textarea className="dp-textarea" value={entry.summary ?? ''} onChange={(e) => void saveDiary({ summary: e.target.value })} />
+            <SafeTextarea
+              recordKey={`diary:${activeDate}:summary`}
+              externalValue={entry.summary ?? ''}
+              onCommit={(val) => saveDiary({ summary: val })}
+              onSaveStateChange={setDiarySaveState}
+              className="dp-textarea"
+            />
           </label>
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Gratitude</strong>
-            <textarea className="dp-textarea" value={entry.gratitude ?? ''} onChange={(e) => void saveDiary({ gratitude: e.target.value })} />
+            <SafeTextarea
+              recordKey={`diary:${activeDate}:gratitude`}
+              externalValue={entry.gratitude ?? ''}
+              onCommit={(val) => saveDiary({ gratitude: val })}
+              onSaveStateChange={setDiarySaveState}
+              className="dp-textarea"
+            />
           </label>
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Wins</strong>
-            <textarea className="dp-textarea" value={entry.wins ?? ''} onChange={(e) => void saveDiary({ wins: e.target.value })} />
+            <SafeTextarea
+              recordKey={`diary:${activeDate}:wins`}
+              externalValue={entry.wins ?? ''}
+              onCommit={(val) => saveDiary({ wins: val })}
+              onSaveStateChange={setDiarySaveState}
+              className="dp-textarea"
+            />
           </label>
           <label className="dp-stack" style={{ gap: 4 }}>
-            <strong>Challenges & Learned</strong>
-            <textarea className="dp-textarea" value={entry.learned ?? ''} onChange={(e) => void saveDiary({ learned: e.target.value })} />
+            <strong>Challenges &amp; Learned</strong>
+            <SafeTextarea
+              recordKey={`diary:${activeDate}:learned`}
+              externalValue={entry.learned ?? ''}
+              onCommit={(val) => saveDiary({ learned: val })}
+              onSaveStateChange={setDiarySaveState}
+              className="dp-textarea"
+            />
           </label>
         </div>
       ) : null}
 
       <label className="dp-stack" style={{ gap: 6 }}>
-        <div className="dp-between">
-          <strong>Narrative Journal</strong>
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => mediaInputRef.current?.click()}>
-            <ImageIcon size={14} /> Add Photo/Audio Memory Capsule
-          </button>
+        <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <div className="dp-row" style={{ gap: 6 }}>
+            <strong>Narrative Journal</strong>
+            <span className="dp-pill">
+              {diarySaveState === 'unsaved' ? 'Unsaved changes' : diarySaveState === 'saving' ? 'Saving locally…' : 'Saved locally ✓'}
+            </span>
+            <span className="dp-pill">
+              {settings.operatingMode !== 'docker-sync'
+                ? 'Offline on device'
+                : syncState.pendingCount > 0
+                  ? `Waiting for sync (${syncState.pendingCount})`
+                  : 'Synced ✓'}
+            </span>
+          </div>
+          <div className="dp-row" style={{ gap: 6 }}>
+            <button
+              type="button"
+              className="dp-btn dp-btn-primary dp-btn-sm"
+              onClick={() => {
+                void saveDiary({});
+                pushToast('Saved Diary entry locally');
+              }}
+            >
+              <Save size={13} /> Save Diary
+            </button>
+            <button type="button" className="dp-btn dp-btn-sm" onClick={() => mediaInputRef.current?.click()}>
+              <ImageIcon size={14} /> Add Photo/Audio
+            </button>
+          </div>
           <input
             ref={mediaInputRef}
             type="file"
@@ -413,12 +463,14 @@ export const DiaryView: React.FC = () => {
             }}
           />
         </div>
-        <textarea
+        <SafeTextarea
+          recordKey={`diary:${activeDate}:narrative`}
+          externalValue={entry.narrative ?? ''}
+          onCommit={(val) => saveDiary({ narrative: val })}
+          onSaveStateChange={setDiarySaveState}
           className="dp-textarea"
           style={{ minHeight: 180, lineHeight: 1.7 }}
           placeholder="Write freely without limits…"
-          value={entry.narrative ?? ''}
-          onChange={(e) => void saveDiary({ narrative: e.target.value })}
         />
       </label>
 

@@ -1,6 +1,6 @@
 {
   "appId": "com.dayplana.planner",
-  "appName": "Dayplana",
+  "appName": "Planaday",
   "webDir": "dist",
   "server": {
     "androidScheme": "http",

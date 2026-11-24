@@ -5,6 +5,7 @@ import { createRecord, softDeleteRecord, updateRecord } from '../../core/reposit
 import { completeActionAtomically, scheduleActionOnCalendar } from '../../core/planActions';
 import { createId } from '../../core/db';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { SafeInput, SafeTextarea } from '../../components/Common/SafeTextEditor';
 import type { LifeRecord, SubtaskItem, TaskPayload } from '../../core/types';
 
 function countSubtasks(list: SubtaskItem[]): { done: number; total: number } {
@@ -285,7 +286,151 @@ export const TasksView: React.FC = () => {
         )}
 
         {expanded && (
-          <div className="dp-stack" style={{ borderTop: '1px dashed var(--dp-border)', paddingTop: 10 }}>
+          <div className="dp-stack" style={{ borderTop: '1px dashed var(--dp-border)', paddingTop: 10, gap: 10 }}>
+            {/* Universal Inline Task Editor */}
+            <div className="dp-stack" style={{ gap: 8, padding: 10, borderRadius: 8, background: 'var(--dp-surface-muted)' }}>
+              <strong style={{ fontSize: '0.82rem' }}>✏️ Edit Task Details</strong>
+              <SafeInput
+                className="dp-input"
+                recordKey={`${t.id}:title`}
+                externalValue={t.title}
+                onCommit={(val) => {
+                  const trimmed = val.trim();
+                  if (!trimmed || trimmed === t.title) return;
+                  void updateRecord<TaskPayload>(t.id, (c) => ({ ...c, title: trimmed }));
+                }}
+                placeholder="Task title…"
+                aria-label="Edit task title"
+              />
+              <SafeTextarea
+                className="dp-textarea"
+                recordKey={`${t.id}:notes`}
+                externalValue={t.payload.notes ?? ''}
+                onCommit={(val) => {
+                  void updateRecord<TaskPayload>(t.id, (c) => ({
+                    ...c,
+                    payload: { ...c.payload, notes: val },
+                  }));
+                }}
+                rows={2}
+                placeholder="Notes, instructions, or context for this task…"
+                aria-label="Edit task notes"
+              />
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8, fontSize: '0.82rem' }}>
+                <label className="dp-row" style={{ gap: 4 }}>
+                  <span className="dp-muted">Do:</span>
+                  <input
+                    type="date"
+                    className="dp-input"
+                    style={{ width: 'auto' }}
+                    value={t.doDate ?? ''}
+                    onChange={(e) =>
+                      void updateRecord<TaskPayload>(t.id, (c) => ({ ...c, doDate: e.target.value || null }))
+                    }
+                  />
+                </label>
+                <label className="dp-row" style={{ gap: 4 }}>
+                  <span className="dp-muted">Hard Due:</span>
+                  <input
+                    type="date"
+                    className="dp-input"
+                    style={{ width: 'auto' }}
+                    value={t.dueDate ?? ''}
+                    onChange={(e) =>
+                      void updateRecord<TaskPayload>(t.id, (c) => ({ ...c, dueDate: e.target.value || null }))
+                    }
+                  />
+                </label>
+                <select
+                  aria-label="Edit task priority"
+                  className="dp-select"
+                  style={{ width: 'auto' }}
+                  value={t.priority ?? 'none'}
+                  onChange={(e) =>
+                    void updateRecord<TaskPayload>(t.id, (c) => ({
+                      ...c,
+                      priority: e.target.value as LifeRecord['priority'],
+                    }))
+                  }
+                >
+                  <option value="none">No Priority</option>
+                  <option value="low">Low Priority</option>
+                  <option value="medium">Medium Priority</option>
+                  <option value="high">High Priority</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+                <select
+                  aria-label="Edit task energy"
+                  className="dp-select"
+                  style={{ width: 'auto' }}
+                  value={t.energy ?? 'medium'}
+                  onChange={(e) =>
+                    void updateRecord<TaskPayload>(t.id, (c) => ({
+                      ...c,
+                      energy: e.target.value as LifeRecord['energy'],
+                    }))
+                  }
+                >
+                  <option value="low">Low Energy</option>
+                  <option value="medium">Medium Energy</option>
+                  <option value="high">High Energy</option>
+                </select>
+                <label className="dp-row" style={{ gap: 4 }}>
+                  <span className="dp-muted">Est:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={480}
+                    className="dp-input"
+                    style={{ width: 68 }}
+                    value={t.estimateMin ?? 25}
+                    onChange={(e) =>
+                      void updateRecord<TaskPayload>(t.id, (c) => ({
+                        ...c,
+                        estimateMin: Math.max(1, Number(e.target.value) || 15),
+                      }))
+                    }
+                  />
+                  <span className="dp-muted">min</span>
+                </label>
+                <SafeInput
+                  className="dp-input"
+                  recordKey={`${t.id}:tags`}
+                  externalValue={(t.tags ?? []).join(', ')}
+                  onCommit={(val) => {
+                    const parsedTags = val
+                      .split(/[,\s#]+/)
+                      .map((s) => s.trim().toLowerCase())
+                      .filter(Boolean);
+                    void updateRecord<TaskPayload>(t.id, (c) => ({ ...c, tags: parsedTags }));
+                  }}
+                  style={{ flex: 1, minWidth: 130 }}
+                  placeholder="Tags (comma separated)…"
+                  aria-label="Edit task tags"
+                />
+                <label className="dp-row" style={{ gap: 4, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(t.sharedWithAll)}
+                    onChange={(e) =>
+                      void updateRecord<TaskPayload>(t.id, (c) => ({ ...c, sharedWithAll: e.target.checked }))
+                    }
+                  />
+                  <span>🏡 Share</span>
+                </label>
+                <label className="dp-row" style={{ gap: 4, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(t.isImportant)}
+                    onChange={(e) =>
+                      void updateRecord<TaskPayload>(t.id, (c) => ({ ...c, isImportant: e.target.checked }))
+                    }
+                  />
+                  <span>★ Important</span>
+                </label>
+              </div>
+            </div>
+
             <div className="dp-row">
               <input
                 className="dp-input"

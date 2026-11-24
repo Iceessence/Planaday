@@ -177,7 +177,7 @@ export const HistoryView: React.FC = () => {
               ['Date', 'Type', 'Title', 'StatusOrRating', 'Details'],
               filtered.map((x) => [x.date, x.kind, x.title, x.badge, x.detail ?? ''])
             );
-            triggerBrowserDownload(csv, `dayplana-history-${logicalToday}.csv`, 'text/csv');
+            triggerBrowserDownload(csv, `planaday-history-${logicalToday}.csv`, 'text/csv');
             pushToast('Exported Completion History CSV');
           }}
         >

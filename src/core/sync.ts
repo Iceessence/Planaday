@@ -1,6 +1,7 @@
 import { blobToArrayBuffer, createId, db, getOrInitSettings, updateSettings } from './db';
 import { detectRuntimePlatform } from './nativeAlarms';
-import type { LifeRecord, SyncConflict } from './types';
+import { compactOutbox, subscribeRepository } from './repository';
+import type { LifeRecord, OutboxOp, SyncConflict } from './types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error' | 'standalone';
 
@@ -12,6 +13,27 @@ export interface SyncStateSnapshot {
   errorMessage?: string;
   serverReachable: boolean;
   activeServerUrl?: string;
+  lastSyncDurationMs?: number;
+  lastSyncedOpsCount?: number;
+  queueBytesEstimate?: number;
+  compactedOpsTotal?: number;
+}
+
+export interface ServerStorageInfo {
+  ok: boolean;
+  app: string;
+  dataDir: string;
+  sqlitePath: string;
+  sqliteSizeBytes: number;
+  blobsDir: string;
+  blobCount: number;
+  blobTotalBytes: number;
+  recordCount: number;
+  seq: number;
+  sseClientCount: number;
+  uptimeSec: number;
+  backupsDir: string;
+  backups: Array<{ name: string; sizeBytes: number; modifiedAt: string }>;
 }
 
 type SyncListener = (state: SyncStateSnapshot) => void;
@@ -23,10 +45,18 @@ let currentState: SyncStateSnapshot = {
   conflictCount: 0,
   lastSyncAt: null,
   serverReachable: false,
+  compactedOpsTotal: 0,
 };
 
 let eventSource: EventSource | null = null;
 let syncTimer: number | null = null;
+let debouncedSyncTimer: number | null = null;
+let unsubRepo: (() => void) | null = null;
+let visibilityHandler: (() => void) | null = null;
+let syncInFlight: Promise<SyncStateSnapshot> | null = null;
+let totalCompactedOps = 0;
+
+const PUSH_BATCH_SIZE = 50;
 
 function emitSyncState(patch: Partial<SyncStateSnapshot>) {
   currentState = { ...currentState, ...patch };
@@ -47,7 +77,7 @@ export function getSyncState(): SyncStateSnapshot {
  * Smartly normalizes user-entered LAN / Tailscale server URLs:
  * - "192.168.88.31:3000" -> "http://192.168.88.31:3000"
  * - "100.85.10.22:3000/" -> "http://100.85.10.22:3000"
- * - "dayplana.tail1234.ts.net" -> "https://dayplana.tail1234.ts.net"
+ * - "planaday.tail1234.ts.net" -> "https://planaday.tail1234.ts.net"
  * - Strips accidental trailing "/api/..." or slashes.
  */
 export function normalizeServerUrl(raw: string): string {
@@ -99,16 +129,17 @@ export async function testServerConnection(rawUrl: string, fetchImpl: typeof fet
         ok: false,
         normalizedUrl,
         latencyMs: Date.now() - started,
-        error: 'Target returned HTML instead of Dayplana Sync API — check that you included port :3000 (not Dockge port 5001).',
+        error: 'Target returned HTML instead of Planaday Sync API — check that you included port :3000 (not Dockge port 5001).',
       };
     }
-    const json = (await res.json()) as { ok?: boolean; app?: string; recordCount?: number };
-    if (!json.ok || json.app !== 'dayplana') {
+    const json = (await res.json()) as { ok?: boolean; app?: string; legacyApp?: string; recordCount?: number };
+    const isPlanaday = json.app === 'planaday' || json.app === 'dayplana' || json.legacyApp === 'dayplana';
+    if (!json.ok || !isPlanaday) {
       return {
         ok: false,
         normalizedUrl,
         latencyMs: Date.now() - started,
-        error: 'Reached a server, but it is not a Dayplana Sync Server.',
+        error: 'Reached a server, but it is not a Planaday Sync Server.',
       };
     }
     return {
@@ -131,6 +162,43 @@ export async function testServerConnection(rawUrl: string, fetchImpl: typeof fet
   }
 }
 
+export async function fetchServerStorageInfo(fetchImpl: typeof fetch = fetch): Promise<ServerStorageInfo | null> {
+  const settings = await getOrInitSettings();
+  const candidates = getCandidateServerBases(settings.syncServerUrl, settings.syncFallbackUrl || '');
+  for (const base of candidates) {
+    try {
+      const res = await fetchImpl(`${base}/api/storage/info`);
+      if (res.ok) {
+        const json = (await res.json()) as ServerStorageInfo;
+        if (json.ok) return json;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
+export async function triggerServerSqliteBackup(
+  fetchImpl: typeof fetch = fetch
+): Promise<{ ok: boolean; filePath?: string; sizeBytes?: number; error?: string }> {
+  const settings = await getOrInitSettings();
+  const candidates = getCandidateServerBases(settings.syncServerUrl, settings.syncFallbackUrl || '');
+  for (const base of candidates) {
+    try {
+      const res = await fetchImpl(`${base}/api/storage/backup`, { method: 'POST' });
+      const json = (await res.json()) as { ok?: boolean; filePath?: string; sizeBytes?: number; error?: string };
+      if (res.ok && json.ok) {
+        return { ok: true, filePath: json.filePath, sizeBytes: json.sizeBytes };
+      }
+      return { ok: false, error: json.error || `HTTP ${res.status}` };
+    } catch {
+      // try next candidate
+    }
+  }
+  return { ok: false, error: 'Could not reach Planaday sync server.' };
+}
+
 function getCandidateServerBases(primaryRaw: string, fallbackRaw: string): string[] {
   const runtime = detectRuntimePlatform();
   const primary = normalizeServerUrl(primaryRaw);
@@ -138,7 +206,7 @@ function getCandidateServerBases(primaryRaw: string, fallbackRaw: string): strin
   const list: string[] = [];
 
   if (primary) list.push(primary);
-  else if (runtime.platform === 'web-pwa') list.push(''); // same-origin when opened in browser from Docker!
+  else if (runtime.platform === 'web-pwa') list.push('');
 
   if (fallback && !list.includes(fallback)) list.push(fallback);
   return list;
@@ -232,9 +300,9 @@ export function mergeRecordsSafely(
 async function syncAgainstBase(
   base: string,
   settings: Awaited<ReturnType<typeof getOrInitSettings>>,
-  pendingOps: import('./types').OutboxOp[],
+  pendingOps: OutboxOp[],
   fetchImpl: typeof fetch
-): Promise<{ seq: number }> {
+): Promise<{ seq: number; pushedCount: number }> {
   // 1. Upload unsynced binary blobs first
   const unsyncedBlobs = await db.blobs.filter((b) => !b.synced).toArray();
   for (const blobRec of unsyncedBlobs) {
@@ -252,14 +320,16 @@ async function syncAgainstBase(
     }
   }
 
-  // 2. Push pending local delta operations idempotently
-  if (pendingOps.length > 0) {
+  // 2. Push pending local delta operations in safe chunks of PUSH_BATCH_SIZE (prevents giant POST OOMs!)
+  let pushedCount = 0;
+  for (let offset = 0; offset < pendingOps.length; offset += PUSH_BATCH_SIZE) {
+    const chunk = pendingOps.slice(offset, offset + PUSH_BATCH_SIZE);
     const pushRes = await fetchImpl(`${base}/api/sync/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deviceId: settings.deviceId,
-        operations: pendingOps,
+        operations: chunk,
       }),
     });
     if (!pushRes.ok) {
@@ -277,6 +347,7 @@ async function syncAgainstBase(
 
     if (pushJson.acceptedOpIds?.length) {
       await db.outbox.bulkDelete(pushJson.acceptedOpIds);
+      pushedCount += pushJson.acceptedOpIds.length;
     }
 
     if (pushJson.conflicts?.length) {
@@ -343,13 +414,34 @@ async function syncAgainstBase(
     }
   }
 
-  return { seq: pullJson.seq ?? settings.lastSyncSeq };
+  return { seq: pullJson.seq ?? settings.lastSyncSeq, pushedCount };
 }
 
-export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<SyncStateSnapshot> {
+function estimateOpsBytes(ops: OutboxOp[]): number {
+  let bytes = 0;
+  for (const o of ops) {
+    try {
+      bytes += JSON.stringify(o).length;
+    } catch {
+      bytes += 256;
+    }
+  }
+  return bytes;
+}
+
+async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnapshot> {
+  const started = Date.now();
+
+  // Always compact redundant ops for the same recordId first!
+  const comp = await compactOutbox();
+  if (comp.removed > 0) {
+    totalCompactedOps += comp.removed;
+  }
+
   const settings = await getOrInitSettings();
   const pendingOps = await db.outbox.orderBy('createdAt').toArray();
   const openConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
+  const queueBytesEstimate = estimateOpsBytes(pendingOps);
 
   if (settings.operatingMode !== 'docker-sync') {
     emitSyncState({
@@ -360,6 +452,8 @@ export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<Syn
       serverReachable: false,
       errorMessage: undefined,
       activeServerUrl: undefined,
+      queueBytesEstimate,
+      compactedOpsTotal: totalCompactedOps,
     });
     return currentState;
   }
@@ -371,7 +465,9 @@ export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<Syn
       conflictCount: openConflicts,
       lastSyncAt: settings.lastSyncAt,
       serverReachable: false,
-      errorMessage: 'Device is currently offline — changes queued locally.',
+      queueBytesEstimate,
+      compactedOpsTotal: totalCompactedOps,
+      errorMessage: 'Device is currently offline — changes queued safely on device.',
     });
     return currentState;
   }
@@ -384,34 +480,46 @@ export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<Syn
       conflictCount: openConflicts,
       lastSyncAt: settings.lastSyncAt,
       serverReachable: false,
-      errorMessage: 'Enter your Docker LAN URL (http://192.168.88.31:3000) or Tailscale IP (http://100.x.y.z:3000) in Settings → 3-Mode Sync.',
+      queueBytesEstimate,
+      compactedOpsTotal: totalCompactedOps,
+      errorMessage: 'Enter your Docker LAN URL (http://192.168.88.31:3000) or Tailscale IP (http://100.x.y.z:3000) in Settings → Sync & Storage.',
     });
     return currentState;
   }
 
-  emitSyncState({ status: 'syncing', pendingCount: pendingOps.length, conflictCount: openConflicts });
+  emitSyncState({
+    status: 'syncing',
+    pendingCount: pendingOps.length,
+    conflictCount: openConflicts,
+    queueBytesEstimate,
+    compactedOpsTotal: totalCompactedOps,
+  });
 
   let lastErr: unknown = null;
   for (const base of candidates) {
     try {
-      const { seq } = await syncAgainstBase(base, settings, pendingOps, fetchImpl);
+      const { seq, pushedCount } = await syncAgainstBase(base, settings, pendingOps, fetchImpl);
       const now = new Date().toISOString();
       await updateSettings({
         lastSyncSeq: Math.max(settings.lastSyncSeq, seq),
         lastSyncAt: now,
       });
 
-      const remPending = await db.outbox.count();
+      const remPendingOps = await db.outbox.toArray();
       const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
 
       emitSyncState({
         status: 'synced',
-        pendingCount: remPending,
+        pendingCount: remPendingOps.length,
         conflictCount: remConflicts,
         lastSyncAt: now,
         serverReachable: true,
         activeServerUrl: base || 'Same-Origin Docker',
         errorMessage: undefined,
+        lastSyncDurationMs: Date.now() - started,
+        lastSyncedOpsCount: pushedCount,
+        queueBytesEstimate: estimateOpsBytes(remPendingOps),
+        compactedOpsTotal: totalCompactedOps,
       });
       return currentState;
     } catch (err) {
@@ -419,15 +527,18 @@ export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<Syn
     }
   }
 
-  const remPending = await db.outbox.count();
+  const remPendingOps = await db.outbox.toArray();
   const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   const isOfflineErr = lastErr instanceof TypeError;
   emitSyncState({
     status: isOfflineErr ? 'offline' : 'error',
-    pendingCount: remPending,
+    pendingCount: remPendingOps.length,
     conflictCount: remConflicts,
     lastSyncAt: settings.lastSyncAt,
     serverReachable: false,
+    lastSyncDurationMs: Date.now() - started,
+    queueBytesEstimate: estimateOpsBytes(remPendingOps),
+    compactedOpsTotal: totalCompactedOps,
     errorMessage:
       lastErr instanceof Error
         ? `${lastErr.message} (Tried: ${candidates.map((c) => c || 'same-origin').join(' → ')})`
@@ -435,6 +546,66 @@ export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<Syn
   });
 
   return currentState;
+}
+
+/**
+ * Serialized sync runner — guarantees at most ONE sync cycle runs at a time (zero overlapping HTTP floods).
+ */
+export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<SyncStateSnapshot> {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = executeSyncCycle(fetchImpl).finally(() => {
+    syncInFlight = null;
+  });
+  return syncInFlight;
+}
+
+/**
+ * Debounced sync trigger called after local edits so rapid edits coalesce into ONE fast push.
+ */
+export function scheduleDebouncedSync(delayMs = 1500): void {
+  if (typeof window === 'undefined') return;
+  if (debouncedSyncTimer !== null) {
+    window.clearTimeout(debouncedSyncTimer);
+  }
+  debouncedSyncTimer = window.setTimeout(() => {
+    debouncedSyncTimer = null;
+    void runSyncCycle();
+  }, delayMs);
+}
+
+/**
+ * Best-effort keepalive push when the mobile app or browser tab transitions into background.
+ */
+async function flushKeepaliveOnBackground(): Promise<void> {
+  try {
+    const settings = await getOrInitSettings();
+    if (settings.operatingMode !== 'docker-sync') return;
+    await compactOutbox();
+    const ops = await db.outbox.orderBy('createdAt').limit(20).toArray();
+    if (ops.length === 0) return;
+    const candidates = getCandidateServerBases(settings.syncServerUrl, settings.syncFallbackUrl || '');
+    const base =
+      currentState.activeServerUrl && currentState.activeServerUrl !== 'Same-Origin Docker'
+        ? currentState.activeServerUrl
+        : candidates[0];
+    if (base === undefined) return;
+    const body = JSON.stringify({ deviceId: settings.deviceId, operations: ops });
+    // keepalive fetch limit is ~64KB in Chromium; fall back to normal runSyncCycle if larger
+    if (body.length < 60_000) {
+      void fetch(`${base}/api/sync/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      }).catch(() => {
+        // Safely preserved in IndexedDB outbox for next resume!
+      });
+    } else {
+      void runSyncCycle();
+    }
+  } catch {
+    // Non-fatal: outbox remains safely in IndexedDB
+  }
 }
 
 export async function resolveConflict(
@@ -509,6 +680,7 @@ export async function resolveConflict(
   await db.syncConflicts.update(conflictId, { resolved: true });
   const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   emitSyncState({ conflictCount: remConflicts });
+  scheduleDebouncedSync(400);
 }
 
 export async function startSyncDaemon(): Promise<void> {
@@ -519,6 +691,16 @@ export async function startSyncDaemon(): Promise<void> {
     emitSyncState({ status: 'standalone', pendingCount, serverReachable: false });
     return;
   }
+
+  // Subscribe to repository changes to push cleanly 1.5s after local saves
+  unsubRepo = subscribeRepository(() => {
+    void db.outbox.count().then((cnt) => {
+      if (cnt !== currentState.pendingCount) {
+        emitSyncState({ pendingCount: cnt });
+      }
+    });
+    scheduleDebouncedSync(1500);
+  });
 
   const result = await runSyncCycle();
 
@@ -531,16 +713,29 @@ export async function startSyncDaemon(): Promise<void> {
       try {
         eventSource = new EventSource(`${activeBase}/api/sync/events?deviceId=${encodeURIComponent(settings.deviceId)}`);
         eventSource.addEventListener('sync-update', () => {
-          void runSyncCycle();
+          scheduleDebouncedSync(300);
         });
       } catch {
         // SSE optional fallback to polling
       }
     }
 
+    // Background / foreground lifecycle flush
+    visibilityHandler = () => {
+      if (document.visibilityState === 'hidden') {
+        void flushKeepaliveOnBackground();
+      } else if (document.visibilityState === 'visible') {
+        void runSyncCycle();
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityHandler);
+
+    // Gentle 20s periodic safety poll (serialized via syncInFlight mutex)
     syncTimer = window.setInterval(() => {
-      void runSyncCycle();
-    }, 15000);
+      if (document.visibilityState !== 'hidden') {
+        void runSyncCycle();
+      }
+    }, 20000);
   }
 }
 
@@ -549,8 +744,20 @@ export function stopSyncDaemon(): void {
     eventSource.close();
     eventSource = null;
   }
-  if (syncTimer !== null && typeof window !== 'undefined') {
+  if (syncTimer !== null) {
     window.clearInterval(syncTimer);
     syncTimer = null;
+  }
+  if (debouncedSyncTimer !== null) {
+    window.clearTimeout(debouncedSyncTimer);
+    debouncedSyncTimer = null;
+  }
+  if (unsubRepo) {
+    unsubRepo();
+    unsubRepo = null;
+  }
+  if (visibilityHandler && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    visibilityHandler = null;
   }
 }

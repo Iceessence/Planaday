@@ -6,6 +6,7 @@ import { fileThoughtPassage } from '../../core/mindActions';
 import { DEFAULT_NOTEBOOKS } from '../../data/sampleData';
 import { getThoughtPromptCategories, THOUGHT_PROMPTS } from '../../data/prompts';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { SafeTextarea } from '../../components/Common/SafeTextEditor';
 import type { LifeRecord, ThoughtPayload } from '../../core/types';
 
 export const ThoughtInboxView: React.FC = () => {
@@ -386,21 +387,22 @@ export const ThoughtInboxView: React.FC = () => {
                 </button>
               </div>
 
-              <textarea
-                ref={entryAreaRef}
+              <SafeTextarea
+                textareaRef={entryAreaRef}
+                recordKey={`thought:${selectedThought.id}`}
+                externalValue={selectedThought.payload.content}
+                onCommit={async (val) => {
+                  await updateRecord<ThoughtPayload>(
+                    selectedThought.id,
+                    (c) => ({ ...c, payload: { ...c.payload, content: val } }),
+                    { skipUndo: true }
+                  );
+                }}
                 className="dp-textarea"
                 style={{ minHeight: 200, lineHeight: 1.65 }}
-                value={selectedThought.payload.content}
                 onSelect={captureSelection}
                 onMouseUp={captureSelection}
                 onKeyUp={captureSelection}
-                onChange={(e) =>
-                  void updateRecord<ThoughtPayload>(
-                    selectedThought.id,
-                    (c) => ({ ...c, payload: { ...c.payload, content: e.target.value } }),
-                    { skipUndo: true }
-                  )
-                }
               />
 
               {/* File a Passage Toolbar */}

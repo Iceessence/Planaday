@@ -62,16 +62,86 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     }
   }
 
+  const startedAtMs = Date.now();
+  const backupsDir = path.join(dataDir, 'blobs', 'db-backups');
+
+  // Automated daily SQLite backup into /data/blobs/db-backups (lands directly on TrueNAS mount!)
+  const dailyBackupTimer = setInterval(() => {
+    try {
+      syncDb.createSqliteBackup(backupsDir, 10);
+    } catch {
+      // Non-fatal if backupsDir is read-only
+    }
+  }, 24 * 60 * 60 * 1000);
+
   app.get('/api/health', async () => {
     const stats = syncDb.getStats();
     return {
       ok: true,
-      app: 'dayplana',
-      edition: 2,
+      app: 'planaday',
+      legacyApp: 'dayplana',
+      version: '2.1.0',
       dataDir,
       ...stats,
       timestamp: new Date().toISOString(),
     };
+  });
+
+  app.get('/api/storage/info', async () => {
+    const stats = syncDb.getStats();
+    const blobsDir = path.join(dataDir, 'blobs');
+    let blobCount = 0;
+    let blobTotalBytes = 0;
+    try {
+      if (fs.existsSync(blobsDir)) {
+        for (const entry of fs.readdirSync(blobsDir)) {
+          if (entry === 'db-backups' || entry.endsWith('.json')) continue;
+          const st = fs.statSync(path.join(blobsDir, entry));
+          if (st.isFile()) {
+            blobCount++;
+            blobTotalBytes += st.size;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const backups: Array<{ name: string; sizeBytes: number; modifiedAt: string }> = [];
+    try {
+      if (fs.existsSync(backupsDir)) {
+        for (const f of fs.readdirSync(backupsDir).filter((x) => x.endsWith('.sqlite'))) {
+          const st = fs.statSync(path.join(backupsDir, f));
+          backups.push({ name: f, sizeBytes: st.size, modifiedAt: st.mtime.toISOString() });
+        }
+        backups.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      ok: true,
+      app: 'planaday',
+      dataDir,
+      sqlitePath: syncDb.dbPath,
+      sqliteSizeBytes: syncDb.getSqliteSizeBytes(),
+      blobsDir,
+      blobCount,
+      blobTotalBytes,
+      ...stats,
+      sseClientCount: sseClients.size,
+      uptimeSec: Math.round((Date.now() - startedAtMs) / 1000),
+      backupsDir,
+      backups,
+    };
+  });
+
+  app.post('/api/storage/backup', async (_req, reply) => {
+    try {
+      const res = syncDb.createSqliteBackup(backupsDir, 10);
+      return reply.send({ ok: true, ...res });
+    } catch (err) {
+      return reply.code(500).send({ ok: false, error: err instanceof Error ? err.message : 'Backup failed' });
+    }
   });
 
   app.post<{ Body: { deviceId: string; operations: IncomingOp[] } }>('/api/sync/push', async (req) => {
@@ -221,6 +291,7 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
   }
 
   app.addHook('onClose', async () => {
+    clearInterval(dailyBackupTimer);
     alarmScheduler.stop();
     syncDb.close();
   });
@@ -236,7 +307,7 @@ if (isMain) {
   buildDayplanaServer()
     .then(({ app }) => app.listen({ port, host }))
     .then((address) => {
-      console.log(`Dayplana Edition 2 Sync Server running at ${address}`);
+      console.log(`Planaday Sync Server running at ${address}`);
     })
     .catch((err) => {
       console.error('Failed to start Dayplana server:', err);

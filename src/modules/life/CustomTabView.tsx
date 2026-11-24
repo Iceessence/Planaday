@@ -37,7 +37,7 @@ import type {
 
 const WIDGET_TYPES: Array<{ type: CustomWidgetType; emoji: string; label: string; desc: string }> = [
   { type: 'timers', emoji: '⏱️', label: 'Custom Timers', desc: 'Pick exact timers (min + sec & sound) for 1-tap start' },
-  { type: 'links', emoji: '🚀', label: 'Tab Launcher & Links', desc: 'Open any specific Dayplana tab, custom tab, or website in 1 tap' },
+  { type: 'links', emoji: '🚀', label: 'Tab Launcher & Links', desc: 'Open any specific Planaday tab, custom tab, or website in 1 tap' },
   { type: 'events', emoji: '📅', label: 'Events Feed', desc: 'Upcoming events filtered by category or shared/important' },
   { type: 'tasks', emoji: '✅', label: 'Task Checklist', desc: 'Interactive tasks filtered by tag/priority with quick-add' },
   { type: 'chores', emoji: '🧹', label: 'Chores Block', desc: 'Room chores with 1-click Done Today' },
@@ -661,13 +661,13 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                       </div>
                     )}
 
-                    {/* TAB LAUNCHER & LINKS EDITOR: Pick ANY specific Dayplana tab, another Custom Tab, or external URL! */}
+                    {/* TAB LAUNCHER & LINKS EDITOR: Pick ANY specific Planaday tab, another Custom Tab, or external URL! */}
                     {w.type === 'links' && (
                       <div className="dp-stack" style={{ gap: 8 }}>
                         <strong style={{ fontSize: '0.8rem' }}>Add a 1-Tap Tab Shortcut:</strong>
                         <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
                           <select
-                            aria-label="Choose a Dayplana tab to open"
+                            aria-label="Choose a Planaday tab to open"
                             className="dp-select"
                             style={{ flex: '1 1 190px' }}
                             value={pickTabTarget[w.id] ?? 'today'}

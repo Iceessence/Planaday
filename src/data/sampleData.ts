@@ -316,12 +316,12 @@ export async function seedSampleData(logicalToday: string): Promise<void> {
   // Sample Note & Thought & Diary
   const noteRec = await createRecord<NotePayload>(
     'note',
-    'Welcome to Dayplana Stationery Guide',
+    'Welcome to Planaday Stationery Guide',
     {
       notebookId: 'nb_personal',
       writtenForDate: logicalToday,
       pinned: true,
-      content: `# Welcome to Dayplana\n\nEvery record lives in **one unified graph** stored locally in IndexedDB with zero word limits and zero \`localStorage\`.\n\n- Type \`[[\` to link notes & records together\n- Highlight any paragraph in **Thought Inbox** to file it straight into a Notebook, Task, Event, or Recipe\n- Try switching paper surfaces (5mm Dot-Grid, Kraft Paper, College Ruled) in **Settings → Theme Studio**\n\n> Tip: All sample records are tagged \`isSample: true\` and can be wiped in 1 click from Settings without touching anything you created.`,
+      content: `# Welcome to Planaday\n\nEvery record lives in **one unified graph** stored locally in IndexedDB with zero word limits and zero \`localStorage\`.\n\n- Type \`[[\` to link notes & records together\n- Highlight any paragraph in **Thought Inbox** to file it straight into a Notebook, Task, Event, or Recipe\n- Try switching paper surfaces (5mm Dot-Grid, Kraft Paper, College Ruled) in **Settings → Theme Studio**\n\n> Tip: All sample records are tagged \`isSample: true\` and can be wiped in 1 click from Settings without touching anything you created.`,
       citations: [],
       touchedDates: [logicalToday],
     },

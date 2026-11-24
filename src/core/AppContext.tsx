@@ -168,7 +168,9 @@ export function applySettingsToDocument(settings: AppSettings) {
   root.style.setProperty('--dp-on-accent', computed.onPrimaryAccent);
   root.style.setProperty('--dp-on-accent-2', computed.onSecondaryAccent);
   root.style.setProperty('--dp-on-highlight', computed.onHighlight);
-  root.style.setProperty('--dp-font-size', `${Math.max(12, Math.min(24, settings.fontSizePx))}px`);
+  const scale = Math.max(0.8, Math.min(1.3, (settings.uiScalePct ?? 100) / 100));
+  root.style.setProperty('--dp-ui-scale', String(scale));
+  root.style.setProperty('--dp-font-size', `${Math.round(Math.max(12, Math.min(24, settings.fontSizePx)) * scale * 10) / 10}px`);
   root.style.setProperty('--dp-line-height', String(settings.lineHeight));
 
   const radiusMap = {
@@ -181,6 +183,8 @@ export function applySettingsToDocument(settings: AppSettings) {
   root.style.setProperty('--dp-radius-md', rMd);
   root.style.setProperty('--dp-radius-lg', rLg);
 
+  const layoutMode = settings.mobileLayoutMode ?? 'adaptive';
+  root.dataset.mobileLayout = layoutMode;
   root.dataset.colorScheme = settings.colorScheme;
   root.dataset.fontPairing = settings.fontPairing;
   root.dataset.density = settings.density;
@@ -189,6 +193,21 @@ export function applySettingsToDocument(settings: AppSettings) {
   root.dataset.binderTabs = String(settings.binderTabs);
   root.dataset.reducedMotion = String(settings.reducedMotion);
   root.dir = settings.rtl ? 'rtl' : 'ltr';
+
+  if (settings.plannerTitle) {
+    document.title = `${settings.plannerTitle} — Personal & Professional Planner`;
+  }
+
+  // Update mobile viewport meta dynamically so Desktop Layout allows smooth pinch-to-zoom & pan on phones!
+  const vp = document.querySelector('meta[name="viewport"]');
+  if (vp) {
+    vp.setAttribute(
+      'content',
+      layoutMode === 'desktop_zoom'
+        ? 'width=1240, initial-scale=0.35, minimum-scale=0.2, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover'
+        : 'width=device-width, initial-scale=1.0, viewport-fit=cover'
+    );
+  }
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -227,8 +246,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeProfileId: liveSettings.activeProfileId || 'all',
       eventCategories: liveSettings.eventCategories?.length ? liveSettings.eventCategories : defaults.eventCategories,
       customTabs: Array.isArray(liveSettings.customTabs) ? liveSettings.customTabs : [],
-      plannerTitle: liveSettings.plannerTitle || 'Dayplana',
+      plannerTitle:
+        !liveSettings.plannerTitle || liveSettings.plannerTitle === 'Dayplana' ? 'Planaday' : liveSettings.plannerTitle,
       cardRadius: liveSettings.cardRadius || 'soft',
+      mobileLayoutMode: liveSettings.mobileLayoutMode || 'adaptive',
+      uiScalePct: typeof liveSettings.uiScalePct === 'number' ? liveSettings.uiScalePct : 100,
       hiddenSidebarViews: Array.isArray(liveSettings.hiddenSidebarViews) ? liveSettings.hiddenSidebarViews : [],
       syncFallbackUrl: liveSettings.syncFallbackUrl ?? '',
       weatherEnabled: liveSettings.weatherEnabled ?? true,
@@ -468,6 +490,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (kind === 'chore' && !prefs.notifyChores) return;
       if (kind === 'stopwatch' && !prefs.notifyStopwatch) return;
 
+      // Respect Quiet Hours for non-alarm notifications (alarms always wake!)
+      if (kind !== 'alarm' && prefs.quietHoursEnabled && prefs.quietHoursStart && prefs.quietHoursEnd) {
+        const now = new Date();
+        const cur = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const s = prefs.quietHoursStart;
+        const e = prefs.quietHoursEnd;
+        const inQuiet = s <= e ? cur >= s && cur < e : cur >= s || cur < e;
+        if (inQuiet) {
+          pushToast(`🌙 (Quiet Hours) ${title}: ${body}`);
+          return;
+        }
+      }
+
+      if (prefs.vibrateEnabled !== false && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate?.([150, 80, 150]);
+        } catch {
+          // optional
+        }
+      }
+
       const effVolume =
         typeof override?.customVolume === 'number' && Number.isFinite(override.customVolume)
           ? override.customVolume
@@ -563,7 +606,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         attempts: 0,
       });
       if (settings.notificationPrefs.enabled && settings.notificationPrefs.notifyTimers) {
-        await scheduleNativeNotification(id, `Timer Done: ${label}`, `Your Dayplana timer "${label}" finished!`, targetEndMs);
+        await scheduleNativeNotification(id, `Timer Done: ${label}`, `Your Planaday timer "${label}" finished!`, targetEndMs);
       }
       const mins = Math.floor(safeSec / 60);
       const secs = safeSec % 60;
@@ -589,7 +632,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } else {
       const nextEnd = now + Math.max(1, p.remainingSecWhenPaused || 60) * 1000;
-      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Dayplana timer "${rec.title}" finished!`, nextEnd);
+      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Planaday timer "${rec.title}" finished!`, nextEnd);
       await db.records.put({
         ...rec,
         updatedAt: new Date(now).toISOString(),
@@ -605,7 +648,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = Date.now();
     const nextEnd = p.targetEndMs !== null ? Math.max(now, p.targetEndMs) + addSec * 1000 : null;
     if (nextEnd) {
-      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Dayplana timer "${rec.title}" finished!`, nextEnd);
+      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Planaday timer "${rec.title}" finished!`, nextEnd);
     }
     await db.records.put({
       ...rec,
@@ -667,7 +710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const key = `tmr:${t.id}:${t.targetEndMs}`;
             if (!firedAlertsRef.current.has(key)) {
               firedAlertsRef.current.add(key);
-              notifyUser('timer', `Timer Finished: ${t.label}`, 'Tap to stop or add time in Dayplana.', {
+              notifyUser('timer', `Timer Finished: ${t.label}`, 'Tap to stop or add time in Planaday.', {
                 customSound: t.customSound,
                 customVolume: t.customVolume ?? null,
               });
@@ -711,10 +754,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (ev.payload.allDay || !ev.payload.startTime) continue;
           const isToday = ev.recurrence
             ? expandRecurrenceDates(ev.payload.startDate, ev.recurrence, {
-                rangeStart: logicalToday,
-                rangeEnd: logicalToday,
-                maxCount: 1,
-              }).length > 0
+              rangeStart: logicalToday,
+              rangeEnd: logicalToday,
+              maxCount: 1,
+            }).length > 0
             : ev.payload.startDate === logicalToday;
           if (!isToday) continue;
 
@@ -823,7 +866,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const p = normalizeAlarmPayload(a.payload as Record<string, unknown>);
         void scheduleNativeNotification(
           a.id,
-          `Dayplana Alarm: ${a.title}`,
+          `Planaday Alarm: ${a.title}`,
           `${p.time} (${p.profile})`,
           next.nextFireMs
         );

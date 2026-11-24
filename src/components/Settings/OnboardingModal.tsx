@@ -17,14 +17,14 @@ export const OnboardingModal: React.FC = () => {
       dayBoundaryHour: selected === 'night-owl' && dayBoundary === 0 ? 4 : dayBoundary,
       logicalToday,
     });
-    pushToast('Welcome to Dayplana! Your stationery workspace is ready.');
+    pushToast('Welcome to Planaday! Your customizable workspace is ready.');
   };
 
   return (
     <ModalDialog
       open={!settings.onboardingCompleted}
       onClose={() => void patchSettings({ onboardingCompleted: true })}
-      title="Welcome to Dayplana — 30-Second Setup"
+      title="Welcome to Planaday — 30-Second Setup"
       wide
     >
       <p className="dp-muted" style={{ margin: 0 }}>

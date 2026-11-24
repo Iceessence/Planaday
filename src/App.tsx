@@ -93,7 +93,7 @@ const ShellFrame: React.FC = () => {
   if (!ready) {
     return (
       <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center' }}>
-        <div className="dp-card">Opening Dayplana paper binder…</div>
+        <div className="dp-card">Opening Planaday workspace…</div>
       </div>
     );
   }

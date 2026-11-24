@@ -1,7 +1,7 @@
 {
-  "name": "Dayplana — Tactile Life Planner",
-  "short_name": "Dayplana",
-  "description": "All-in-one tactile paper life planner with unlimited offline storage and self-hosted Docker sync.",
+  "name": "Planaday — Customizable Life Planner",
+  "short_name": "Planaday",
+  "description": "All-in-one customizable personal planner, digital notebook, calendar, and offline-first sync workspace.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

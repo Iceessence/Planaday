@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   ChefHat,
   Download,
   Flame,
@@ -33,6 +34,7 @@ export const RecipesView: React.FC = () => {
   const { settings, records, logicalToday, pushToast, startCountdownTimer, setActiveView } = useApp();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mobileRecipePane, setMobileRecipePane] = useState<'list' | 'detail'>('list');
   const [search, setSearch] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('all');
   const [diffFilter, setDiffFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
@@ -344,34 +346,45 @@ export const RecipesView: React.FC = () => {
               setDiffFilter('all');
             }}
           />
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 260px) minmax(0, 1fr)', gap: 16 }}>
+          <div className={`dp-split-pane ${mobileRecipePane === 'detail' ? 'mobile-show-detail' : 'mobile-show-list'}`}>
             {/* Recipe List */}
-            <div className="dp-stack" style={{ gap: 8 }}>
+            <div className="dp-split-list dp-stack" style={{ gap: 8 }}>
               {filteredRecipes.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className="dp-card"
-                style={{
-                  textAlign: 'start',
-                  padding: 10,
-                  cursor: 'pointer',
-                  borderColor: r.id === activeRecipe?.id ? 'var(--dp-accent)' : undefined,
-                  borderWidth: r.id === activeRecipe?.id ? 2 : 1,
-                }}
-                onClick={() => setSelectedId(r.id)}
-              >
-                <strong>{r.title}</strong>
-                <div className="dp-muted" style={{ fontSize: '0.78rem', marginTop: 3 }}>
-                  {r.payload.prepMin + r.payload.cookMin}m · Serves {r.payload.servings} · Made {r.payload.madeCount}×
-                </div>
-              </button>
-            ))}
-          </div>
+                <button
+                  key={r.id}
+                  type="button"
+                  className="dp-card"
+                  style={{
+                    textAlign: 'start',
+                    padding: 10,
+                    cursor: 'pointer',
+                    borderColor: r.id === activeRecipe?.id ? 'var(--dp-accent)' : undefined,
+                    borderWidth: r.id === activeRecipe?.id ? 2 : 1,
+                  }}
+                  onClick={() => {
+                    setSelectedId(r.id);
+                    setMobileRecipePane('detail');
+                  }}
+                >
+                  <strong>{r.title}</strong>
+                  <div className="dp-muted" style={{ fontSize: '0.78rem', marginTop: 3 }}>
+                    {r.payload.prepMin + r.payload.cookMin}m · Serves {r.payload.servings} · Made {r.payload.madeCount}×
+                  </div>
+                </button>
+              ))}
+            </div>
 
           {/* Recipe Card Detail */}
           {activeRecipe ? (
-            <div className="dp-card dp-stack" style={{ padding: 18 }}>
+            <div className="dp-split-detail dp-card dp-stack" style={{ padding: 16 }}>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm dp-mobile-only"
+                style={{ alignSelf: 'flex-start' }}
+                onClick={() => setMobileRecipePane('list')}
+              >
+                <ArrowLeft size={14} /> All Recipes ({filteredRecipes.length})
+              </button>
               <div className="dp-between">
                 <div>
                   <h2 style={{ fontSize: '1.45rem' }}>{activeRecipe.title}</h2>

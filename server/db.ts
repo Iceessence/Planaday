@@ -33,12 +33,13 @@ export interface PushResult {
 export class SyncDatabase {
   private db: DatabaseSync;
   public readonly dataDir: string;
+  public readonly dbPath: string;
 
   constructor(dataDir: string) {
     this.dataDir = dataDir;
     fs.mkdirSync(dataDir, { recursive: true });
-    const dbPath = path.join(dataDir, 'dayplana.sqlite');
-    this.db = new DatabaseSync(dbPath);
+    this.dbPath = path.join(dataDir, 'dayplana.sqlite');
+    this.db = new DatabaseSync(this.dbPath);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
@@ -81,6 +82,23 @@ export class SyncDatabase {
     const acceptedOpIds: string[] = [];
     const conflicts: Array<{ recordId: string; serverRecord: ServerLifeRecord }> = [];
 
+    // Coalesce duplicate ops targeting the same recordId within a single incoming batch
+    // so older clients sending uncoalesced keystroke queues never stall SQLite!
+    const coalesced: Array<{ op: IncomingOp; allOpIds: string[] }> = [];
+    const byRecordIdx = new Map<string, number>();
+    for (const op of operations) {
+      const key = op.record?.id ?? op.recordId;
+      const prevIdx = byRecordIdx.get(key);
+      if (prevIdx !== undefined) {
+        const entry = coalesced[prevIdx];
+        entry.allOpIds.push(op.opId);
+        entry.op = { ...op, baseRev: Math.min(entry.op.baseRev, op.baseRev) };
+      } else {
+        byRecordIdx.set(key, coalesced.length);
+        coalesced.push({ op, allOpIds: [op.opId] });
+      }
+    }
+
     const checkOp = this.db.prepare('SELECT 1 FROM applied_ops WHERE op_id = ?');
     const markOp = this.db.prepare('INSERT OR IGNORE INTO applied_ops (op_id, applied_at) VALUES (?, ?)');
     const getRec = this.db.prepare('SELECT rev, device_id, json_data FROM records WHERE id = ?');
@@ -101,15 +119,15 @@ export class SyncDatabase {
     const now = new Date().toISOString();
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      for (const op of operations) {
+      for (const { op, allOpIds } of coalesced) {
         // Idempotent opId check
         if (checkOp.get(op.opId)) {
-          acceptedOpIds.push(op.opId);
+          acceptedOpIds.push(...allOpIds);
           continue;
         }
         if (!op.record) {
-          markOp.run(op.opId, now);
-          acceptedOpIds.push(op.opId);
+          for (const oid of allOpIds) markOp.run(oid, now);
+          acceptedOpIds.push(...allOpIds);
           continue;
         }
 
@@ -120,8 +138,8 @@ export class SyncDatabase {
         if (existing && existing.rev > op.baseRev && existing.device_id !== deviceId) {
           const serverRecord = JSON.parse(existing.json_data) as ServerLifeRecord;
           conflicts.push({ recordId: op.record.id, serverRecord });
-          markOp.run(op.opId, now);
-          acceptedOpIds.push(op.opId);
+          for (const oid of allOpIds) markOp.run(oid, now);
+          acceptedOpIds.push(...allOpIds);
           continue;
         }
 
@@ -144,8 +162,8 @@ export class SyncDatabase {
           stored.deletedAt ?? null,
           JSON.stringify(stored)
         );
-        markOp.run(op.opId, now);
-        acceptedOpIds.push(op.opId);
+        for (const oid of allOpIds) markOp.run(oid, now);
+        acceptedOpIds.push(...allOpIds);
       }
       this.db.exec('COMMIT');
     } catch (err) {
@@ -187,6 +205,44 @@ export class SyncDatabase {
     this.db
       .prepare('INSERT INTO sync_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
       .run(key, value);
+  }
+
+  public getSqliteSizeBytes(): number {
+    try {
+      return fs.statSync(this.dbPath).size;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Creates a consistent point-in-time SQLite snapshot using VACUUM INTO
+   * (safe while WAL mode is active; ideal for backing up Docker volume SQLite to TrueNAS /data/blobs/db-backups).
+   */
+  public createSqliteBackup(backupsDir: string, maxKeep = 10): { filePath: string; sizeBytes: number; name: string } {
+    fs.mkdirSync(backupsDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const name = `planaday-sqlite-${stamp}.sqlite`;
+    const filePath = path.join(backupsDir, name);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    const escaped = filePath.replace(/'/g, "''");
+    this.db.exec(`VACUUM INTO '${escaped}'`);
+    const sizeBytes = fs.statSync(filePath).size;
+
+    // Prune older snapshots beyond maxKeep
+    const files = fs
+      .readdirSync(backupsDir)
+      .filter((f) => f.endsWith('.sqlite'))
+      .map((f) => ({ name: f, full: path.join(backupsDir, f), mtime: fs.statSync(path.join(backupsDir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    for (const old of files.slice(maxKeep)) {
+      try {
+        fs.unlinkSync(old.full);
+      } catch {
+        // non-fatal
+      }
+    }
+    return { filePath, sizeBytes, name };
   }
 
   public close(): void {

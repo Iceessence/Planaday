@@ -287,7 +287,7 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
                   ['Date', 'Logged', 'Mood', 'Energy', 'TasksCompleted'],
                   insightWindow.map((r) => [r.date, r.hasRecord, r.mood ?? 'missing', r.energy ?? 'missing', r.tasksDone])
                 );
-                triggerBrowserDownload(csv, `dayplana-insights-${insightDays}d.csv`, 'text/csv');
+                triggerBrowserDownload(csv, `planaday-insights-${insightDays}d.csv`, 'text/csv');
                 pushToast('Exported Insights CSV');
               }}
             >
@@ -466,7 +466,7 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
                   const json = (await res.json()) as { response?: string };
                   setAiProposal(json.response || 'No response returned by local model.');
                 } catch {
-                  setAiProposal('Could not reach configured Ollama endpoint — Dayplana stays 100% functional offline without AI.');
+                  setAiProposal('Could not reach configured Ollama endpoint — Planaday stays 100% functional offline without AI.');
                 } finally {
                   setAiBusy(false);
                 }

@@ -621,13 +621,13 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
             <p className="dp-muted" style={{ margin: 0, fontSize: '0.82rem' }}>
               {runtimeInfo.canWakeWhenBrowserClosed
                 ? 'Running as a native app — alarms schedule directly on your OS and fire even when closed or locked.'
-                : 'To make alarms wake your phone even when Chrome is completely closed: install the native Dayplana Android APK / Desktop app, OR enter a free ntfy.sh topic below so your Docker server pushes alarms directly to your phone!'}
+                : 'To make alarms wake your phone even when Chrome is completely closed: install the native Planaday Android APK / Desktop app, OR enter a free ntfy.sh topic below so your Docker server pushes alarms directly to your phone!'}
             </p>
             <div className="dp-row">
               <input
                 className="dp-input"
                 style={{ flex: 2 }}
-                placeholder="Optional ntfy push URL (e.g., https://ntfy.sh/my-private-dayplana-alarms)"
+                placeholder="Optional ntfy push URL (e.g., https://ntfy.sh/my-private-planaday-alarms)"
                 value={settings.ntfyPushUrl || ''}
                 onChange={(e) => void patchSettings({ ntfyPushUrl: e.target.value })}
               />
@@ -710,7 +710,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
               if (nextTrig && targetId) {
                 await scheduleNativeNotification(
                   targetId,
-                  `Dayplana Alarm: ${alarmTitle.trim() || 'Alarm'}`,
+                  `Planaday Alarm: ${alarmTitle.trim() || 'Alarm'}`,
                   `${alarmTime} (${payload.profile})`,
                   nextTrig.nextFireMs
                 );
@@ -1514,7 +1514,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                   className="dp-btn dp-btn-sm"
                   onClick={() => {
                     const csv = exportStopwatchLapsToCsv(swLaps);
-                    triggerBrowserDownload(csv, `dayplana-stopwatch-laps-${logicalToday}.csv`, 'text/csv');
+                    triggerBrowserDownload(csv, `planaday-stopwatch-laps-${logicalToday}.csv`, 'text/csv');
                     pushToast('Exported stopwatch laps CSV');
                   }}
                 >
@@ -1562,7 +1562,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                     ['Date', 'Source', 'Label', 'ActiveSeconds'],
                     timeLedger.map((e) => [e.date, e.sourceType, e.label, e.activeSeconds])
                   );
-                  triggerBrowserDownload(csv, `dayplana-time-ledger-${logicalToday}.csv`, 'text/csv');
+                  triggerBrowserDownload(csv, `planaday-time-ledger-${logicalToday}.csv`, 'text/csv');
                 }}
               >
                 <Download size={13} /> Export CSV

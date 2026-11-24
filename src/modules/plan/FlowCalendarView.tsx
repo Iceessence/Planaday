@@ -1376,7 +1376,7 @@ export const FlowCalendarView: React.FC = () => {
             className="dp-btn dp-btn-sm"
             onClick={() => {
               const ics = exportEventsToIcs(events);
-              triggerBrowserDownload(ics, `dayplana-calendar-${logicalToday}.ics`, 'text/calendar');
+              triggerBrowserDownload(ics, `planaday-calendar-${logicalToday}.ics`, 'text/calendar');
               pushToast(`Exported ${events.length} events to .ics`);
             }}
           >

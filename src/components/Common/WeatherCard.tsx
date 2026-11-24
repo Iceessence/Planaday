@@ -259,7 +259,7 @@ export const WeatherCard: React.FC<{
           </div>
 
           {!compact && weather.daily.length > 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weather.daily.length}, minmax(0, 1fr))`, gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 6 }}>
               {weather.daily.map((day, idx) => {
                 const d = describeWeatherCode(day.code);
                 return (

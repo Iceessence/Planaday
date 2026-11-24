@@ -21,8 +21,8 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 };
 
-/** Build a genuine 32x32 amber & cream Dayplana "D" PNG buffer for Windows/macOS/Linux Tray & Window icons. */
-function buildDayplanaIconPng() {
+/** Build a genuine 32x32 amber & cream Planaday "P" PNG buffer for Windows/macOS/Linux Tray & Window icons. */
+function buildPlanadayIconPng() {
   const w = 32;
   const h = 32;
   const raw = Buffer.alloc((w * 4 + 1) * h);
@@ -34,12 +34,12 @@ function buildDayplanaIconPng() {
       const dy = Math.max(0, Math.abs(y - 15.5) - 10.5);
       const inRounded = dx * dx + dy * dy <= 25;
       if (!inRounded) continue;
-      const inStem = x >= 10 && x <= 13 && y >= 8 && y <= 23;
-      const inTop = y >= 8 && y <= 10 && x >= 10 && x <= 18;
-      const inBot = y >= 21 && y <= 23 && x >= 10 && x <= 18;
-      const distArc = Math.hypot((x - 16.5) / 5.5, (y - 15.5) / 7.5);
-      const inCurve = x >= 16 && distArc >= 0.62 && distArc <= 1.05;
-      if (inStem || inTop || inBot || inCurve) {
+      const inStem = x >= 10 && x <= 13 && y >= 7 && y <= 24;
+      const inTop = y >= 7 && y <= 9 && x >= 10 && x <= 19;
+      const inMid = y >= 15 && y <= 17 && x >= 10 && x <= 19;
+      const distBowl = Math.hypot((x - 18) / 4.5, (y - 12) / 5);
+      const inBowl = x >= 17 && y >= 7 && y <= 17 && distBowl >= 0.55 && distBowl <= 1.08;
+      if (inStem || inTop || inMid || inBowl) {
         raw[idx] = 250;
         raw[idx + 1] = 246;
         raw[idx + 2] = 238;
@@ -127,13 +127,13 @@ function startLocalStaticServer() {
 
 function createTray(appIcon) {
   tray = new Tray(appIcon);
-  tray.setToolTip('Dayplana — Running in background for alarms & timers');
+  tray.setToolTip('Planaday — Running in background for alarms & timers');
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Dayplana', click: () => showMainWindow() },
+      { label: 'Open Planaday', click: () => showMainWindow() },
       { type: 'separator' },
       {
-        label: 'Quit Dayplana',
+        label: 'Quit Planaday',
         click: () => {
           isQuitting = true;
           app.quit();
@@ -160,7 +160,7 @@ async function createWindow(appIcon) {
     minWidth: 380,
     minHeight: 560,
     icon: appIcon,
-    title: 'Dayplana — Tactile Life Planner',
+    title: 'Planaday — Personal & Professional Planner',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -190,7 +190,7 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
-    const appIcon = nativeImage.createFromBuffer(buildDayplanaIconPng());
+    const appIcon = nativeImage.createFromBuffer(buildPlanadayIconPng());
     createTray(appIcon);
     await createWindow(appIcon);
     app.on('activate', () => showMainWindow());

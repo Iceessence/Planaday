@@ -116,7 +116,7 @@ export class ServerAlarmScheduler {
           const key = `timer:${t.id}:${payload.targetEndMs}`;
           if (!this.firedKeys.has(key)) {
             this.firedKeys.add(key);
-            await this.sendPush(`Timer Finished: ${t.title}`, `Your Dayplana timer "${t.title}" has completed!`, 'high');
+            await this.sendPush(`Timer Finished: ${t.title}`, `Your Planaday timer "${t.title}" has completed!`, 'high');
           }
         }
       }
@@ -171,8 +171,8 @@ export class ServerAlarmScheduler {
         if (!this.firedKeys.has(key)) {
           this.firedKeys.add(key);
           await this.sendPush(
-            `Dayplana Alarm: ${a.title}`,
-            `${p.time} (${p.profile || 'Alarm'}) — Open Dayplana to start your day.`,
+            `Planaday Alarm: ${a.title}`,
+            `${p.time} (${p.profile || 'Alarm'}) — Open Planaday to start your day.`,
             'urgent'
           );
         }
@@ -224,7 +224,7 @@ export class ServerAlarmScheduler {
           this.firedKeys.add(key);
           const names = due.slice(0, 4).map((c) => c.title).join(', ');
           await this.sendPush(
-            `Dayplana Chores Due (${due.length})`,
+            `Planaday Chores Due (${due.length})`,
             `Due or overdue today: ${names}${due.length > 4 ? ` +${due.length - 4} more` : ''}`,
             'default'
           );

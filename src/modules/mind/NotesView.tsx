@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
+  BookmarkPlus,
   CheckSquare,
   FilePlus,
   History,
@@ -8,17 +10,25 @@ import {
   Network,
   PenTool,
   Pin,
+  Save,
   Square,
   Trash2,
 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
-import { createRecord, getNoteRevisions, softDeleteRecord, updateRecord } from '../../core/repository';
+import {
+  createNamedNoteCheckpoint,
+  createRecord,
+  getNoteRevisions,
+  softDeleteRecord,
+  updateRecord,
+} from '../../core/repository';
 import { getBlobObjectUrl, storeBlob } from '../../core/db';
 import { DEFAULT_NOTEBOOKS } from '../../data/sampleData';
 import { extractInlineEntities } from '../../core/mindActions';
 import { ModalDialog } from '../../components/Common/ModalDialog';
 import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import { computeLineDiff, useBufferedText } from '../../components/Common/SafeTextEditor';
 import type { FontPairing, LifeRecord, NotePayload, PaperMaterial, RevisionRecord, TaskPayload } from '../../core/types';
 
 export const NotesView: React.FC = () => {
@@ -30,6 +40,7 @@ export const NotesView: React.FC = () => {
     pushToast,
     selectedNoteId,
     setSelectedNoteId,
+    syncState,
   } = useApp();
 
   const [activeNotebook, setActiveNotebook] = useState<string>('all');
@@ -38,8 +49,11 @@ export const NotesView: React.FC = () => {
   const [noteSortBy, setNoteSortBy] = useState<'updated' | 'created' | 'title' | 'words'>('updated');
   const [noteSortDir, setNoteSortDir] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'graph'>('edit');
+  const [mobilePane, setMobilePane] = useState<'list' | 'editor'>('editor');
   const [revisionsOpen, setRevisionsOpen] = useState(false);
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
+  const [diffRevId, setDiffRevId] = useState<string | null>(null);
+  const [checkpointLabel, setCheckpointLabel] = useState('');
   const [sketchOpen, setSketchOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [autocompleteQuery, setAutocompleteQuery] = useState<string | null>(null);
@@ -53,6 +67,7 @@ export const NotesView: React.FC = () => {
   const drawingRef = useRef(false);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const lastRevisionAtRef = useRef<Record<string, number>>({});
 
   const customNotebooks = useMemo(
     () => records.filter((r) => r.type === 'notebook').map((r) => ({ id: r.id, name: r.title, emoji: '📒', color: r.color || '#a97434' })),
@@ -99,9 +114,10 @@ export const NotesView: React.FC = () => {
     [notes, selectedNoteId, visibleNotes]
   );
 
-  // Load object URLs for inline image/PDF/voice attachments
+  // Load object URLs cleanly — revokes exact created URLs (fixes ObjectURL memory leak!)
   useEffect(() => {
     let active = true;
+    const createdUrls: string[] = [];
     const ids = [
       ...(activeNote?.payload.attachmentBlobIds ?? []),
       ...(activeNote?.payload.voiceMemoBlobIds ?? []),
@@ -111,16 +127,86 @@ export const NotesView: React.FC = () => {
       const next: Record<string, string> = {};
       for (const h of ids) {
         const u = await getBlobObjectUrl(h);
-        if (u) next[h] = u;
+        if (u) {
+          createdUrls.push(u);
+          next[h] = u;
+        }
       }
-      if (active) setBlobUrls(next);
+      if (active) {
+        setBlobUrls(next);
+      } else {
+        createdUrls.forEach((u) => URL.revokeObjectURL(u));
+      }
     })();
     return () => {
       active = false;
-      Object.values(blobUrls).forEach((u) => URL.revokeObjectURL(u));
+      createdUrls.forEach((u) => URL.revokeObjectURL(u));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNote?.id, activeNote?.payload.attachmentBlobIds?.length, activeNote?.payload.voiceMemoBlobIds?.length, activeNote?.payload.sketchBlobId]);
+
+  // IME-safe, cursor-preserving buffered title & body (fixes mobile cursor jump, autocorrect duplication & per-keystroke DB storm!)
+  const commitTitle = useCallback(
+    async (nextTitle: string) => {
+      if (!activeNote) return;
+      await updateRecord(activeNote.id, { title: nextTitle }, { skipUndo: true, skipRevision: true });
+    },
+    [activeNote]
+  );
+
+  const commitContent = useCallback(
+    async (nextContent: string, meta: { manual: boolean }) => {
+      if (!activeNote) return;
+      const entities = extractInlineEntities(nextContent);
+      const touched = Array.from(new Set([...(activeNote.payload.touchedDates ?? []), logicalToday]));
+      const nowMs = Date.now();
+      const lastRevMs = lastRevisionAtRef.current[activeNote.id] ?? 0;
+      const shouldSnapshotRevision = meta.manual || nowMs - lastRevMs >= 60_000;
+      if (shouldSnapshotRevision) {
+        lastRevisionAtRef.current[activeNote.id] = nowMs;
+      }
+      await updateRecord<NotePayload>(
+        activeNote.id,
+        (cur) => ({
+          ...cur,
+          tags: entities.tags,
+          payload: { ...cur.payload, content: nextContent, touchedDates: touched },
+        }),
+        { skipUndo: true, skipRevision: !shouldSnapshotRevision }
+      );
+    },
+    [activeNote, logicalToday]
+  );
+
+  const titleBuffer = useBufferedText({
+    recordKey: `${activeNote?.id ?? 'none'}:title`,
+    externalValue: activeNote?.title ?? '',
+    debounceMs: 550,
+    onCommit: commitTitle,
+  });
+
+  const bodyBuffer = useBufferedText({
+    recordKey: `${activeNote?.id ?? 'none'}:body`,
+    externalValue: activeNote?.payload.content ?? '',
+    debounceMs: 650,
+    onCommit: commitContent,
+  });
+
+  const handleManualSave = useCallback(async () => {
+    await Promise.all([titleBuffer.flushNow(true), bodyBuffer.flushNow(true)]);
+    pushToast('Saved note locally (queued for sync)');
+  }, [titleBuffer, bodyBuffer, pushToast]);
+
+  // Ctrl+S / Cmd+S manual save inside Notes
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void handleManualSave();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleManualSave]);
 
   const handleCreateNote = async () => {
     const nb = activeNotebook === 'all' ? 'nb_personal' : activeNotebook;
@@ -135,32 +221,21 @@ export const NotesView: React.FC = () => {
     });
     setSelectedNoteId(created.id);
     setViewMode('edit');
+    setMobilePane('editor');
     pushToast('Created new note', { canUndo: true });
   };
 
   const handleContentChange = (nextContent: string) => {
     if (!activeNote) return;
-    // Detect [[ autocomplete trigger
+    bodyBuffer.handleChange(nextContent);
     const m = nextContent.match(/\[\[([^[\]]*)$/);
     setAutocompleteQuery(m ? m[1] : null);
-
-    const entities = extractInlineEntities(nextContent);
-    const touched = Array.from(new Set([...(activeNote.payload.touchedDates ?? []), logicalToday]));
-    void updateRecord<NotePayload>(
-      activeNote.id,
-      (cur) => ({
-        ...cur,
-        tags: entities.tags,
-        payload: { ...cur.payload, content: nextContent, touchedDates: touched },
-      }),
-      { skipUndo: true }
-    );
   };
 
   const insertSnippet = (snippet: string) => {
     if (!activeNote) return;
     const el = textareaRef.current;
-    const content = activeNote.payload.content ?? '';
+    const content = bodyBuffer.value;
     if (!el) {
       handleContentChange(`${content}\n${snippet}`);
       return;
@@ -169,6 +244,12 @@ export const NotesView: React.FC = () => {
     const end = el.selectionEnd;
     const next = content.slice(0, start) + snippet + content.slice(end);
     handleContentChange(next);
+    // Preserve cursor position right after the inserted snippet!
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + snippet.length;
+      el.setSelectionRange(pos, pos);
+    });
   };
 
   // Backlinks panel + broken-link detection (Section 03.03 & 12.01)
@@ -264,9 +345,31 @@ export const NotesView: React.FC = () => {
     pushToast('Saved stylus sketch block');
   };
 
-  const wordCount = activeNote
-    ? (activeNote.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length
-    : 0;
+  const liveText = bodyBuffer.value;
+  const wordCount = activeNote ? liveText.trim().split(/\s+/).filter(Boolean).length : 0;
+  const charCount = activeNote ? liveText.length : 0;
+  const paragraphCount = activeNote ? liveText.split(/\n\s*\n/).filter((p) => p.trim().length > 0).length : 0;
+  const readTimeMin = Math.max(1, Math.ceil(wordCount / 220));
+
+  const combinedLocalSave =
+    titleBuffer.saveState === 'saving' || bodyBuffer.saveState === 'saving'
+      ? 'Saving locally…'
+      : titleBuffer.saveState === 'unsaved' || bodyBuffer.saveState === 'unsaved'
+        ? 'Unsaved changes'
+        : 'Saved locally ✓';
+
+  const combinedSyncLabel =
+    settings.operatingMode !== 'docker-sync'
+      ? 'Offline mode (on device)'
+      : syncState.status === 'syncing'
+        ? 'Synchronizing…'
+        : syncState.status === 'error'
+          ? 'Sync failed'
+          : syncState.status === 'offline'
+            ? `Waiting for sync (${syncState.pendingCount})`
+            : syncState.pendingCount > 0
+              ? `Waiting for sync (${syncState.pendingCount})`
+              : 'Fully synchronized ✓';
 
   return (
     <div className="dp-paper-sheet dp-stack" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-4)' }}>
@@ -459,9 +562,9 @@ export const NotesView: React.FC = () => {
           </svg>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 260px) minmax(0, 1fr)', gap: 14 }}>
+        <div className={`dp-split-pane ${mobilePane === 'editor' ? 'mobile-show-detail' : 'mobile-show-list'}`}>
           {/* Note List */}
-          <div className="dp-stack" style={{ gap: 6, maxHeight: '66dvh', overflowY: 'auto' }}>
+          <div className="dp-split-list dp-stack" style={{ gap: 6, maxHeight: '66dvh', overflowY: 'auto' }}>
             {visibleNotes.map((n) => (
               <button
                 key={n.id}
@@ -474,7 +577,10 @@ export const NotesView: React.FC = () => {
                   borderColor: n.id === activeNote?.id ? 'var(--dp-accent)' : undefined,
                   borderWidth: n.id === activeNote?.id ? 2 : 1,
                 }}
-                onClick={() => setSelectedNoteId(n.id)}
+                onClick={() => {
+                  setSelectedNoteId(n.id);
+                  setMobilePane('editor');
+                }}
               >
                 <div className="dp-between">
                   <strong style={{ fontSize: '0.9rem' }}>
@@ -491,15 +597,50 @@ export const NotesView: React.FC = () => {
 
           {/* Note Editor Canvas */}
           {activeNote ? (
-            <div className="dp-card dp-stack" style={{ padding: 16 }}>
-              <div className="dp-between">
+            <div className="dp-split-detail dp-card dp-stack" style={{ padding: 14 }}>
+              {/* Mobile-only Back to Notes List toggle + Save & Sync Status Strip */}
+              <div className="dp-between" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm dp-mobile-only"
+                    onClick={() => setMobilePane('list')}
+                  >
+                    <ArrowLeft size={14} /> All Notes ({visibleNotes.length})
+                  </button>
+                  <span
+                    className="dp-pill"
+                    style={{
+                      borderColor: combinedLocalSave.includes('Unsaved') ? 'var(--dp-warn)' : 'var(--dp-ok)',
+                      color: combinedLocalSave.includes('Unsaved') ? 'var(--dp-warn)' : undefined,
+                    }}
+                  >
+                    {combinedLocalSave}
+                  </span>
+                  <span className="dp-pill">{combinedSyncLabel}</span>
+                </div>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-primary dp-btn-sm"
+                  onClick={() => void handleManualSave()}
+                  title="Save immediately & create version snapshot (Ctrl+S)"
+                >
+                  <Save size={13} /> Save
+                </button>
+              </div>
+
+              <div className="dp-between" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <input
                   className="dp-input"
-                  style={{ fontSize: '1.2rem', fontFamily: 'var(--dp-font-heading)', fontWeight: 700, flex: 1 }}
-                  value={activeNote.title}
-                  onChange={(e) => void updateRecord(activeNote.id, { title: e.target.value }, { skipUndo: true })}
+                  style={{ fontSize: '1.15rem', fontFamily: 'var(--dp-font-heading)', fontWeight: 700, flex: '1 1 200px' }}
+                  value={titleBuffer.value}
+                  onChange={(e) => titleBuffer.handleChange(e.target.value)}
+                  onCompositionStart={titleBuffer.handleCompositionStart}
+                  onCompositionEnd={(e) => titleBuffer.handleCompositionEnd(e.currentTarget.value)}
+                  onBlur={titleBuffer.handleBlur}
+                  aria-label="Note title"
                 />
-                <div className="dp-row">
+                <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="dp-icon-btn"
@@ -514,7 +655,7 @@ export const NotesView: React.FC = () => {
                     <Pin size={15} fill={activeNote.payload.pinned ? 'currentColor' : 'none'} />
                   </button>
                   <button type="button" className="dp-btn dp-btn-sm" onClick={() => void openRevisions()}>
-                    <History size={14} /> Revisions
+                    <History size={14} /> History
                   </button>
                   <button
                     type="button"
@@ -538,12 +679,12 @@ export const NotesView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Metadata row: Written-For Date vs Created + Notebook + Word count */}
-              <div className="dp-row" style={{ fontSize: '0.8rem' }}>
+              {/* Metadata row: Written-For Date vs Created + Notebook + Full Live Stats */}
+              <div className="dp-row" style={{ fontSize: '0.8rem', flexWrap: 'wrap', gap: 8 }}>
                 <select
                   aria-label="Subject notebook"
                   className="dp-select"
-                  style={{ width: 'auto', padding: '3px 8px' }}
+                  style={{ width: 'auto', padding: '4px 8px' }}
                   value={activeNote.payload.notebookId}
                   onChange={(e) =>
                     void updateRecord<NotePayload>(activeNote.id, (c) => ({
@@ -571,7 +712,10 @@ export const NotesView: React.FC = () => {
                     }
                   />
                 </label>
-                <span className="dp-muted">Created: {activeNote.createdAt.slice(0, 10)} · {wordCount.toLocaleString()} words (no limit)</span>
+                <span className="dp-muted">
+                  Created: {new Date(activeNote.createdAt).toLocaleDateString()} · Modified: {new Date(activeNote.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ·{' '}
+                  <strong>{wordCount.toLocaleString()}</strong> words · {charCount.toLocaleString()} chars · {paragraphCount} ¶ · ~{readTimeMin}m read
+                </span>
               </div>
 
               {/* Rich Block Toolbar */}
@@ -641,14 +785,25 @@ export const NotesView: React.FC = () => {
                 <textarea
                   ref={textareaRef}
                   className="dp-textarea"
-                  style={{ minHeight: 310, fontFamily: 'var(--dp-font-body)', lineHeight: 1.65 }}
+                  autoCorrect="on"
+                  autoCapitalize="sentences"
+                  spellCheck={true}
+                  style={{
+                    minHeight: 320,
+                    fontFamily: 'var(--dp-font-body)',
+                    lineHeight: 'var(--dp-line-height, 1.65)',
+                    fontSize: 'max(16px, 1rem)',
+                  }}
                   placeholder="Write freely in Markdown with [[WikiLinks]], @mentions, #tags, checklists (- [ ])…"
-                  value={activeNote.payload.content}
+                  value={bodyBuffer.value}
                   onChange={(e) => handleContentChange(e.target.value)}
+                  onCompositionStart={bodyBuffer.handleCompositionStart}
+                  onCompositionEnd={(e) => bodyBuffer.handleCompositionEnd(e.currentTarget.value)}
+                  onBlur={bodyBuffer.handleBlur}
                 />
               ) : (
                 <div className="dp-stack" style={{ minHeight: 310, padding: 10 }}>
-                  {(activeNote.payload.content ?? '').split(/\r?\n/).map((line, idx) => {
+                  {bodyBuffer.value.split(/\r?\n/).map((line, idx) => {
                     const checkMatch = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.*)$/);
                     if (checkMatch) {
                       const checked = checkMatch[2].toLowerCase() === 'x';
@@ -660,7 +815,7 @@ export const NotesView: React.FC = () => {
                               type="checkbox"
                               checked={checked}
                               onChange={() => {
-                                const lines = activeNote.payload.content.split(/\r?\n/);
+                                const lines = bodyBuffer.value.split(/\r?\n/);
                                 lines[idx] = `${checkMatch[1]}- [${checked ? ' ' : 'x'}] ${label}`;
                                 handleContentChange(lines.join('\n'));
                               }}
@@ -770,38 +925,117 @@ export const NotesView: React.FC = () => {
         </div>
       )}
 
-      {/* 20+ Revisions History & Restore Modal */}
-      <ModalDialog open={revisionsOpen} onClose={() => setRevisionsOpen(false)} title={`Revisions (${revisions.length} saved)`} wide>
+      {/* Version History, Named Checkpoints & Line-by-Line Diff Modal */}
+      <ModalDialog open={revisionsOpen} onClose={() => setRevisionsOpen(false)} title={`Version History (${revisions.length} saved)`} wide>
+        {activeNote && (
+          <div className="dp-card dp-row" style={{ padding: 10, background: 'var(--dp-surface-2)', gap: 8 }}>
+            <input
+              className="dp-input"
+              style={{ flex: 1 }}
+              placeholder="Name this checkpoint (e.g., Draft 1, Before Lab Review)…"
+              value={checkpointLabel}
+              onChange={(e) => setCheckpointLabel(e.target.value)}
+            />
+            <button
+              type="button"
+              className="dp-btn dp-btn-primary dp-btn-sm"
+              onClick={async () => {
+                await handleManualSave();
+                await createNamedNoteCheckpoint(activeNote.id, checkpointLabel);
+                setCheckpointLabel('');
+                setRevisions(await getNoteRevisions(activeNote.id));
+                pushToast('Saved named checkpoint!');
+              }}
+            >
+              <BookmarkPlus size={14} /> Save Checkpoint
+            </button>
+          </div>
+        )}
+
         {revisions.length === 0 ? (
-          <p className="dp-muted">No prior revisions recorded yet.</p>
+          <p className="dp-muted">No prior versions recorded yet. Click Save Checkpoint above to record a named snapshot.</p>
         ) : (
           <div className="dp-stack">
-            {revisions.map((rev) => (
-              <div key={rev.id} className="dp-card dp-stack" style={{ padding: 10, gap: 6 }}>
-                <div className="dp-between">
-                  <strong>{new Date(rev.timestamp).toLocaleString()}</strong>
-                  <button
-                    type="button"
-                    className="dp-btn dp-btn-primary dp-btn-sm"
-                    onClick={async () => {
-                      if (!activeNote) return;
-                      await updateRecord<NotePayload>(
-                        activeNote.id,
-                        (c) => ({ ...c, title: rev.title, payload: { ...c.payload, content: rev.content } }),
-                        { undoLabel: 'Restored note revision' }
-                      );
-                      setRevisionsOpen(false);
-                      pushToast('Restored note revision', { canUndo: true });
-                    }}
-                  >
-                    Restore This Revision
-                  </button>
+            {revisions.map((rev, idx) => {
+              const prevRev = revisions[idx + 1];
+              const diff = computeLineDiff(prevRev?.content ?? '', rev.content);
+              const showDiff = diffRevId === rev.id;
+              return (
+                <div key={rev.id} className="dp-card dp-stack" style={{ padding: 10, gap: 6 }}>
+                  <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+                    <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                      <strong>{new Date(rev.timestamp).toLocaleString()}</strong>
+                      {rev.label && <span className="dp-pill highlight">🔖 {rev.label}</span>}
+                      <span className="dp-pill" style={{ color: 'var(--dp-ok)' }}>+{diff.addedCount}</span>
+                      <span className="dp-pill" style={{ color: 'var(--dp-danger)' }}>−{diff.removedCount}</span>
+                    </div>
+                    <div className="dp-row" style={{ gap: 6 }}>
+                      <button
+                        type="button"
+                        className="dp-btn dp-btn-sm"
+                        onClick={() => setDiffRevId(showDiff ? null : rev.id)}
+                      >
+                        {showDiff ? 'Hide Diff' : 'View Changes'}
+                      </button>
+                      <button
+                        type="button"
+                        className="dp-btn dp-btn-primary dp-btn-sm"
+                        onClick={async () => {
+                          if (!activeNote) return;
+                          await updateRecord<NotePayload>(
+                            activeNote.id,
+                            (c) => ({ ...c, title: rev.title, payload: { ...c.payload, content: rev.content } }),
+                            { undoLabel: 'Restored note revision' }
+                          );
+                          setRevisionsOpen(false);
+                          pushToast('Restored note revision', { canUndo: true });
+                        }}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  </div>
+
+                  {showDiff ? (
+                    <div
+                      style={{
+                        fontFamily: 'var(--dp-font-mono)',
+                        fontSize: '0.78rem',
+                        maxHeight: 220,
+                        overflow: 'auto',
+                        background: 'var(--dp-surface-2)',
+                        padding: 8,
+                        borderRadius: 6,
+                      }}
+                    >
+                      {diff.lines.slice(0, 120).map((ln, li) => (
+                        <div
+                          key={li}
+                          style={{
+                            padding: '1px 6px',
+                            background:
+                              ln.type === 'added'
+                                ? 'color-mix(in oklch, var(--dp-ok) 18%, transparent)'
+                                : ln.type === 'removed'
+                                  ? 'color-mix(in oklch, var(--dp-danger) 18%, transparent)'
+                                  : 'transparent',
+                            color: ln.type === 'removed' ? 'var(--dp-danger)' : undefined,
+                            whiteSpace: 'pre-wrap',
+                          }}
+                        >
+                          {ln.type === 'added' ? '+ ' : ln.type === 'removed' ? '- ' : '  '}
+                          {ln.text}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '0.8rem', maxHeight: 110, overflow: 'auto' }}>
+                      {rev.content.slice(0, 400)}
+                    </pre>
+                  )}
                 </div>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '0.8rem', maxHeight: 110, overflow: 'auto' }}>
-                  {rev.content.slice(0, 400)}
-                </pre>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </ModalDialog>

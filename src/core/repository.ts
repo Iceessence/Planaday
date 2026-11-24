@@ -28,6 +28,8 @@ export interface SaveOptions {
   undoLabel?: string;
   skipUndo?: boolean;
   skipOutbox?: boolean;
+  skipRevision?: boolean;
+  revisionLabel?: string;
 }
 
 async function pushUndoEntry(entry: UndoEntry): Promise<void> {
@@ -40,16 +42,62 @@ async function pushUndoEntry(entry: UndoEntry): Promise<void> {
   }
 }
 
+/**
+ * Coalesces pending sync operations per recordId so editing the same note 2,000 times
+ * keeps ONLY 1 queued operation in IndexedDB (preserving the earliest baseRev for safe conflict detection).
+ */
 async function enqueueOutbox(record: LifeRecord, baseRev: number): Promise<void> {
+  const existingOps = await db.outbox.where('recordId').equals(record.id).toArray();
+  let effectiveBaseRev = baseRev;
+  if (existingOps.length > 0) {
+    // Keep the lowest/earliest baseRev across any pending ops for this record
+    effectiveBaseRev = existingOps.reduce((min, op) => Math.min(min, op.baseRev), baseRev);
+    await db.outbox.bulkDelete(existingOps.map((o) => o.opId));
+  }
   await db.outbox.put({
     opId: createId('op'),
     recordId: record.id,
     operation: 'upsert',
     record,
-    baseRev,
+    baseRev: effectiveBaseRev,
     createdAt: new Date().toISOString(),
     attempts: 0,
   });
+}
+
+/**
+ * Compacts any pre-existing uncoalesced outbox backlog (e.g., from older builds before v2.1.0)
+ * down to at most 1 operation per unique recordId without losing a single edit.
+ */
+export async function compactOutbox(): Promise<{ before: number; after: number; removed: number }> {
+  const all = await db.outbox.orderBy('createdAt').toArray();
+  if (all.length <= 1) return { before: all.length, after: all.length, removed: 0 };
+
+  const byRec = new Map<string, typeof all>();
+  for (const op of all) {
+    const list = byRec.get(op.recordId) ?? [];
+    list.push(op);
+    byRec.set(op.recordId, list);
+  }
+
+  const deleteIds: string[] = [];
+  const updates: typeof all = [];
+  for (const list of byRec.values()) {
+    if (list.length <= 1) continue;
+    const earliestBaseRev = list.reduce((min, o) => Math.min(min, o.baseRev), list[0].baseRev);
+    const newest = list[list.length - 1];
+    for (let i = 0; i < list.length - 1; i++) {
+      deleteIds.push(list[i].opId);
+    }
+    updates.push({ ...newest, baseRev: earliestBaseRev });
+  }
+
+  if (deleteIds.length > 0) {
+    await db.outbox.bulkDelete(deleteIds);
+    await db.outbox.bulkPut(updates);
+  }
+
+  return { before: all.length, after: all.length - deleteIds.length, removed: deleteIds.length };
 }
 
 export async function createRecord<P = Record<string, unknown>>(
@@ -156,11 +204,11 @@ export async function updateRecord<P = Record<string, unknown>>(
     });
   }
 
-  if (updated.type === 'note') {
+  if (updated.type === 'note' && !options.skipRevision) {
     const oldContent = (existing.payload as unknown as NotePayload)?.content ?? '';
     const newContent = (updated.payload as unknown as NotePayload)?.content ?? '';
-    if (oldContent !== newContent) {
-      await saveNoteRevision(updated as unknown as LifeRecord<NotePayload>);
+    if (oldContent !== newContent || options.revisionLabel) {
+      await saveNoteRevision(updated as unknown as LifeRecord<NotePayload>, options.revisionLabel);
     }
   }
 
@@ -199,20 +247,31 @@ export async function batchApplyChanges(
   notify();
 }
 
-async function saveNoteRevision(note: LifeRecord<NotePayload>): Promise<void> {
+async function saveNoteRevision(note: LifeRecord<NotePayload>, label?: string): Promise<void> {
   const rev = {
     id: createId('nrev'),
     recordId: note.id,
     timestamp: new Date().toISOString(),
     title: note.title,
     content: note.payload?.content ?? '',
+    label: label?.trim() || undefined,
   };
   await db.revisions.put(rev);
   const all = await db.revisions.where('recordId').equals(note.id).sortBy('timestamp');
+  // Preserve named manual checkpoints preferentially when pruning oldest auto-revisions
   if (all.length > MAX_NOTE_REVISIONS) {
-    const excess = all.slice(0, all.length - MAX_NOTE_REVISIONS).map((r) => r.id);
-    await db.revisions.bulkDelete(excess);
+    const autoOnly = all.filter((r) => !r.label);
+    const excessCount = all.length - MAX_NOTE_REVISIONS;
+    const toDelete = (autoOnly.length >= excessCount ? autoOnly : all).slice(0, excessCount).map((r) => r.id);
+    await db.revisions.bulkDelete(toDelete);
   }
+}
+
+export async function createNamedNoteCheckpoint(recordId: string, label: string): Promise<boolean> {
+  const rec = (await db.records.get(recordId)) as LifeRecord<NotePayload> | undefined;
+  if (!rec || rec.type !== 'note') return false;
+  await saveNoteRevision(rec, label.trim() || `Checkpoint (${new Date().toLocaleTimeString()})`);
+  return true;
 }
 
 export async function getNoteRevisions(recordId: string) {

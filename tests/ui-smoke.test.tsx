@@ -41,7 +41,7 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
     });
 
     // Onboarding wizard appears first
-    expect(container.textContent).toContain('Welcome to Dayplana');
+    expect(container.textContent).toContain('Welcome to Planaday');
     const openBtn = Array.from(container.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('Open My Planner')
     );

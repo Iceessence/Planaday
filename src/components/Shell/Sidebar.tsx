@@ -173,9 +173,9 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
       <div className="dp-brand">
         <div className="dp-brand-mark">
           <span className="dp-brand-icon" aria-hidden="true">
-            {(settings.plannerTitle || 'D').charAt(0).toUpperCase()}
+            {(settings.plannerTitle || 'P').charAt(0).toUpperCase()}
           </span>
-          {!collapsed && <span>{settings.plannerTitle || 'Dayplana'}</span>}
+          {!collapsed && <span>{settings.plannerTitle || 'Planaday'}</span>}
         </div>
         <button
           type="button"

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Bell, BookOpen, Compass, ExternalLink, HelpCircle, Keyboard, Layers, PenTool, Search, Users } from 'lucide-react';
+import { Bell, BookOpen, Compass, ExternalLink, HelpCircle, History, Keyboard, Layers, PenTool, Search, Users } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
+import { PLANADAY_CHANGELOG } from '../../data/changelog';
 import type { NavView } from '../../core/types';
 
 interface FeatureDirectoryEntry {
@@ -161,6 +162,7 @@ const FEATURE_DIRECTORY: FeatureDirectoryEntry[] = [
 
 export const GuideView: React.FC = () => {
   const { settings, setActiveView } = useApp();
+  const [guideTab, setGuideTab] = useState<'directory' | 'changelog'>('directory');
   const [query, setQuery] = useState('');
 
   const filteredDirectory = useMemo(() => {
@@ -177,19 +179,91 @@ export const GuideView: React.FC = () => {
 
   return (
     <div className="dp-paper-sheet dp-stack" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-5)', gap: 18 }}>
-      <div className="dp-between">
+      <div className="dp-between" style={{ flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h2>
-            <BookOpen size={20} style={{ verticalAlign: '-3px' }} /> {settings.plannerTitle} Guide &amp; Documentation
+            <BookOpen size={20} style={{ verticalAlign: '-3px' }} /> {settings.plannerTitle} Guide, Feature Directory &amp; Changelog
           </h2>
           <p className="dp-muted" style={{ margin: '4px 0 0', fontSize: '0.88rem' }}>
-            Find any feature in seconds, learn what every control does, and personalize your planner.
+            Find any feature in seconds, check What&apos;s New in the permanent changelog, and customize every setting.
           </p>
         </div>
-        <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => setActiveView('settings')}>
-          Open Settings &amp; Personalization
-        </button>
+        <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`dp-btn dp-btn-sm ${guideTab === 'directory' ? 'dp-btn-primary' : ''}`}
+            onClick={() => setGuideTab('directory')}
+          >
+            <Compass size={14} /> Feature Directory
+          </button>
+          <button
+            type="button"
+            className={`dp-btn dp-btn-sm ${guideTab === 'changelog' ? 'dp-btn-primary' : ''}`}
+            onClick={() => setGuideTab('changelog')}
+          >
+            <History size={14} /> What&apos;s New &amp; Changelog (v{PLANADAY_CHANGELOG[0].version})
+          </button>
+          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('settings')}>
+            Open Settings
+          </button>
+        </div>
       </div>
+
+      {guideTab === 'changelog' ? (
+        <div className="dp-stack" style={{ gap: 14 }}>
+          {PLANADAY_CHANGELOG.map((rel) => (
+            <div key={rel.version} className="dp-card dp-stack" style={{ padding: 16, gap: 10 }}>
+              <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+                <strong style={{ fontSize: '1.08rem' }}>
+                  v{rel.version} — {rel.title}
+                </strong>
+                <span className="dp-pill highlight">Released {rel.date}</span>
+              </div>
+              {rel.highlights.length > 0 && (
+                <div>
+                  <strong style={{ fontSize: '0.86rem' }}>✨ New &amp; Improved Features</strong>
+                  <ul style={{ margin: '4px 0 0', paddingInlineStart: 20, fontSize: '0.86rem' }}>
+                    {rel.highlights.map((h, i) => <li key={i}>{h}</li>)}
+                  </ul>
+                </div>
+              )}
+              {rel.bugFixes.length > 0 && (
+                <div>
+                  <strong style={{ fontSize: '0.86rem' }}>🛠️ Bug Fixes</strong>
+                  <ul style={{ margin: '4px 0 0', paddingInlineStart: 20, fontSize: '0.86rem' }}>
+                    {rel.bugFixes.map((b, i) => <li key={i}>{b}</li>)}
+                  </ul>
+                </div>
+              )}
+              {rel.performanceAndSync.length > 0 && (
+                <div>
+                  <strong style={{ fontSize: '0.86rem' }}>⚡ Performance &amp; Synchronization</strong>
+                  <ul style={{ margin: '4px 0 0', paddingInlineStart: 20, fontSize: '0.86rem' }}>
+                    {rel.performanceAndSync.map((p, i) => <li key={i}>{p}</li>)}
+                  </ul>
+                </div>
+              )}
+              {rel.storageAndData.length > 0 && (
+                <div>
+                  <strong style={{ fontSize: '0.86rem' }}>🗄️ Storage &amp; Backups</strong>
+                  <ul style={{ margin: '4px 0 0', paddingInlineStart: 20, fontSize: '0.86rem' }}>
+                    {rel.storageAndData.map((s, i) => <li key={i}>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+              {rel.knownLimitations.length > 0 && (
+                <div>
+                  <strong style={{ fontSize: '0.86rem', color: 'var(--dp-warn)' }}>ℹ️ Honest Known Limitations</strong>
+                  <ul style={{ margin: '4px 0 0', paddingInlineStart: 20, fontSize: '0.84rem' }} className="dp-muted">
+                    {rel.knownLimitations.map((k, i) => <li key={i}>{k}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
 
       {/* Interactive "Where Do I Find...?" Directory */}
       <div className="dp-card dp-stack" style={{ padding: 14 }}>
@@ -249,7 +323,7 @@ export const GuideView: React.FC = () => {
               <strong>Planned vs. Actual</strong> lets you compare your original plan against <em>reality</em> so you can spot meetings that ran long or tasks that took less time than expected.
             </li>
             <li>
-              <strong>Log Actual</strong> opens a time editor pre-filled with the scheduled time plus 1-click buttons (<em>Ended Just Now</em>, <em>Started +10m Late</em>, <em>Ran +15m/+30m Long</em>) so you record when the event <em>actually</em> started and ended—and Dayplana shows the variance (e.g., <code>+20m over</code>).
+              <strong>Log Actual</strong> opens a time editor pre-filled with the scheduled time plus 1-click buttons (<em>Ended Just Now</em>, <em>Started +10m Late</em>, <em>Ran +15m/+30m Long</em>) so you record when the event <em>actually</em> started and ended—and Planaday shows the variance (e.g., <code>+20m over</code>).
             </li>
           </ul>
         </section>
@@ -321,6 +395,22 @@ export const GuideView: React.FC = () => {
         </div>
       </div>
 
+      {/* Lock-Screen Notifications, Sync & Storage Setup Guide */}
+      <div className="dp-card dp-stack" style={{ padding: 14, gap: 8 }}>
+        <h4>📱 Phone Lock-Screen Alerts, Background Sync &amp; Server Storage</h4>
+        <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: '0.84rem', display: 'grid', gap: 5 }}>
+          <li>
+            <strong>Android APK Lock-Screen Alerts:</strong> After installing the Planaday Android APK, go to Android <em>Settings → Apps → Planaday</em> and enable <strong>Notifications</strong>, grant <strong>Alarms &amp; reminders</strong>, and set <strong>Battery</strong> to <strong>Unrestricted</strong> so Android Doze does not delay alarms.
+          </li>
+          <li>
+            <strong>Browser / iOS Alerts when Closed:</strong> Mobile web browsers pause tabs when locked; connect a free <strong>ntfy.sh</strong> topic in <em>Settings → Notifications</em> so your Docker server delivers alerts even when every browser is closed.
+          </li>
+          <li>
+            <strong>Where Your Data Lives:</strong> On your device in IndexedDB (<code>dayplana-v2</code>, zero <code>localStorage</code>); on your server in SQLite (<code>/data/dayplana.sqlite</code>) + blobs and automated daily SQLite snapshots in <code>/data/blobs/db-backups/</code> on TrueNAS. Inspect live paths and trigger instant backups anytime in <strong>Settings → Sync &amp; Storage</strong>.
+          </li>
+        </ul>
+      </div>
+
       <div className="dp-row">
         <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('today')}>
           Go to Today Spread
@@ -332,6 +422,8 @@ export const GuideView: React.FC = () => {
           <Layers size={13} /> Go to All-in-One Scroll
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 };

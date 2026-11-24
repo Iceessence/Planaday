@@ -1,7 +1,7 @@
 {
-  "name": "dayplana-desktop",
-  "version": "2.0.0",
-  "description": "Dayplana Native Desktop App — Standalone Offline Life Planner with Background Alarms & Docker Sync",
+  "name": "planaday-desktop",
+  "version": "2.1.0",
+  "description": "Planaday Native Desktop App — Standalone Offline Life Planner with Background Alarms & Docker Sync",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
@@ -11,7 +11,7 @@
   },
   "build": {
     "appId": "com.dayplana.desktop",
-    "productName": "Dayplana",
+    "productName": "Planaday",
     "directories": {
       "output": "release"
     },

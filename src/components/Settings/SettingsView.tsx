@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bell, Plus, Trash2, Users, Volume2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import {
@@ -19,8 +19,15 @@ import {
   saveDirectToDiskFolder,
   triggerBrowserDownload,
 } from '../../core/backup';
-import { normalizeServerUrl, resolveConflict, testServerConnection } from '../../core/sync';
-import { wipeSampleData } from '../../core/repository';
+import {
+  fetchServerStorageInfo,
+  normalizeServerUrl,
+  resolveConflict,
+  testServerConnection,
+  triggerServerSqliteBackup,
+  type ServerStorageInfo,
+} from '../../core/sync';
+import { compactOutbox, wipeSampleData } from '../../core/repository';
 import { applyOnboardingPreset, ONBOARDING_PRESETS } from '../../data/sampleData';
 import { audioEngine } from '../../core/audio';
 import {
@@ -104,6 +111,19 @@ export const SettingsView: React.FC = () => {
   const [syncFallbackDraft, setSyncFallbackDraft] = useState(settings.syncFallbackUrl || '');
   const [syncTestOutput, setSyncTestOutput] = useState('');
   const [syncTesting, setSyncTesting] = useState(false);
+  const [serverStorage, setServerStorage] = useState<ServerStorageInfo | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  useEffect(() => {
+    if (tab !== 'sync') return;
+    let cancelled = false;
+    void fetchServerStorageInfo().then((info) => {
+      if (!cancelled) setServerStorage(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, syncState.lastSyncAt, settings.syncServerUrl]);
 
   const importBackupRef = useRef<HTMLInputElement | null>(null);
   const importThemeRef = useRef<HTMLInputElement | null>(null);
@@ -224,6 +244,58 @@ export const SettingsView: React.FC = () => {
                 <input type="checkbox" checked={np.osPushEnabled} onChange={(e) => updateNotif({ osPushEnabled: e.target.checked })} />
                 <span>Show OS / System Banner</span>
               </label>
+              <label className="dp-row" style={{ cursor: 'pointer' }}>
+                <input type="checkbox" checked={np.vibrateEnabled !== false} onChange={(e) => updateNotif({ vibrateEnabled: e.target.checked })} />
+                <span>Vibrate on Phone</span>
+              </label>
+            </div>
+
+            {/* Quiet Hours + Live Test Notification */}
+            <div className="dp-card dp-between" style={{ padding: 10, background: 'var(--dp-surface-2)', flexWrap: 'wrap', gap: 8 }}>
+              <div className="dp-row" style={{ gap: 8, flexWrap: 'wrap', fontSize: '0.84rem' }}>
+                <label className="dp-row" style={{ cursor: 'pointer', gap: 5 }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(np.quietHoursEnabled)}
+                    onChange={(e) => updateNotif({ quietHoursEnabled: e.target.checked })}
+                  />
+                  <strong>🌙 Quiet Hours (silences non-alarm alerts):</strong>
+                </label>
+                <input
+                  type="time"
+                  aria-label="Quiet hours start"
+                  className="dp-input"
+                  style={{ width: 118 }}
+                  value={np.quietHoursStart || '22:00'}
+                  onChange={(e) => updateNotif({ quietHoursStart: e.target.value })}
+                />
+                <span className="dp-muted">to</span>
+                <input
+                  type="time"
+                  aria-label="Quiet hours end"
+                  className="dp-input"
+                  style={{ width: 118 }}
+                  value={np.quietHoursEnd || '07:00'}
+                  onChange={(e) => updateNotif({ quietHoursEnd: e.target.value })}
+                />
+              </div>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => {
+                  audioEngine.playChime(np.chimeStyle, Math.max(0.05, np.volume / 100));
+                  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                    try {
+                      new Notification('Planaday Test Alert', { body: 'Notifications and sound are working on this device!' });
+                    } catch {
+                      // fallback toast below
+                    }
+                  }
+                  pushToast('🔔 Test notification fired! (Check OS banner & volume)');
+                }}
+              >
+                🔔 Send Test Notification
+              </button>
             </div>
 
             <div className="dp-grid-2" style={{ gap: 12 }}>
@@ -522,7 +594,7 @@ export const SettingsView: React.FC = () => {
                   className="dp-input"
                   value={settings.plannerTitle}
                   onChange={(e) => void patchSettings({ plannerTitle: e.target.value })}
-                  placeholder="Dayplana"
+                  placeholder="Planaday"
                 />
               </label>
               <label className="dp-stack" style={{ gap: 4 }}>
@@ -760,7 +832,7 @@ export const SettingsView: React.FC = () => {
                 className="dp-btn dp-btn-sm"
                 onClick={() => {
                   const text = serializeThemePack(settings.themePresetId, settings.customTokens, settings.paperMaterial);
-                  triggerBrowserDownload(text, `dayplana-${settings.themePresetId}.dmtheme`, 'application/json');
+                  triggerBrowserDownload(text, `planaday-${settings.themePresetId}.dmtheme`, 'application/json');
                 }}
               >
                 Export .dmtheme Pack
@@ -872,6 +944,59 @@ export const SettingsView: React.FC = () => {
                 />
               </label>
             ))}
+          </div>
+
+          {/* 4 User-Selectable Mobile Layout Modes & Scaling */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>📱 Phone &amp; Tablet Layout Mode + Interface Scale</h4>
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+              Choose how Planaday behaves on phones and remember it automatically across sessions.
+            </p>
+            <div className="dp-grid-2" style={{ gap: 8 }}>
+              {(
+                [
+                  ['adaptive', '📱 Adaptive Mobile (Default)', 'Automatically adapts to screen width with thumb-friendly controls & full-width editors.'],
+                  ['portrait', '↕️ Portrait Only', 'Locks into a clean vertical single-column phone experience even if rotated.'],
+                  ['portrait_landscape', '🔄 Portrait & Landscape', 'Stacks vertically in portrait and switches to side-by-side split view in landscape.'],
+                  ['desktop_zoom', '🖥️ Desktop Layout (Pinch-to-Zoom)', 'Shows the full desktop sidebar & wide multi-column workspace with pinch-to-zoom and panning.'],
+                ] as const
+              ).map(([modeId, title, desc]) => (
+                <button
+                  key={modeId}
+                  type="button"
+                  className="dp-card"
+                  style={{
+                    textAlign: 'start',
+                    padding: 10,
+                    cursor: 'pointer',
+                    borderColor: (settings.mobileLayoutMode ?? 'adaptive') === modeId ? 'var(--dp-accent)' : undefined,
+                    borderWidth: (settings.mobileLayoutMode ?? 'adaptive') === modeId ? 2 : 1,
+                  }}
+                  onClick={() => {
+                    void patchSettings({ mobileLayoutMode: modeId });
+                    pushToast(`Layout mode set to ${title}`);
+                  }}
+                >
+                  <strong style={{ fontSize: '0.88rem' }}>{title}</strong>
+                  <div className="dp-muted" style={{ fontSize: '0.78rem', marginTop: 4 }}>{desc}</div>
+                </button>
+              ))}
+            </div>
+            <label className="dp-row" style={{ gap: 10, fontSize: '0.84rem', marginTop: 4 }}>
+              <span className="dp-muted">Interface Scale: <strong>{settings.uiScalePct ?? 100}%</strong></span>
+              <input
+                type="range"
+                min={80}
+                max={130}
+                step={5}
+                style={{ flex: 1, maxWidth: 240 }}
+                value={settings.uiScalePct ?? 100}
+                onChange={(e) => void patchSettings({ uiScalePct: Number(e.target.value) })}
+              />
+              <button type="button" className="dp-btn dp-btn-sm" onClick={() => void patchSettings({ uiScalePct: 100 })}>
+                Reset 100%
+              </button>
+            </label>
           </div>
 
           {/* Phone Bottom Navigation Bar Customizer */}
@@ -1083,13 +1208,34 @@ export const SettingsView: React.FC = () => {
               <button type="button" className="dp-btn" onClick={() => void triggerSyncNow()}>
                 Sync Now
               </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={async () => {
+                  const res = await compactOutbox();
+                  pushToast(`Compacted queue: ${res.before} → ${res.after} ops (${res.removed} redundant removed)`);
+                  await triggerSyncNow();
+                }}
+              >
+                Compact Queue
+              </button>
               {syncState.lastSyncAt && (
                 <span className="dp-muted" style={{ fontSize: '0.82rem' }}>
                   Last synced: {new Date(syncState.lastSyncAt).toLocaleString()}
+                  {typeof syncState.lastSyncDurationMs === 'number' ? ` (${syncState.lastSyncDurationMs}ms)` : ''}
                 </span>
               )}
               {syncState.errorMessage && (
                 <span style={{ color: 'var(--dp-danger)', fontSize: '0.82rem' }}>{syncState.errorMessage}</span>
+              )}
+            </div>
+            <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap', fontSize: '0.78rem' }}>
+              <span className="dp-pill">Queue Size: {syncState.pendingCount} ops ({((syncState.queueBytesEstimate ?? 0) / 1024).toFixed(1)} KB)</span>
+              {typeof syncState.lastSyncedOpsCount === 'number' && (
+                <span className="dp-pill">Last Push: {syncState.lastSyncedOpsCount} op(s)</span>
+              )}
+              {(syncState.compactedOpsTotal ?? 0) > 0 && (
+                <span className="dp-pill highlight">Coalesced {syncState.compactedOpsTotal} duplicate ops</span>
               )}
             </div>
             {syncTestOutput && (
@@ -1097,6 +1243,78 @@ export const SettingsView: React.FC = () => {
                 {syncTestOutput}
               </pre>
             )}
+          </div>
+
+          {/* Live Storage & Backup Architecture Dashboard (Local Device vs Docker + TrueNAS) */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <h4>Where Your Data Is Stored &amp; Server SQLite Backups</h4>
+                <p className="dp-muted" style={{ margin: '2px 0 0', fontSize: '0.8rem' }}>
+                  Local edits save first to your device&apos;s IndexedDB, then sync to your self-hosted Docker SQLite + TrueNAS blob mount.
+                </p>
+              </div>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => void fetchServerStorageInfo().then(setServerStorage)}
+                >
+                  Refresh Info
+                </button>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-primary dp-btn-sm"
+                  disabled={backupBusy || !serverStorage}
+                  onClick={async () => {
+                    setBackupBusy(true);
+                    const res = await triggerServerSqliteBackup();
+                    setBackupBusy(false);
+                    if (res.ok) {
+                      pushToast(`Backed up SQLite snapshot (${((res.sizeBytes ?? 0) / 1024).toFixed(1)} KB) to TrueNAS blobs/db-backups!`);
+                      void fetchServerStorageInfo().then(setServerStorage);
+                    } else {
+                      pushToast(res.error || 'Backup failed', { tone: 'warn' });
+                    }
+                  }}
+                >
+                  {backupBusy ? 'Backing up…' : 'Backup SQLite to TrueNAS Now'}
+                </button>
+              </div>
+            </div>
+
+            <div className="dp-grid-2" style={{ gap: 10, fontSize: '0.82rem' }}>
+              <div className="dp-card dp-stack" style={{ padding: 10, gap: 4, background: 'var(--dp-surface-2)' }}>
+                <strong>📱 This Device (Offline-First IndexedDB)</strong>
+                <span className="dp-muted">Database: <code>dayplana-v2</code> (Zero localStorage)</span>
+                {storageHealth && (
+                  <span className="dp-muted">
+                    Persistent: {storageHealth.persisted ? 'Granted ✓' : 'Best-Effort'} · Used:{' '}
+                    {(storageHealth.usageBytes / (1024 * 1024)).toFixed(2)} MB
+                  </span>
+                )}
+                <span className="dp-muted">Survives app crashes, restarts &amp; offline travel.</span>
+              </div>
+
+              <div className="dp-card dp-stack" style={{ padding: 10, gap: 4, background: 'var(--dp-surface-2)' }}>
+                <strong>🗄️ Server (Docker Volume + TrueNAS Blobs)</strong>
+                {serverStorage ? (
+                  <>
+                    <span className="dp-muted">
+                      SQLite: <code>{serverStorage.sqlitePath}</code> ({(serverStorage.sqliteSizeBytes / 1024).toFixed(1)} KB · {serverStorage.recordCount} records)
+                    </span>
+                    <span className="dp-muted">
+                      Blobs (TrueNAS): <code>{serverStorage.blobsDir}</code> ({serverStorage.blobCount} files · {(serverStorage.blobTotalBytes / (1024 * 1024)).toFixed(2)} MB)
+                    </span>
+                    <span className="dp-muted">
+                      Connected Live Devices (SSE): <strong>{serverStorage.sseClientCount}</strong> · Auto-backups saved: <strong>{serverStorage.backups.length}</strong>
+                    </span>
+                  </>
+                ) : (
+                  <span className="dp-muted">Connect your Docker server above to inspect live SQLite &amp; TrueNAS backup paths.</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {openConflicts.length > 0 && (
@@ -1219,7 +1437,7 @@ export const SettingsView: React.FC = () => {
                 className="dp-btn dp-btn-primary"
                 onClick={async () => {
                   const zip = await exportFullZipBackup();
-                  triggerBrowserDownload(zip, `dayplana-full-backup-${logicalToday}.zip`, 'application/zip');
+                  triggerBrowserDownload(zip, `planaday-full-backup-${logicalToday}.zip`, 'application/zip');
                   pushToast('Downloaded full ZIP backup (records + blobs).');
                 }}
               >
@@ -1230,7 +1448,7 @@ export const SettingsView: React.FC = () => {
                 className="dp-btn"
                 onClick={async () => {
                   const json = await exportFullJsonBackup();
-                  triggerBrowserDownload(json, `dayplana-backup-${logicalToday}.json`, 'application/json');
+                  triggerBrowserDownload(json, `planaday-backup-${logicalToday}.json`, 'application/json');
                   pushToast('Downloaded JSON backup.');
                 }}
               >
