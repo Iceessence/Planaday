@@ -13,6 +13,16 @@ import {
 import { buildDayplanaServer } from '../server/index';
 import { isMedicationRefillDue } from '../src/modules/life/HouseholdHealthView';
 import { isRecordVisibleForProfile } from '../src/core/AppContext';
+import { normalizeServerUrl, testServerConnection } from '../src/core/sync';
+import { describeWeatherCode } from '../src/core/weather';
+import { getDailyFact, getFactTopics, OFFLINE_LEARNING_FACTS } from '../src/data/facts';
+import {
+  computeNextAlarmTrigger,
+  doesAlarmMatchMoment,
+  formatRepeatDaysSummary,
+} from '../src/core/alarmSchedule';
+import { ALARM_RINGTONES, getRingtoneLabel } from '../src/core/audio';
+import { DIARY_PROMPTS, THOUGHT_PROMPTS } from '../src/data/prompts';
 import type { CalendarEventPayload, ChorePayload, LifeRecord } from '../src/core/types';
 
 describe('Upgrades — Seconds Timers, Post-Now Free Time, Chore Punctuality, Event Reviews & Server Push', () => {
@@ -195,5 +205,84 @@ describe('Upgrades — Seconds Timers, Post-Now Free Time, Chore Punctuality, Ev
     const sharedDad = { ...baseRec, sharedWithProfileIds: ['prof_dad'] };
     expect(isRecordVisibleForProfile(sharedDad, 'prof_dad')).toBe(true);
     expect(isRecordVisibleForProfile(sharedDad, 'prof_kid')).toBe(false);
+  });
+
+  it('normalizes bare LAN / Tailscale URLs and verifies real /api/health connectivity cleanly', async () => {
+    expect(normalizeServerUrl('192.168.88.31:3000')).toBe('http://192.168.88.31:3000');
+    expect(normalizeServerUrl('100.84.12.5:3000/')).toBe('http://100.84.12.5:3000');
+    expect(normalizeServerUrl('dayplana.tail1234.ts.net')).toBe('https://dayplana.tail1234.ts.net');
+    expect(normalizeServerUrl('http://192.168.88.31:3000/api/health')).toBe('http://192.168.88.31:3000');
+    expect(normalizeServerUrl('')).toBe('');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dayplana-sync-test-'));
+    const { app } = await buildDayplanaServer({ dataDir: tmpDir });
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+
+    try {
+      const okRes = await testServerConnection(address);
+      expect(okRes.ok).toBe(true);
+      expect(okRes.recordCount).toBe(0);
+      expect(okRes.latencyMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await app.close();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('provides 120 offline facts across 12 topics with topic filtering and WMO weather descriptions', () => {
+    expect(OFFLINE_LEARNING_FACTS.length).toBe(120);
+    const topics = getFactTopics();
+    expect(topics[0]).toBe('All');
+    expect(topics.length).toBeGreaterThanOrEqual(13); // All + 12 topics
+
+    const spaceFact = getDailyFact('2026-11-23', 0, [], 'Space');
+    expect(spaceFact.fact.topic).toBe('Space');
+    expect(spaceFact.totalInDeck).toBeGreaterThanOrEqual(5);
+
+    const customDeck = [{ id: 999, topic: 'Family', text: 'Pizza Friday starts at 6 PM!' }];
+    const famFact = getDailyFact('2026-11-23', 0, customDeck, 'Family');
+    expect(famFact.fact.text).toContain('Pizza Friday');
+    expect(famFact.totalInDeck).toBe(1);
+
+    expect(describeWeatherCode(0).label).toBe('Clear Sky');
+    expect(describeWeatherCode(63).emoji).toBe('🌧️');
+    expect(describeWeatherCode(95).label).toContain('Thunderstorm');
+  });
+
+  it('schedules recurring weekday and specific-date alarms accurately and provides 8+ ringtones & 85+ reflection/thought prompts', () => {
+    // Weekday-only alarm (Mon-Fri) at 07:00
+    const weekdayAlarm = {
+      time: '07:00',
+      enabled: true,
+      scheduleType: 'recurring',
+      repeatDays: [1, 2, 3, 4, 5],
+      ringtone: 'classic_bell',
+    };
+    // Monday 2026-11-23 is day=1 -> matches!
+    expect(doesAlarmMatchMoment(weekdayAlarm, '2026-11-23', 1, '07:00')).toBe(true);
+    // Sunday 2026-11-22 is day=0 -> must NOT ring!
+    expect(doesAlarmMatchMoment(weekdayAlarm, '2026-11-22', 0, '07:00')).toBe(false);
+    expect(formatRepeatDaysSummary([1, 2, 3, 4, 5], 'recurring')).toBe('Weekdays');
+
+    // One-time scheduled alarm for 2026-12-03 at 05:30
+    const flightAlarm = {
+      time: '05:30',
+      enabled: true,
+      scheduleType: 'once',
+      scheduleDate: '2026-12-03',
+      ringtone: 'urgent_siren',
+    };
+    expect(doesAlarmMatchMoment(flightAlarm, '2026-12-02', 3, '05:30')).toBe(false);
+    expect(doesAlarmMatchMoment(flightAlarm, '2026-12-03', 4, '05:30')).toBe(true);
+    const nextFlight = computeNextAlarmTrigger(flightAlarm, new Date(2026, 10, 23, 20, 0, 0));
+    expect(nextFlight?.dateIso).toBe('2026-12-03');
+    expect(formatRepeatDaysSummary([], 'once', '2026-12-03')).toBe('Once · 2026-12-03');
+
+    // Ringtones & categorized prompts
+    expect(ALARM_RINGTONES.length).toBeGreaterThanOrEqual(8);
+    expect(getRingtoneLabel('sunrise_harp')).toContain('Sunrise Harp');
+    expect(getRingtoneLabel('blob:abc123', 'MySong.mp3')).toContain('MySong.mp3');
+    expect(DIARY_PROMPTS.length).toBeGreaterThanOrEqual(50);
+    expect(THOUGHT_PROMPTS.length).toBeGreaterThanOrEqual(35);
   });
 });

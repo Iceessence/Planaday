@@ -4,6 +4,7 @@ import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { canonicalizeIngredientName, computeLotFreshness } from '../../core/kitchenActions';
 import { addDaysIso } from '../../core/temporal';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import type { LifeRecord, PantryLotPayload } from '../../core/types';
 
 const DEFAULT_ZONES = ['Fridge', 'Freezer', 'Dry Pantry', 'Spice Rack', 'Countertop', 'Unassigned'];
@@ -11,6 +12,10 @@ const DEFAULT_ZONES = ['Fridge', 'Freezer', 'Dry Pantry', 'Spice Rack', 'Counter
 export const PantryView: React.FC = () => {
   const { settings, records, logicalToday, pushToast } = useApp();
   const [zoneFilter, setZoneFilter] = useState('All');
+  const [pantrySearch, setPantrySearch] = useState('');
+  const [freshFilter, setFreshFilter] = useState<'all' | 'expiring' | 'low_stock'>('all');
+  const [pantrySortBy, setPantrySortBy] = useState<'expiry' | 'name' | 'qty' | 'zone'>('expiry');
+  const [pantrySortDir, setPantrySortDir] = useState<'asc' | 'desc'>('asc');
   const [name, setName] = useState('');
   const [qty, setQty] = useState(1);
   const [unit, setUnit] = useState('cup');
@@ -35,10 +40,27 @@ export const PantryView: React.FC = () => {
     [records]
   );
 
-  const visibleLots = useMemo(
-    () => (zoneFilter === 'All' ? lots : lots.filter((l) => l.payload.zone === zoneFilter)),
-    [lots, zoneFilter]
-  );
+  const visibleLots = useMemo(() => {
+    const q = pantrySearch.trim().toLowerCase();
+    const list = lots.filter((l) => {
+      if (zoneFilter !== 'All' && l.payload.zone !== zoneFilter) return false;
+      const fr = computeLotFreshness(l.payload, logicalToday);
+      if (freshFilter === 'expiring' && fr.status !== 'Use Soon' && fr.status !== 'Expires Today' && fr.status !== 'Expired') return false;
+      if (freshFilter === 'low_stock' && !(l.payload.parLevel && l.payload.quantity <= l.payload.parLevel)) return false;
+      if (q) {
+        const hay = `${l.title} ${l.payload.zone} ${l.payload.shelfBin ?? ''} ${l.payload.barcode ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const dir = pantrySortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (pantrySortBy === 'name') return a.title.localeCompare(b.title) * dir;
+      if (pantrySortBy === 'qty') return ((a.payload.quantity || 0) - (b.payload.quantity || 0)) * dir;
+      if (pantrySortBy === 'zone') return (a.payload.zone || '').localeCompare(b.payload.zone || '') * dir;
+      return (a.payload.bestByDate || '9999-12-31').localeCompare(b.payload.bestByDate || '9999-12-31') * dir;
+    });
+  }, [lots, zoneFilter, pantrySearch, freshFilter, logicalToday, pantrySortBy, pantrySortDir]);
 
   const handleBarcodeLookup = async () => {
     if (!barcode.trim()) return;
@@ -162,6 +184,37 @@ export const PantryView: React.FC = () => {
           }}
         />
       </div>
+
+      {/* Easy Sort & Filter Bar for Pantry */}
+      <SortFilterBar
+        search={pantrySearch}
+        onSearchChange={setPantrySearch}
+        searchPlaceholder="Search ingredients, shelves, barcodes…"
+        sortBy={pantrySortBy}
+        onSortByChange={(v) => setPantrySortBy(v as typeof pantrySortBy)}
+        sortOptions={[
+          { value: 'expiry', label: 'Best-By / Expiry' },
+          { value: 'name', label: 'Name (A–Z)' },
+          { value: 'qty', label: 'Quantity' },
+          { value: 'zone', label: 'Storage Zone' },
+        ]}
+        sortDir={pantrySortDir}
+        onSortDirToggle={() => setPantrySortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        chips={[
+          { value: 'all', label: 'All Lots' },
+          { value: 'expiring', label: '⚠️ Use Soon / Expired' },
+          { value: 'low_stock', label: '📉 Below Par Level' },
+        ]}
+        activeChip={freshFilter}
+        onChipChange={(v) => setFreshFilter(v as typeof freshFilter)}
+        totalCount={lots.length}
+        shownCount={visibleLots.length}
+        onReset={() => {
+          setPantrySearch('');
+          setFreshFilter('all');
+          setZoneFilter('All');
+        }}
+      />
 
       {/* Pantry Lots Grid */}
       <div className="dp-stack">

@@ -4,6 +4,7 @@ import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { addDaysIso, diffDaysIso, formatTimeDisplay } from '../../core/temporal';
 import { evaluateAutomations } from '../../core/automations';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import type { ChorePayload, LifeRecord, TaskPayload } from '../../core/types';
 
 export interface MedicationPayload {
@@ -114,6 +115,10 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
   const [medRefillDaysBefore, setMedRefillDaysBefore] = useState(7);
   const [medFoodNote, setMedFoodNote] = useState('With food');
   const [refillAddQty, setRefillAddQty] = useState<Record<string, number>>({});
+  const [medSearch, setMedSearch] = useState('');
+  const [medFilter, setMedFilter] = useState<'all' | 'refill_due' | 'taken_today' | 'remaining_today'>('all');
+  const [medSortBy, setMedSortBy] = useState<'time' | 'doses' | 'refillDate' | 'name'>('time');
+  const [medSortDir, setMedSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Workout & Wellness state
   const [workoutTitle, setWorkoutTitle] = useState('');
@@ -125,6 +130,31 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
   const members = useMemo(() => records.filter((r) => r.type === 'household_member'), [records]);
   const chores = useMemo(() => records.filter((r) => r.type === 'chore') as Array<LifeRecord<ChorePayload>>, [records]);
   const meds = useMemo(() => records.filter((r) => r.type === 'medication'), [records]);
+  const filteredMeds = useMemo(() => {
+    const q = medSearch.trim().toLowerCase();
+    const list = meds.filter((m) => {
+      const p = m.payload as Partial<MedicationPayload>;
+      const takenToday = (p.takenLog ?? []).some((x) => x.date === logicalToday);
+      const refillDue = isMedicationRefillDue(p, logicalToday).due;
+      if (medFilter === 'refill_due' && !refillDue) return false;
+      if (medFilter === 'taken_today' && !takenToday) return false;
+      if (medFilter === 'remaining_today' && takenToday) return false;
+      if (q) {
+        const hay = `${m.title} ${p.dose ?? ''} ${p.frequency ?? ''} ${p.foodNote ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const dir = medSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const pa = a.payload as Partial<MedicationPayload>;
+      const pb = b.payload as Partial<MedicationPayload>;
+      if (medSortBy === 'name') return a.title.localeCompare(b.title) * dir;
+      if (medSortBy === 'doses') return ((pa.pillsRemaining ?? 0) - (pb.pillsRemaining ?? 0)) * dir;
+      if (medSortBy === 'refillDate') return (pa.refillByDate || '9999').localeCompare(pb.refillByDate || '9999') * dir;
+      return (pa.timeOfDay || '99:99').localeCompare(pb.timeOfDay || '99:99') * dir;
+    });
+  }, [meds, medSearch, medFilter, medSortBy, medSortDir, logicalToday]);
   const workouts = useMemo(() => records.filter((r) => r.type === 'workout'), [records]);
   const wellnessLogs = useMemo(() => records.filter((r) => r.type === 'wellness_log'), [records]);
 
@@ -381,7 +411,37 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
           </div>
         </form>
 
-        {meds.map((m) => {
+        <SortFilterBar
+          search={medSearch}
+          onSearchChange={setMedSearch}
+          searchPlaceholder="Search medications, doses, instructions…"
+          sortBy={medSortBy}
+          onSortByChange={(v) => setMedSortBy(v as typeof medSortBy)}
+          sortOptions={[
+            { value: 'time', label: 'Reminder Time' },
+            { value: 'doses', label: 'Doses Remaining' },
+            { value: 'refillDate', label: 'Refill-By Date' },
+            { value: 'name', label: 'Name (A–Z)' },
+          ]}
+          sortDir={medSortDir}
+          onSortDirToggle={() => setMedSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          chips={[
+            { value: 'all', label: 'All Meds' },
+            { value: 'remaining_today', label: 'Not Taken Yet' },
+            { value: 'taken_today', label: 'Taken Today ✓' },
+            { value: 'refill_due', label: '⚠️ Refill Due' },
+          ]}
+          activeChip={medFilter}
+          onChipChange={(v) => setMedFilter(v as typeof medFilter)}
+          totalCount={meds.length}
+          shownCount={filteredMeds.length}
+          onReset={() => {
+            setMedSearch('');
+            setMedFilter('all');
+          }}
+        />
+
+        {filteredMeds.map((m) => {
           const p = m.payload as Partial<MedicationPayload>;
           const takenTodayEntries = (p.takenLog ?? []).filter((x) => x.date === logicalToday);
           const skippedToday = (p.skippedLog ?? []).some((x) => x.date === logicalToday);

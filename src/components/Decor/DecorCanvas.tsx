@@ -398,6 +398,36 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           }}
         >
           <div className="dp-row" style={{ gap: 4 }}>
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+              title="Preset: Crisp Fountain Black Pen"
+              onClick={() => { setInkTool('pen'); setInkColor('#2a241d'); setInkWidth(2.5); setInkOpacity(95); }}
+            >
+              🖋️ Fountain
+            </button>
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+              title="Preset: Warm Amber Highlighter"
+              onClick={() => { setInkTool('highlighter'); setInkColor('#e6b800'); setInkWidth(4); setInkOpacity(40); }}
+            >
+              🖍️ Hi-Lite
+            </button>
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+              title="Preset: Red Proofing Markup"
+              onClick={() => { setInkTool('fine'); setInkColor('#b5453a'); setInkWidth(3); setInkOpacity(92); }}
+            >
+              ✏️ Red Pen
+            </button>
+          </div>
+
+          <div className="dp-row" style={{ gap: 4 }}>
             {(
               [
                 ['pen', 'Pen', <PenTool size={12} key="p" />],

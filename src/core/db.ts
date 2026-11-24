@@ -114,8 +114,15 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
 
 export function createDefaultSettings(): AppSettings {
   const defaultTheme = THEME_PRESETS[0];
+  const isCapacitorNative =
+    typeof window !== 'undefined' &&
+    Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+  const isElectronDesktop =
+    typeof window !== 'undefined' && ('dayplanaDesktop' in window || window.location.port === '41932');
   const isLikelyServerOrigin =
     typeof window !== 'undefined' &&
+    !isCapacitorNative &&
+    !isElectronDesktop &&
     window.location.protocol.startsWith('http') &&
     window.location.hostname !== '';
   return {
@@ -134,10 +141,26 @@ export function createDefaultSettings(): AppSettings {
     plannerTitle: 'Dayplana',
     cardRadius: 'soft',
     hiddenSidebarViews: [],
-    operatingMode: isLikelyServerOrigin ? 'docker-sync' : 'offline-computer',
-    syncServerUrl: '', // same origin when served from Docker; editable for LAN/Tailscale URL
+    operatingMode: isLikelyServerOrigin ? 'docker-sync' : isCapacitorNative ? 'offline-phone' : 'offline-computer',
+    syncServerUrl: '', // same origin when served from Docker; set to http://192.168.x.x:3000 in native apps
+    syncFallbackUrl: '', // optional Tailscale IP/URL for away-from-home failover
     lastSyncSeq: 0,
     lastSyncAt: null,
+    weatherEnabled: true,
+    weatherLocationName: '',
+    weatherLat: null,
+    weatherLon: null,
+    weatherUnit: 'F',
+    cachedWeather: null,
+    factTopicFilter: 'All',
+    customTimerPresets: [],
+    customMoods: [],
+    customDiaryPrompts: [],
+    customThoughtPrompts: [],
+    customRingtones: [],
+    customNotebooks: [],
+    customMealFavorites: [],
+    defaultCurrency: 'USD',
     themePresetId: defaultTheme.id,
     customTokens: { ...defaultTheme.tokens },
     colorScheme: 'system',
@@ -211,6 +234,20 @@ export async function getOrInitSettings(): Promise<AppSettings> {
       plannerTitle: existing.plannerTitle || 'Dayplana',
       cardRadius: existing.cardRadius || 'soft',
       hiddenSidebarViews: Array.isArray(existing.hiddenSidebarViews) ? existing.hiddenSidebarViews : [],
+      syncFallbackUrl: existing.syncFallbackUrl ?? '',
+      weatherEnabled: existing.weatherEnabled ?? true,
+      weatherLocationName: existing.weatherLocationName ?? '',
+      weatherLat: existing.weatherLat ?? null,
+      weatherLon: existing.weatherLon ?? null,
+      weatherUnit: existing.weatherUnit ?? 'F',
+      cachedWeather: existing.cachedWeather ?? null,
+      factTopicFilter: existing.factTopicFilter ?? 'All',
+      customTimerPresets: Array.isArray(existing.customTimerPresets) ? existing.customTimerPresets : [],
+      customMoods: Array.isArray(existing.customMoods) ? existing.customMoods : [],
+      customDiaryPrompts: Array.isArray(existing.customDiaryPrompts) ? existing.customDiaryPrompts : [],
+      customNotebooks: Array.isArray(existing.customNotebooks) ? existing.customNotebooks : [],
+      customMealFavorites: Array.isArray(existing.customMealFavorites) ? existing.customMealFavorites : [],
+      defaultCurrency: existing.defaultCurrency || 'USD',
       notificationPrefs: {
         ...defaults.notificationPrefs,
         ...(existing.notificationPrefs ?? {}),

@@ -1,29 +1,50 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, Image as ImageIcon, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Download, Image as ImageIcon, Plus, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { createId, storeBlob } from '../../core/db';
 import { triggerBrowserDownload } from '../../core/backup';
 import { addDaysIso, formatDateLocalized } from '../../core/temporal';
-import type { DiaryPayload, LifeRecord } from '../../core/types';
-
-const PROMPTS = [
-  'What gave you the most calm energy today?',
-  'What small win deserves appreciation tonight?',
-  'What felt heavy today, and what can wait until tomorrow?',
-  'Who made your day a little warmer?',
-  'What is one thing you learned or noticed today?',
-];
+import { DIARY_PROMPTS, getDiaryPromptCategories } from '../../data/prompts';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import type { DiaryPayload, LifeRecord, PaperMaterial } from '../../core/types';
 
 const DEFAULT_MOODS = ['Great', 'Good', 'Okay', 'Low', 'Rough'];
 const EMOTION_TAGS = ['Calm', 'Grateful', 'Focused', 'Energized', 'Tired', 'Anxious', 'Inspired', 'Cozy'];
 
 export const DiaryView: React.FC = () => {
-  const { settings, records, activeDate, setActiveDate, logicalToday, pushToast } = useApp();
+  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast } = useApp();
+  const [promptCategory, setPromptCategory] = useState('All');
   const [promptIdx, setPromptIdx] = useState(0);
   const [customMood, setCustomMood] = useState('');
+  const [customPromptInput, setCustomPromptInput] = useState('');
   const [extraEntryText, setExtraEntryText] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyMoodFilter, setHistoryMoodFilter] = useState('all');
+  const [historySortBy, setHistorySortBy] = useState<'date' | 'energy' | 'sleep' | 'stress'>('date');
+  const [historySortDir, setHistorySortDir] = useState<'asc' | 'desc'>('desc');
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
+
+  const allMoods = useMemo(
+    () => Array.from(new Set([...DEFAULT_MOODS, ...(settings.customMoods ?? [])])),
+    [settings.customMoods]
+  );
+
+  const promptCategories = useMemo(
+    () => getDiaryPromptCategories(settings.customDiaryPrompts),
+    [settings.customDiaryPrompts]
+  );
+
+  const filteredPrompts = useMemo(() => {
+    const customWrapped = (settings.customDiaryPrompts ?? []).map((text) => ({ category: 'My Prompts', text }));
+    const combined = [...DIARY_PROMPTS, ...customWrapped];
+    if (promptCategory === 'All') return combined;
+    const subset = combined.filter((p) => p.category === promptCategory);
+    return subset.length > 0 ? subset : combined;
+  }, [settings.customDiaryPrompts, promptCategory]);
+
+  const activePrompt = filteredPrompts[promptIdx % filteredPrompts.length] ?? DIARY_PROMPTS[0];
 
   const diaries = useMemo(
     () =>
@@ -32,6 +53,26 @@ export const DiaryView: React.FC = () => {
       ),
     [records]
   );
+
+  const filteredHistoryDiaries = useMemo(() => {
+    const q = historySearch.trim().toLowerCase();
+    const list = diaries.filter((d) => {
+      const p = d.payload;
+      if (historyMoodFilter !== 'all' && p.mood !== historyMoodFilter) return false;
+      if (q) {
+        const hay = `${p.date} ${p.mood ?? ''} ${(p.emotions ?? []).join(' ')} ${p.summary ?? ''} ${p.gratitude ?? ''} ${p.wins ?? ''} ${p.learned ?? ''} ${p.narrative ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const dir = historySortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (historySortBy === 'energy') return ((a.payload.energy ?? 0) - (b.payload.energy ?? 0)) * dir;
+      if (historySortBy === 'sleep') return ((a.payload.sleepHours ?? 0) - (b.payload.sleepHours ?? 0)) * dir;
+      if (historySortBy === 'stress') return ((a.payload.stress ?? 0) - (b.payload.stress ?? 0)) * dir;
+      return a.payload.date.localeCompare(b.payload.date) * dir;
+    });
+  }, [diaries, historySearch, historyMoodFilter, historySortBy, historySortDir]);
 
   const todayDiaryRec = diaries.find((d) => d.payload.date === activeDate);
   const entry: DiaryPayload = todayDiaryRec?.payload ?? { date: activeDate, emotions: [], extraEntries: [] };
@@ -116,25 +157,90 @@ export const DiaryView: React.FC = () => {
         </div>
       </div>
 
+      {/* In-Tab Diary Settings Drawer */}
+      <TabSettingsDrawer title="Diary Settings" subtitle="Customize journal paper surface, moods, and custom reflection prompts.">
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 12, fontSize: '0.83rem' }}>
+          <label className="dp-row" style={{ gap: 6 }}>
+            <span className="dp-muted">Paper Surface:</span>
+            <select
+              className="dp-select"
+              style={{ width: 'auto' }}
+              value={settings.paperMaterial}
+              onChange={(e) => void patchSettings({ paperMaterial: e.target.value as PaperMaterial })}
+            >
+              <option value="plain">Plain Stationery</option>
+              <option value="dot">Dot Grid</option>
+              <option value="lined">Lined Journal</option>
+              <option value="grid">Graph Grid</option>
+              <option value="cornell">Cornell</option>
+            </select>
+          </label>
+          <label className="dp-row" style={{ gap: 6 }}>
+            <span className="dp-muted">Font Size:</span>
+            <input
+              type="range"
+              min={13}
+              max={22}
+              value={settings.fontSizePx}
+              onChange={(e) => void patchSettings({ fontSizePx: Number(e.target.value) })}
+            />
+            <span>{settings.fontSizePx}px</span>
+          </label>
+        </div>
+        {(settings.customMoods?.length > 0 || settings.customDiaryPrompts?.length > 0) && (
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6, fontSize: '0.78rem' }}>
+            {(settings.customMoods ?? []).map((cm) => (
+              <span key={cm} className="dp-pill">
+                Mood: {cm}
+                <button
+                  type="button"
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', paddingInlineStart: 4, color: 'inherit' }}
+                  onClick={() => void patchSettings({ customMoods: (settings.customMoods ?? []).filter((x) => x !== cm) })}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {(settings.customDiaryPrompts ?? []).map((cp, i) => (
+              <span key={i} className="dp-pill">
+                Prompt: {cp.slice(0, 28)}…
+                <button
+                  type="button"
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', paddingInlineStart: 4, color: 'inherit' }}
+                  onClick={() => void patchSettings({ customDiaryPrompts: (settings.customDiaryPrompts ?? []).filter((_, idx) => idx !== i) })}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </TabSettingsDrawer>
+
       {/* Mood & Emotions Strip */}
       <div className="dp-card dp-stack" style={{ padding: 14 }}>
         <div className="dp-row">
           <strong>Mood:</strong>
-          {DEFAULT_MOODS.map((m) => (
+          {allMoods.map((m) => (
             <button key={m} type="button" className={`dp-btn dp-btn-sm ${entry.mood === m ? 'dp-btn-primary' : ''}`} onClick={() => void saveDiary({ mood: m })}>
               {m}
             </button>
           ))}
           <input
             className="dp-input"
-            style={{ width: 130, padding: '3px 8px', fontSize: '0.82rem' }}
-            placeholder="Custom mood…"
+            style={{ width: 150, padding: '3px 8px', fontSize: '0.82rem' }}
+            placeholder="+ Save custom mood (Enter)…"
             value={customMood}
             onChange={(e) => setCustomMood(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && customMood.trim()) {
-                void saveDiary({ mood: customMood.trim() });
+                const nm = customMood.trim();
+                void saveDiary({ mood: nm });
+                if (!allMoods.includes(nm)) {
+                  void patchSettings({ customMoods: [...(settings.customMoods ?? []), nm] });
+                }
                 setCustomMood('');
+                pushToast(`Saved mood "${nm}"`);
               }
             }}
           />
@@ -174,14 +280,95 @@ export const DiaryView: React.FC = () => {
         </div>
       </div>
 
-      {/* Rotating Prompt Deck */}
-      <div className="dp-card dp-between" style={{ padding: 10, background: 'var(--dp-surface-2)' }}>
-        <span style={{ fontSize: '0.88rem' }}>
-          <Sparkles size={14} style={{ verticalAlign: '-2px' }} /> Prompt: <em>{PROMPTS[promptIdx % PROMPTS.length]}</em>
-        </span>
-        <button type="button" className="dp-btn dp-btn-sm" onClick={() => setPromptIdx((n) => n + 1)}>
-          Next Prompt
-        </button>
+      {/* Rich Categorized Prompt Deck (50+ Prompts) + Custom Prompt Creator */}
+      <div className="dp-card dp-stack" style={{ padding: 12, gap: 10, background: 'var(--dp-surface-2)' }}>
+        <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: '0.82rem' }}>
+            <Sparkles size={14} style={{ verticalAlign: '-2px' }} /> Reflection Prompts ({filteredPrompts.length}):
+          </strong>
+          {promptCategories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              className="dp-chip"
+              data-active={promptCategory === cat}
+              onClick={() => {
+                setPromptCategory(cat);
+                setPromptIdx(0);
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <span style={{ fontSize: '0.92rem', flex: '1 1 240px' }}>
+            <span className="dp-pill" style={{ marginInlineEnd: 6 }}>{activePrompt.category}</span>
+            <em>{activePrompt.text}</em>
+          </span>
+          <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="dp-btn dp-btn-primary dp-btn-sm"
+              onClick={() => {
+                const prefix = entry.narrative?.trim() ? `${entry.narrative.trim()}\n\n` : '';
+                void saveDiary({ narrative: `${prefix}**${activePrompt.text}**\n` });
+                pushToast('Inserted prompt into Narrative Journal');
+              }}
+            >
+              + Write About This
+            </button>
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              onClick={() => setPromptIdx(Math.floor(Math.random() * filteredPrompts.length))}
+              title="Pick a random prompt"
+            >
+              <Shuffle size={13} /> Shuffle
+            </button>
+            <button type="button" className="dp-btn dp-btn-sm" onClick={() => setPromptIdx((n) => n + 1)}>
+              Next →
+            </button>
+            {settings.cachedWeather && (
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => {
+                  const w = settings.cachedWeather!;
+                  void saveDiary({ weatherNote: `${w.emoji} ${w.temp}°${w.unit} ${w.conditionLabel}` });
+                  pushToast('Logged live weather into Diary');
+                }}
+              >
+                {settings.cachedWeather.emoji} Log Weather
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="dp-row">
+          <input
+            className="dp-input"
+            style={{ flex: 1, padding: '4px 8px', fontSize: '0.8rem' }}
+            placeholder="Add your own custom reflection prompt…"
+            value={customPromptInput}
+            onChange={(e) => setCustomPromptInput(e.target.value)}
+          />
+          <button
+            type="button"
+            className="dp-btn dp-btn-sm"
+            onClick={() => {
+              const p = customPromptInput.trim();
+              if (!p) return;
+              void patchSettings({ customDiaryPrompts: [...(settings.customDiaryPrompts ?? []), p] });
+              setCustomPromptInput('');
+              setPromptCategory('My Prompts');
+              setPromptIdx((settings.customDiaryPrompts ?? []).length);
+              pushToast('Added custom reflection prompt');
+            }}
+          >
+            + Save Prompt
+          </button>
+        </div>
       </div>
 
       {!entry.blankMode ? (
@@ -309,6 +496,75 @@ export const DiaryView: React.FC = () => {
             );
           })}
         </div>
+      </div>
+
+      {/* Past Diary Entries — Easy Sort & Filter */}
+      <div className="dp-stack" style={{ gap: 10 }}>
+        <strong>Browse Past Diary Entries ({diaries.length})</strong>
+        <SortFilterBar
+          search={historySearch}
+          onSearchChange={setHistorySearch}
+          searchPlaceholder="Search past entries, gratitude, wins…"
+          sortBy={historySortBy}
+          onSortByChange={(v) => setHistorySortBy(v as typeof historySortBy)}
+          sortOptions={[
+            { value: 'date', label: 'Date' },
+            { value: 'energy', label: 'Energy' },
+            { value: 'sleep', label: 'Sleep Hours' },
+            { value: 'stress', label: 'Stress' },
+          ]}
+          sortDir={historySortDir}
+          onSortDirToggle={() => setHistorySortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          extraFilters={[
+            {
+              label: 'Filter by mood',
+              value: historyMoodFilter,
+              onChange: setHistoryMoodFilter,
+              options: [
+                { value: 'all', label: 'All Moods' },
+                ...allMoods.map((m) => ({ value: m, label: m })),
+              ],
+            },
+          ]}
+          totalCount={diaries.length}
+          shownCount={filteredHistoryDiaries.length}
+          onReset={() => {
+            setHistorySearch('');
+            setHistoryMoodFilter('all');
+          }}
+        />
+        {filteredHistoryDiaries.length === 0 ? (
+          <p className="dp-muted" style={{ margin: 0, fontSize: '0.84rem' }}>No diary entries match your filter.</p>
+        ) : (
+          <div className="dp-stack" style={{ gap: 6, maxHeight: 280, overflowY: 'auto' }}>
+            {filteredHistoryDiaries.slice(0, 25).map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                className="dp-card dp-between"
+                style={{
+                  padding: '8px 12px',
+                  textAlign: 'start',
+                  cursor: 'pointer',
+                  borderColor: d.payload.date === activeDate ? 'var(--dp-accent)' : undefined,
+                }}
+                onClick={() => setActiveDate(d.payload.date)}
+              >
+                <div>
+                  <strong>{d.payload.date}</strong>{' '}
+                  {d.payload.mood && <span className="dp-pill">{d.payload.mood}</span>}{' '}
+                  {d.payload.weatherNote && <span className="dp-muted" style={{ fontSize: '0.78rem' }}>{d.payload.weatherNote}</span>}
+                  <div className="dp-muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
+                    {(d.payload.summary || d.payload.gratitude || d.payload.narrative || 'Opened entry').slice(0, 100)}
+                  </div>
+                </div>
+                <span className="dp-muted" style={{ fontSize: '0.76rem', whiteSpace: 'nowrap' }}>
+                  ⚡ {d.payload.energy ?? '-'} · 😴 {d.payload.sleepHours ?? '-'}h
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -45,13 +45,22 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Enable exact alarm, notification & LAN cleartext permissions in AndroidManifest
+      - name: Enable exact alarm, notification & LAN/Tailscale cleartext permissions in AndroidManifest
         run: |
           node -e '
             const fs = require("fs");
+            const path = require("path");
+            const xmlDir = "android/app/src/main/res/xml";
+            fs.mkdirSync(xmlDir, { recursive: true });
+            fs.writeFileSync(
+              path.join(xmlDir, "network_security_config.xml"),
+              `<?xml version="1.0" encoding="utf-8"?>\n<network-security-config>\n  <base-config cleartextTrafficPermitted="true">\n    <trust-anchors>\n      <certificates src="system" />\n    </trust-anchors>\n  </base-config>\n</network-security-config>\n`
+            );
             const p = "android/app/src/main/AndroidManifest.xml";
             let xml = fs.readFileSync(p, "utf8");
             const perms = [
+              "android.permission.INTERNET",
+              "android.permission.ACCESS_NETWORK_STATE",
               "android.permission.POST_NOTIFICATIONS",
               "android.permission.SCHEDULE_EXACT_ALARM",
               "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -64,7 +73,7 @@ jobs:
               xml = xml.replace("<application", perms + "\n    <application");
             }
             if (!xml.includes("usesCleartextTraffic")) {
-              xml = xml.replace("<application", "<application android:usesCleartextTraffic=\"true\"");
+              xml = xml.replace("<application", "<application android:usesCleartextTraffic=\"true\" android:networkSecurityConfig=\"@xml/network_security_config\"");
             }
             fs.writeFileSync(p, xml);
           '

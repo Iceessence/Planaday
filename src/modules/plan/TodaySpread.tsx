@@ -27,8 +27,10 @@ import {
 } from '../../core/planActions';
 import { scheduleMealWithPrepReminder } from '../../core/kitchenActions';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { getDailyFact } from '../../data/facts';
+import { getDailyFact, getFactTopics } from '../../data/facts';
 import { ModalDialog } from '../../components/Common/ModalDialog';
+import { WeatherCard } from '../../components/Common/WeatherCard';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
 import type {
   CalendarEventPayload,
   ChorePayload,
@@ -36,6 +38,7 @@ import type {
   EventRetrospective,
   LifeRecord,
   NotePayload,
+  PaperMaterial,
   TaskPayload,
   ThoughtPayload,
 } from '../../core/types';
@@ -64,6 +67,9 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
   const [nowDate, setNowDate] = useState(() => new Date());
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [factOffset, setFactOffset] = useState(0);
+  const [addingFactOpen, setAddingFactOpen] = useState(false);
+  const [customFactTopic, setCustomFactTopic] = useState('Personal Quote');
+  const [customFactText, setCustomFactText] = useState('');
   const [showActualRail, setShowActualRail] = useState(false);
   const [rolloverOpen, setRolloverOpen] = useState(false);
   const [rolloverDismissed, setRolloverDismissed] = useState(false);
@@ -503,7 +509,9 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     );
   };
 
-  const dailyFact = getDailyFact(activeDate, factOffset, settings.customFactsDeck);
+  const factResult = getDailyFact(activeDate, factOffset, settings.customFactsDeck, settings.factTopicFilter);
+  const dailyFact = factResult.fact;
+  const factTopics = useMemo(() => getFactTopics(settings.customFactsDeck), [settings.customFactsDeck]);
   const spreadPaper = settings.spreadPaperOverrides[`today:${activeDate}`] ?? settings.paperMaterial;
 
   // Low-Energy / Overwhelmed Mode
@@ -571,6 +579,95 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
   return (
     <div className="dp-stack">
+      {/* In-Tab Today Spread Settings Drawer */}
+      <TabSettingsDrawer
+        title="Today Spread Settings"
+        subtitle="Customize Open-Book layout, paper surface, day cutoff hour, daily capacity, weather & facts right from Today."
+      >
+        <div className="dp-grid-3" style={{ gap: 8, fontSize: '0.83rem' }}>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Paper Surface (Today)</span>
+            <select
+              className="dp-select"
+              value={settings.spreadPaperOverrides?.today ?? settings.paperMaterial}
+              onChange={(e) =>
+                void patchSettings({
+                  spreadPaperOverrides: { ...(settings.spreadPaperOverrides ?? {}), today: e.target.value as PaperMaterial },
+                })
+              }
+            >
+              <option value="plain">Plain Stationery</option>
+              <option value="dot">Dot Grid</option>
+              <option value="lined">Lined Journal</option>
+              <option value="grid">Graph Grid</option>
+              <option value="cornell">Cornell</option>
+            </select>
+          </label>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Daily Planned Capacity ({settings.dailyCapacityHours}h)</span>
+            <input
+              type="range"
+              min={2}
+              max={16}
+              value={settings.dailyCapacityHours}
+              onChange={(e) => void patchSettings({ dailyCapacityHours: Number(e.target.value) })}
+            />
+          </label>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Night-Owl Day Boundary</span>
+            <select
+              className="dp-select"
+              value={settings.dayBoundaryHour}
+              onChange={(e) => void patchSettings({ dayBoundaryHour: Number(e.target.value) })}
+            >
+              {[0, 1, 2, 3, 4, 5, 6].map((h) => (
+                <option key={h} value={h}>
+                  {h === 0 ? 'Midnight (12:00 AM)' : `${h}:00 AM`}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 12, fontSize: '0.83rem' }}>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.openBookLayout}
+              onChange={(e) => void patchSettings({ openBookLayout: e.target.checked })}
+            />
+            <span>Open-Book 2-Page Spread</span>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.weatherEnabled}
+              onChange={(e) => void patchSettings({ weatherEnabled: e.target.checked })}
+            />
+            <span>Show Weather Strip</span>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.showFactsWidget}
+              onChange={(e) => void patchSettings({ showFactsWidget: e.target.checked })}
+            />
+            <span>Show Daily Facts Card</span>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <span className="dp-muted">Weather Unit:</span>
+            <select
+              className="dp-select"
+              style={{ width: 'auto', padding: '2px 6px' }}
+              value={settings.weatherUnit}
+              onChange={(e) => void patchSettings({ weatherUnit: e.target.value as 'F' | 'C' })}
+            >
+              <option value="F">°F</option>
+              <option value="C">°C</option>
+            </select>
+          </label>
+        </div>
+      </TabSettingsDrawer>
+
       {/* Date Header & Live Rollover Controls */}
       <div className="dp-card dp-between" style={{ padding: '12px 16px' }}>
         <div className="dp-row">
@@ -1139,15 +1236,37 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
             </div>
           </div>
 
+          {/* Compact Live Weather Card (1-click log to Diary) */}
+          <WeatherCard compact onInsertWeatherNote={(summary) => void saveDiaryField({ weatherNote: summary })} />
+
           {settings.showFactsWidget ? (
-            <div className="dp-card" style={{ padding: 12, background: 'var(--dp-surface-2)' }}>
-              <div className="dp-between" style={{ marginBottom: 4 }}>
-                <span className="dp-pill">
-                  <Sparkles size={12} /> {dailyFact.topic} · Fact #{dailyFact.id}/40
-                </span>
+            <div className="dp-card dp-stack" style={{ padding: 12, gap: 8, background: 'var(--dp-surface-2)' }}>
+              <div className="dp-between">
+                <div className="dp-row" style={{ gap: 6 }}>
+                  <span className="dp-pill">
+                    <Sparkles size={12} /> {dailyFact.topic} · Fact #{dailyFact.id}/{factResult.totalInDeck}
+                  </span>
+                  <select
+                    aria-label="Filter daily fact topic"
+                    className="dp-select"
+                    style={{ width: 'auto', padding: '2px 6px', fontSize: '0.74rem' }}
+                    value={settings.factTopicFilter || 'All'}
+                    onChange={(e) => {
+                      setFactOffset(0);
+                      void patchSettings({ factTopicFilter: e.target.value });
+                    }}
+                  >
+                    {factTopics.map((tp) => (
+                      <option key={tp} value={tp}>{tp}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="dp-row" style={{ gap: 4 }}>
                   <button type="button" className="dp-btn dp-btn-sm" onClick={() => setFactOffset((n) => n + 1)}>
-                    Next fact <ArrowRight size={12} />
+                    Next <ArrowRight size={12} />
+                  </button>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => setAddingFactOpen((v) => !v)}>
+                    + Add Own
                   </button>
                   <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" onClick={() => void patchSettings({ showFactsWidget: false })}>
                     Hide
@@ -1155,10 +1274,45 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
                 </div>
               </div>
               <p style={{ margin: 0, fontSize: '0.86rem' }}>{dailyFact.text}</p>
+              {addingFactOpen && (
+                <div className="dp-row" style={{ gap: 6, marginTop: 4 }}>
+                  <input
+                    className="dp-input"
+                    style={{ width: 130 }}
+                    value={customFactTopic}
+                    onChange={(e) => setCustomFactTopic(e.target.value)}
+                    placeholder="Topic"
+                  />
+                  <input
+                    className="dp-input"
+                    style={{ flex: 1 }}
+                    value={customFactText}
+                    onChange={(e) => setCustomFactText(e.target.value)}
+                    placeholder="Add your own favorite fact, mantra, or quote…"
+                  />
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-primary dp-btn-sm"
+                    onClick={() => {
+                      const txt = customFactText.trim();
+                      if (!txt) return;
+                      const nextId = 121 + (settings.customFactsDeck?.length ?? 0);
+                      void patchSettings({
+                        customFactsDeck: [...(settings.customFactsDeck ?? []), { id: nextId, topic: customFactTopic.trim() || 'Custom', text: txt }],
+                      });
+                      setCustomFactText('');
+                      setAddingFactOpen(false);
+                      pushToast('Added to your Daily Facts deck!');
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => void patchSettings({ showFactsWidget: true })}>
-              Show Daily Learning Fact Widget
+              Show Daily Learning Fact Widget (120+ Facts)
             </button>
           )}
         </section>

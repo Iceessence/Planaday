@@ -8,6 +8,7 @@ import {
   inferAisle,
   reconcileFinishedShopping,
 } from '../../core/kitchenActions';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import type { GroceryItemPayload, LifeRecord } from '../../core/types';
 
 const STORES = ['All Stores', 'Local Market', 'Costco', 'Farmers Market', 'Hardware / Home'];
@@ -15,21 +16,45 @@ const STORES = ['All Stores', 'Local Market', 'Costco', 'Farmers Market', 'Hardw
 export const GroceryView: React.FC = () => {
   const { settings, records, logicalToday, pushToast } = useApp();
   const [storeFilter, setStoreFilter] = useState('All Stores');
+  const [grocSearch, setGrocSearch] = useState('');
+  const [grocStatusFilter, setGrocStatusFilter] = useState<'all' | 'unchecked' | 'checked'>('all');
+  const [grocSortBy, setGrocSortBy] = useState<'aisle' | 'name' | 'qty'>('aisle');
+  const [grocSortDir, setGrocSortDir] = useState<'asc' | 'desc'>('asc');
   const [newItemName, setNewItemName] = useState('');
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState('item');
   const [newItemStore, setNewItemStore] = useState('Local Market');
   const [logExpenseOnCheckout, setLogExpenseOnCheckout] = useState(true);
 
-  const items = useMemo(
+  const allActiveItems = useMemo(
     () =>
-      (records.filter((r) => r.type === 'grocery_item' && r.status === 'active') as Array<
+      records.filter((r) => r.type === 'grocery_item' && r.status === 'active') as Array<
         LifeRecord<GroceryItemPayload>
-      >).filter((i) => storeFilter === 'All Stores' || i.payload.store === storeFilter),
-    [records, storeFilter]
+      >,
+    [records]
   );
 
-  // Group by aisle sorted alphabetically
+  const items = useMemo(() => {
+    const q = grocSearch.trim().toLowerCase();
+    const list = allActiveItems.filter((i) => {
+      if (storeFilter !== 'All Stores' && i.payload.store !== storeFilter) return false;
+      if (grocStatusFilter === 'unchecked' && i.payload.checked) return false;
+      if (grocStatusFilter === 'checked' && !i.payload.checked) return false;
+      if (q) {
+        const hay = `${i.title} ${i.payload.aisle ?? ''} ${i.payload.store ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const dir = grocSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (grocSortBy === 'name') return a.title.localeCompare(b.title) * dir;
+      if (grocSortBy === 'qty') return ((a.payload.quantity || 0) - (b.payload.quantity || 0)) * dir;
+      return (a.payload.aisle || 'Pantry').localeCompare(b.payload.aisle || 'Pantry') * dir || a.title.localeCompare(b.title);
+    });
+  }, [allActiveItems, storeFilter, grocSearch, grocStatusFilter, grocSortBy, grocSortDir]);
+
+  // Group by aisle sorted according to user direction
   const groupedByAisle = useMemo(() => {
     const map = new Map<string, Array<LifeRecord<GroceryItemPayload>>>();
     for (const item of items) {
@@ -38,8 +63,9 @@ export const GroceryView: React.FC = () => {
       arr.push(item);
       map.set(aisle, arr);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [items]);
+    const dir = grocSortDir === 'asc' ? 1 : -1;
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]) * dir);
+  }, [items, grocSortDir]);
 
   const checkedCount = items.filter((i) => i.payload.checked).length;
 
@@ -143,6 +169,36 @@ export const GroceryView: React.FC = () => {
           <span>Link checkout total to Finance expenses</span>
         </label>
       </div>
+
+      {/* Easy Sort & Filter Bar for Groceries */}
+      <SortFilterBar
+        search={grocSearch}
+        onSearchChange={setGrocSearch}
+        searchPlaceholder="Search grocery items or aisles…"
+        sortBy={grocSortBy}
+        onSortByChange={(v) => setGrocSortBy(v as typeof grocSortBy)}
+        sortOptions={[
+          { value: 'aisle', label: 'Aisle' },
+          { value: 'name', label: 'Item Name (A–Z)' },
+          { value: 'qty', label: 'Quantity' },
+        ]}
+        sortDir={grocSortDir}
+        onSortDirToggle={() => setGrocSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        chips={[
+          { value: 'all', label: 'All Items' },
+          { value: 'unchecked', label: 'Still Needed' },
+          { value: 'checked', label: 'In Cart ✓' },
+        ]}
+        activeChip={grocStatusFilter}
+        onChipChange={(v) => setGrocStatusFilter(v as typeof grocStatusFilter)}
+        totalCount={allActiveItems.length}
+        shownCount={items.length}
+        onReset={() => {
+          setGrocSearch('');
+          setGrocStatusFilter('all');
+          setStoreFilter('All Stores');
+        }}
+      />
 
       {groupedByAisle.length === 0 ? (
         <div className="dp-empty">

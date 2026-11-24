@@ -4,13 +4,16 @@ import {
   AlarmClock,
   Clock,
   Download,
+  Edit3,
   Flag,
   Moon,
   Pause,
   Play,
   Plus,
   RotateCcw,
+  Square,
   Timer,
+  Upload,
   Volume2,
   Watch,
 } from 'lucide-react';
@@ -18,7 +21,13 @@ import { useApp } from '../../core/AppContext';
 import { COMMON_TIMEZONES, convertEventTimeZone } from '../../core/temporal';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { createId, db, storeBlob } from '../../core/db';
-import { audioEngine, type SoundscapeChannel } from '../../core/audio';
+import { ALARM_RINGTONES, audioEngine, getRingtoneLabel, type SoundscapeChannel } from '../../core/audio';
+import {
+  computeNextAlarmTrigger,
+  DAY_SHORT_LABELS,
+  formatRepeatDaysSummary,
+  normalizeAlarmPayload,
+} from '../../core/alarmSchedule';
 import {
   detectRuntimePlatform,
   requestAlarmNotificationPermission,
@@ -26,8 +35,9 @@ import {
   syncPushConfigToServer,
 } from '../../core/nativeAlarms';
 import { recordsToCsv, triggerBrowserDownload } from '../../core/backup';
-import { ModalDialog } from '../../components/Common/ModalDialog';
-import type { CalendarEventPayload, LifeRecord } from '../../core/types';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import type { CalendarEventPayload, ChimeStyle, LifeRecord } from '../../core/types';
 
 export interface StopwatchLap {
   index: number;
@@ -77,7 +87,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     toggleTimerPause,
     extendTimer,
     dismissTimer,
-    setActiveView,
+    triggerAlarmRing,
     notifyUser,
   } = useApp();
   const runtimeInfo = useMemo(() => detectRuntimePlatform(), []);
@@ -99,23 +109,38 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
   const [addZoneVal, setAddZoneVal] = useState('Europe/Berlin');
   const [sliderMinutes, setSliderMinutes] = useState(14 * 60); // 14:00 local
 
-  // Smart Alarms state
+  // Smart Alarms state (schedulable by weekday or specific date + customizable ringtones!)
+  const [editingAlarmId, setEditingAlarmId] = useState<string | null>(null);
   const [alarmTitle, setAlarmTitle] = useState('Morning Wake-Up');
   const [alarmTime, setAlarmTime] = useState('07:00');
-  const [alarmProfile, setAlarmProfile] = useState<(typeof ALARM_PROFILES)[number]>('Workday');
-  const [alarmChallenge, setAlarmChallenge] = useState<'none' | 'math' | 'affirmation' | 'memory'>('math');
-  const [alarmRampSec, setAlarmRampSec] = useState(30);
+  const [alarmProfile, setAlarmProfile] = useState<string>('Workday');
+  const [alarmScheduleType, setAlarmScheduleType] = useState<'recurring' | 'once'>('recurring');
+  const [alarmRepeatDays, setAlarmRepeatDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [alarmScheduleDate, setAlarmScheduleDate] = useState<string>(logicalToday);
+  const [alarmRingtone, setAlarmRingtone] = useState<string>('sunrise_harp');
+  const [alarmRingtoneName, setAlarmRingtoneName] = useState<string>('');
+  const [alarmVolume, setAlarmVolume] = useState<number>(85);
+  const [alarmNotes, setAlarmNotes] = useState<string>('');
+  const [alarmChallenge, setAlarmChallenge] = useState<'none' | 'math' | 'affirmation' | 'memory'>('none');
+  const [alarmRampSec, setAlarmRampSec] = useState(25);
   const [alarmSnoozeMin, setAlarmSnoozeMin] = useState(9);
   const [alarmMaxSnooze, setAlarmMaxSnooze] = useState(3);
-  const [ringingAlarm, setRingingAlarm] = useState<LifeRecord | null>(null);
-  const [challengeAnswer, setChallengeAnswer] = useState('');
-  const [mathPair] = useState(() => [14, 19]);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+
+  // Alarm Sort & Filter state
+  const [alarmSearch, setAlarmSearch] = useState('');
+  const [alarmFilterChip, setAlarmFilterChip] = useState<'all' | 'enabled' | 'disabled' | 'once' | 'recurring'>('all');
+  const [alarmProfileFilter, setAlarmProfileFilter] = useState('all');
+  const [alarmSortBy, setAlarmSortBy] = useState<'time' | 'next' | 'title' | 'profile'>('time');
+  const [alarmSortDir, setAlarmSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Timers, Pomodoro, Soundscapes & Interval Builder state (supports Hours + Minutes + Seconds!)
   const [timerLabel, setTimerLabel] = useState('Deep Work');
   const [timerHours, setTimerHours] = useState(0);
   const [timerMin, setTimerMin] = useState(25);
   const [timerSec, setTimerSec] = useState(0);
+  const [timerSound, setTimerSound] = useState('default');
+  const [timerVolOverride, setTimerVolOverride] = useState('');
   const [pomoFocus, setPomoFocus] = useState(25);
   const [pomoShort, setPomoShort] = useState(5);
   const [pomoLong, setPomoLong] = useState(15);
@@ -147,6 +172,73 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
 
   const timeLedger = useLiveQuery(() => db.timeLedger.orderBy('startedAt').reverse().limit(40).toArray(), []) ?? [];
   const alarms = useMemo(() => records.filter((r) => r.type === 'alarm'), [records]);
+
+  const filteredSortedAlarms = useMemo(() => {
+    const q = alarmSearch.trim().toLowerCase();
+    const list = alarms.filter((a) => {
+      const p = normalizeAlarmPayload(a.payload as Record<string, unknown>);
+      if (alarmFilterChip === 'enabled' && !p.enabled) return false;
+      if (alarmFilterChip === 'disabled' && p.enabled) return false;
+      if (alarmFilterChip === 'once' && p.scheduleType !== 'once') return false;
+      if (alarmFilterChip === 'recurring' && p.scheduleType !== 'recurring') return false;
+      if (alarmProfileFilter !== 'all' && p.profile !== alarmProfileFilter) return false;
+      if (q) {
+        const hay = `${a.title} ${p.time} ${p.profile} ${p.notes ?? ''} ${getRingtoneLabel(p.ringtone, p.ringtoneName)}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const dir = alarmSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const pa = normalizeAlarmPayload(a.payload as Record<string, unknown>);
+      const pb = normalizeAlarmPayload(b.payload as Record<string, unknown>);
+      if (alarmSortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      if (alarmSortBy === 'profile') return pa.profile.localeCompare(pb.profile) * dir;
+      if (alarmSortBy === 'next') {
+        const na = computeNextAlarmTrigger(a.payload as Record<string, unknown>, now)?.nextFireMs ?? Number.MAX_SAFE_INTEGER;
+        const nb = computeNextAlarmTrigger(b.payload as Record<string, unknown>, now)?.nextFireMs ?? Number.MAX_SAFE_INTEGER;
+        return (na - nb) * dir;
+      }
+      return pa.time.localeCompare(pb.time) * dir;
+    });
+  }, [alarms, alarmSearch, alarmFilterChip, alarmProfileFilter, alarmSortBy, alarmSortDir, now]);
+
+  const resetAlarmForm = () => {
+    setEditingAlarmId(null);
+    setAlarmTitle('Morning Wake-Up');
+    setAlarmTime('07:00');
+    setAlarmProfile('Workday');
+    setAlarmScheduleType('recurring');
+    setAlarmRepeatDays([1, 2, 3, 4, 5]);
+    setAlarmScheduleDate(logicalToday);
+    setAlarmRingtone('sunrise_harp');
+    setAlarmRingtoneName('');
+    setAlarmVolume(85);
+    setAlarmNotes('');
+    setAlarmChallenge('none');
+    setAlarmRampSec(25);
+    setAlarmSnoozeMin(9);
+    setAlarmMaxSnooze(3);
+  };
+
+  const loadAlarmForEdit = (a: LifeRecord) => {
+    const p = normalizeAlarmPayload(a.payload as Record<string, unknown>);
+    setEditingAlarmId(a.id);
+    setAlarmTitle(a.title);
+    setAlarmTime(p.time);
+    setAlarmProfile(p.profile);
+    setAlarmScheduleType(p.scheduleType ?? 'recurring');
+    setAlarmRepeatDays(p.repeatDays?.length ? p.repeatDays : [1, 2, 3, 4, 5]);
+    setAlarmScheduleDate(p.scheduleDate || logicalToday);
+    setAlarmRingtone(p.ringtone || 'sunrise_harp');
+    setAlarmRingtoneName(p.ringtoneName || '');
+    setAlarmVolume(p.volume ?? 85);
+    setAlarmNotes(p.notes || '');
+    setAlarmChallenge(p.challenge);
+    setAlarmRampSec(p.volumeRampSec);
+    setAlarmSnoozeMin(p.snoozeMin);
+    setAlarmMaxSnooze(p.maxSnoozes);
+  };
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 500);
@@ -245,6 +337,115 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
           ))}
         </div>
       </div>
+
+      {/* In-Tab Time, Alarm, Timer & Sound Settings Drawer */}
+      <TabSettingsDrawer
+        title="Time, Alarm & Sound Settings"
+        subtitle="Global defaults for Clock, Smart Alarms, Timers & Stopwatch — individual alarms and timers can override their own sound & volume."
+      >
+        <div className="dp-grid-3" style={{ gap: 8, fontSize: '0.83rem' }}>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Default Alert Chime</span>
+            <select
+              className="dp-select"
+              value={settings.notificationPrefs.chimeStyle}
+              onChange={(e) =>
+                void patchSettings({
+                  notificationPrefs: { ...settings.notificationPrefs, chimeStyle: e.target.value as ChimeStyle },
+                })
+              }
+            >
+              <option value="bell">🔔 Classic Bell</option>
+              <option value="soft">🌿 Soft Chime</option>
+              <option value="marimba">🎵 Warm Marimba</option>
+              <option value="classic_alarm">⏰ Classic Alarm</option>
+              <option value="woodblock">🪵 Woodblock</option>
+              <option value="bright">✨ Bright Triple</option>
+            </select>
+          </label>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Default Alert Volume ({settings.notificationPrefs.volume}%)</span>
+            <div className="dp-row" style={{ gap: 6 }}>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                style={{ flex: 1 }}
+                value={settings.notificationPrefs.volume}
+                onChange={(e) =>
+                  void patchSettings({
+                    notificationPrefs: { ...settings.notificationPrefs, volume: Number(e.target.value) },
+                  })
+                }
+              />
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() =>
+                  audioEngine.playChime(settings.notificationPrefs.chimeStyle, Math.max(0.05, settings.notificationPrefs.volume / 100))
+                }
+              >
+                ▶ Test
+              </button>
+            </div>
+          </label>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Clock Format &amp; Stopwatch Chime</span>
+            <div className="dp-row" style={{ gap: 6 }}>
+              <select
+                className="dp-select"
+                style={{ width: 'auto' }}
+                value={settings.timeFormat}
+                onChange={(e) => void patchSettings({ timeFormat: e.target.value as '12h' | '24h' })}
+              >
+                <option value="12h">12h</option>
+                <option value="24h">24h</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                max={120}
+                aria-label="Stopwatch milestone interval minutes"
+                className="dp-input"
+                style={{ width: 64 }}
+                value={settings.notificationPrefs.stopwatchIntervalMin}
+                onChange={(e) =>
+                  void patchSettings({
+                    notificationPrefs: { ...settings.notificationPrefs, stopwatchIntervalMin: Math.max(0, Number(e.target.value) || 0) },
+                  })
+                }
+              />
+              <span className="dp-muted" style={{ fontSize: '0.76rem' }}>min/lap chime</span>
+            </div>
+          </label>
+        </div>
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 12, fontSize: '0.82rem' }}>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.notificationPrefs.notifyAlarms}
+              onChange={(e) => void patchSettings({ notificationPrefs: { ...settings.notificationPrefs, notifyAlarms: e.target.checked } })}
+            />
+            <span>Notify Alarms</span>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.notificationPrefs.notifyTimers}
+              onChange={(e) => void patchSettings({ notificationPrefs: { ...settings.notificationPrefs, notifyTimers: e.target.checked } })}
+            />
+            <span>Notify Timers</span>
+          </label>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.notificationPrefs.notifyStopwatch}
+              onChange={(e) => void patchSettings({ notificationPrefs: { ...settings.notificationPrefs, notifyStopwatch: e.target.checked } })}
+            />
+            <span>Stopwatch Milestones</span>
+          </label>
+        </div>
+      </TabSettingsDrawer>
 
       {/* --- TAB 1: LOCAL CLOCK, WORLD CLOCK SLIDER & NIGHTSTAND MODE --- */}
       {tab === 'clock' && (
@@ -467,61 +668,226 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
 
           <form
             className="dp-card dp-stack"
-            style={{ padding: 12 }}
+            style={{ padding: 14, gap: 10 }}
             onSubmit={async (e) => {
               e.preventDefault();
-              const created = await createRecord('alarm', alarmTitle.trim() || 'Alarm', {
+              audioEngine.stopAlarmLoop();
+              setPreviewPlaying(false);
+              const payload = {
                 time: alarmTime,
-                profile: alarmProfile,
+                profile: alarmProfile.trim() || 'Workday',
                 enabled: true,
+                scheduleType: alarmScheduleType,
+                repeatDays: alarmScheduleType === 'recurring' ? alarmRepeatDays : [],
+                scheduleDate: alarmScheduleType === 'once' ? alarmScheduleDate || logicalToday : null,
+                ringtone: alarmRingtone,
+                ringtoneName: alarmRingtoneName || undefined,
+                volume: alarmVolume,
+                vibrate: true,
                 challenge: alarmChallenge,
                 volumeRampSec: alarmRampSec,
                 snoozeMin: alarmSnoozeMin,
                 maxSnoozes: alarmMaxSnooze,
                 skipNext: false,
-              });
-              // Schedule next OS native alarm when running inside Capacitor Android/iOS app
-              const [hh, mm] = alarmTime.split(':').map(Number);
-              const nextFire = new Date();
-              nextFire.setHours(hh || 7, mm || 0, 0, 0);
-              if (nextFire.getTime() <= Date.now()) nextFire.setDate(nextFire.getDate() + 1);
-              await scheduleNativeNotification(created.id, `Dayplana Alarm: ${created.title}`, `${alarmTime} (${alarmProfile})`, nextFire.getTime());
-              pushToast(`Saved ${alarmProfile} alarm for ${alarmTime}`);
+                notes: alarmNotes.trim() || undefined,
+              };
+
+              let targetId = editingAlarmId;
+              if (editingAlarmId) {
+                await updateRecord(editingAlarmId, (c) => ({
+                  ...c,
+                  title: alarmTitle.trim() || 'Alarm',
+                  payload: { ...c.payload, ...payload },
+                }));
+                pushToast(`Updated alarm "${alarmTitle.trim() || 'Alarm'}" (${alarmTime})`);
+              } else {
+                const created = await createRecord('alarm', alarmTitle.trim() || 'Alarm', payload);
+                targetId = created.id;
+                pushToast(`Scheduled alarm "${created.title}" for ${alarmTime}`);
+              }
+
+              const nextTrig = computeNextAlarmTrigger(payload as Record<string, unknown>, new Date());
+              if (nextTrig && targetId) {
+                await scheduleNativeNotification(
+                  targetId,
+                  `Dayplana Alarm: ${alarmTitle.trim() || 'Alarm'}`,
+                  `${alarmTime} (${payload.profile})`,
+                  nextTrig.nextFireMs
+                );
+              }
+              resetAlarmForm();
             }}
           >
-            <div className="dp-row">
-              <input className="dp-input" style={{ flex: 2 }} value={alarmTitle} onChange={(e) => setAlarmTitle(e.target.value)} placeholder="Alarm label" />
-              <input type="time" className="dp-input" style={{ width: 130 }} value={alarmTime} onChange={(e) => setAlarmTime(e.target.value)} />
-              <select aria-label="Profile" className="dp-select" style={{ width: 'auto' }} value={alarmProfile} onChange={(e) => setAlarmProfile(e.target.value as (typeof ALARM_PROFILES)[number])}>
-                {ALARM_PROFILES.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <button type="submit" className="dp-btn dp-btn-primary">
-                <Plus size={14} /> Add Alarm
-              </button>
+            <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
+              <strong>{editingAlarmId ? '✏️ Edit Scheduled Alarm' : '⏰ Schedule New Smart Alarm'}</strong>
+              {editingAlarmId && (
+                <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" onClick={resetAlarmForm}>
+                  Cancel Edit
+                </button>
+              )}
             </div>
-            <details className="dp-details">
-              <summary>More options (Dismiss Challenge, Volume Ramp, Snooze Cap, Custom Local Audio)</summary>
-              <div className="dp-row" style={{ marginTop: 10 }}>
-                <select aria-label="Dismiss challenge" className="dp-select" style={{ width: 'auto' }} value={alarmChallenge} onChange={(e) => setAlarmChallenge(e.target.value as typeof alarmChallenge)}>
-                  <option value="none">No dismiss challenge</option>
-                  <option value="math">Math Puzzle Challenge</option>
-                  <option value="affirmation">Affirmation Typing Challenge</option>
-                  <option value="memory">Memory Pattern Challenge</option>
+
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <input
+                className="dp-input"
+                style={{ flex: '2 1 170px' }}
+                value={alarmTitle}
+                onChange={(e) => setAlarmTitle(e.target.value)}
+                placeholder="Alarm label (e.g., Morning Wake-Up, Early Flight, Meds)"
+              />
+              <input
+                type="time"
+                aria-label="Alarm time"
+                className="dp-input"
+                style={{ width: 132, fontWeight: 700, fontSize: '1.05rem' }}
+                value={alarmTime}
+                onChange={(e) => setAlarmTime(e.target.value)}
+              />
+              <input
+                aria-label="Alarm profile"
+                className="dp-input"
+                list="alarm-profile-list"
+                style={{ width: 140 }}
+                value={alarmProfile}
+                onChange={(e) => setAlarmProfile(e.target.value)}
+                placeholder="Profile..."
+              />
+              <datalist id="alarm-profile-list">
+                {ALARM_PROFILES.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </div>
+
+            {/* Schedule Selector: Repeat Days vs Specific Calendar Date */}
+            <div className="dp-card dp-stack" style={{ padding: 10, gap: 8, background: 'var(--dp-surface-2)' }}>
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                <strong style={{ fontSize: '0.84rem' }}>Schedule:</strong>
+                <button
+                  type="button"
+                  className={`dp-btn dp-btn-sm ${alarmScheduleType === 'recurring' ? 'dp-btn-primary' : ''}`}
+                  onClick={() => setAlarmScheduleType('recurring')}
+                >
+                  🔁 Repeating Days
+                </button>
+                <button
+                  type="button"
+                  className={`dp-btn dp-btn-sm ${alarmScheduleType === 'once' ? 'dp-btn-primary' : ''}`}
+                  onClick={() => setAlarmScheduleType('once')}
+                >
+                  📅 Specific Date (One-Time)
+                </button>
+              </div>
+
+              {alarmScheduleType === 'recurring' ? (
+                <div className="dp-stack" style={{ gap: 6 }}>
+                  <div className="dp-row" style={{ flexWrap: 'wrap', gap: 5 }}>
+                    {DAY_SHORT_LABELS.map((lbl, idx) => {
+                      const on = alarmRepeatDays.includes(idx);
+                      return (
+                        <button
+                          key={lbl}
+                          type="button"
+                          className={`dp-btn dp-btn-sm ${on ? 'dp-btn-primary' : ''}`}
+                          style={{ minWidth: 44 }}
+                          onClick={() =>
+                            setAlarmRepeatDays((prev) =>
+                              prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx].sort()
+                            )
+                          }
+                        >
+                          {lbl}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                    <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Quick presets:</span>
+                    <button type="button" className="dp-chip" onClick={() => setAlarmRepeatDays([0, 1, 2, 3, 4, 5, 6])}>
+                      Every Day
+                    </button>
+                    <button type="button" className="dp-chip" onClick={() => setAlarmRepeatDays([1, 2, 3, 4, 5])}>
+                      Weekdays (Mon–Fri)
+                    </button>
+                    <button type="button" className="dp-chip" onClick={() => setAlarmRepeatDays([0, 6])}>
+                      Weekends (Sat–Sun)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <label className="dp-row" style={{ gap: 6 }}>
+                    <span className="dp-muted" style={{ fontSize: '0.84rem' }}>Date to ring:</span>
+                    <input
+                      type="date"
+                      className="dp-input"
+                      style={{ width: 'auto' }}
+                      value={alarmScheduleDate}
+                      onChange={(e) => setAlarmScheduleDate(e.target.value)}
+                    />
+                  </label>
+                  <span className="dp-muted" style={{ fontSize: '0.78rem' }}>
+                    Auto-disables after ringing on {alarmScheduleDate || logicalToday}.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Ringtone Chooser + Preview + Custom Audio Upload + Volume */}
+            <div className="dp-card dp-stack" style={{ padding: 10, gap: 8, background: 'var(--dp-surface-2)' }}>
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <strong style={{ fontSize: '0.84rem' }}>🎵 Ringtone:</strong>
+                <select
+                  aria-label="Alarm ringtone"
+                  className="dp-select"
+                  style={{ flex: '1 1 200px', width: 'auto' }}
+                  value={alarmRingtone}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAlarmRingtone(val);
+                    const custom = (settings.customRingtones ?? []).find((c) => `blob:${c.hash}` === val);
+                    setAlarmRingtoneName(custom?.name ?? '');
+                    audioEngine.stopAlarmLoop();
+                    setPreviewPlaying(false);
+                  }}
+                >
+                  <optgroup label="Built-In Musical Ringtones (Offline)">
+                    {ALARM_RINGTONES.map((rt) => (
+                      <option key={rt.id} value={rt.id}>
+                        {rt.emoji} {rt.name} — {rt.description}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {(settings.customRingtones ?? []).length > 0 && (
+                    <optgroup label="My Uploaded Ringtones">
+                      {(settings.customRingtones ?? []).map((cr) => (
+                        <option key={cr.hash} value={`blob:${cr.hash}`}>
+                          🎶 {cr.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
-                <label className="dp-row">
-                  <span className="dp-muted">Ramp (s):</span>
-                  <input type="number" min={15} max={60} className="dp-input" style={{ width: 64 }} value={alarmRampSec} onChange={(e) => setAlarmRampSec(Number(e.target.value) || 30)} />
-                </label>
-                <label className="dp-row">
-                  <span className="dp-muted">Snooze (m):</span>
-                  <input type="number" min={1} max={30} className="dp-input" style={{ width: 64 }} value={alarmSnoozeMin} onChange={(e) => setAlarmSnoozeMin(Number(e.target.value) || 9)} />
-                </label>
-                <label className="dp-row">
-                  <span className="dp-muted">Max Snoozes:</span>
-                  <input type="number" min={1} max={10} className="dp-input" style={{ width: 64 }} value={alarmMaxSnooze} onChange={(e) => setAlarmMaxSnooze(Number(e.target.value) || 3)} />
-                </label>
-                <label className="dp-btn dp-btn-sm">
-                  Upload Audio (MP3/WAV)
+
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => {
+                    if (previewPlaying) {
+                      audioEngine.stopAlarmLoop();
+                      setPreviewPlaying(false);
+                    } else {
+                      setPreviewPlaying(true);
+                      void audioEngine.playRingtoneOnce(alarmRingtone, alarmVolume / 100);
+                      window.setTimeout(() => setPreviewPlaying(false), 2600);
+                    }
+                  }}
+                >
+                  {previewPlaying ? <Square size={13} /> : <Play size={13} />} {previewPlaying ? 'Stop' : 'Preview'}
+                </button>
+
+                <label className="dp-btn dp-btn-sm" style={{ cursor: 'pointer' }}>
+                  <Upload size={13} /> Upload MP3/WAV
                   <input
                     type="file"
                     accept="audio/*"
@@ -529,18 +895,77 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (f) {
-                        await storeBlob(f, f.name);
-                        pushToast(`Stored custom alarm audio "${f.name}" locally`);
+                        const stored = await storeBlob(f, f.name);
+                        const existing = settings.customRingtones ?? [];
+                        if (!existing.some((x) => x.hash === stored.hash)) {
+                          await patchSettings({
+                            customRingtones: [...existing, { hash: stored.hash, name: f.name }],
+                          });
+                        }
+                        setAlarmRingtone(`blob:${stored.hash}`);
+                        setAlarmRingtoneName(f.name);
+                        pushToast(`Uploaded & selected custom ringtone "${f.name}"`);
                       }
+                      e.target.value = '';
                     }}
                   />
                 </label>
               </div>
-            </details>
+
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 12, fontSize: '0.82rem' }}>
+                <label className="dp-row" style={{ gap: 6 }}>
+                  <Volume2 size={14} />
+                  <span>Alarm Volume: <strong>{alarmVolume}%</strong></span>
+                  <input
+                    type="range"
+                    min={10}
+                    max={100}
+                    value={alarmVolume}
+                    onChange={(e) => setAlarmVolume(Number(e.target.value))}
+                  />
+                </label>
+                <input
+                  className="dp-input"
+                  style={{ flex: '1 1 180px', padding: '4px 8px', fontSize: '0.82rem' }}
+                  placeholder="Optional wake-up note shown when ringing…"
+                  value={alarmNotes}
+                  onChange={(e) => setAlarmNotes(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <details className="dp-details" style={{ flex: 1 }}>
+                <summary>Wake-Up Challenge, Gradual Ramp &amp; Snooze Options</summary>
+                <div className="dp-row" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                  <select aria-label="Dismiss challenge" className="dp-select" style={{ width: 'auto' }} value={alarmChallenge} onChange={(e) => setAlarmChallenge(e.target.value as typeof alarmChallenge)}>
+                    <option value="none">No dismiss challenge</option>
+                    <option value="math">Math Puzzle Challenge</option>
+                    <option value="affirmation">Affirmation Typing Challenge</option>
+                    <option value="memory">Memory Code Challenge</option>
+                  </select>
+                  <label className="dp-row">
+                    <span className="dp-muted">Volume Ramp (sec):</span>
+                    <input type="number" min={0} max={90} className="dp-input" style={{ width: 64 }} value={alarmRampSec} onChange={(e) => setAlarmRampSec(Number(e.target.value) || 0)} />
+                  </label>
+                  <label className="dp-row">
+                    <span className="dp-muted">Snooze (min):</span>
+                    <input type="number" min={1} max={30} className="dp-input" style={{ width: 64 }} value={alarmSnoozeMin} onChange={(e) => setAlarmSnoozeMin(Number(e.target.value) || 9)} />
+                  </label>
+                  <label className="dp-row">
+                    <span className="dp-muted">Max Snoozes:</span>
+                    <input type="number" min={1} max={10} className="dp-input" style={{ width: 64 }} value={alarmMaxSnooze} onChange={(e) => setAlarmMaxSnooze(Number(e.target.value) || 3)} />
+                  </label>
+                </div>
+              </details>
+              <button type="submit" className="dp-btn dp-btn-primary">
+                <Plus size={14} /> {editingAlarmId ? 'Save Alarm Changes' : 'Schedule Alarm'}
+              </button>
+            </div>
           </form>
 
           {/* Bulk Profile Toggles */}
-          <div className="dp-row">
+          <div className="dp-row" style={{ flexWrap: 'wrap' }}>
             <span className="dp-muted" style={{ fontSize: '0.82rem' }}>Bulk Toggle Profile:</span>
             {ALARM_PROFILES.map((prof) => (
               <button
@@ -561,50 +986,127 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
             ))}
           </div>
 
+          {/* Easy Sort & Filter Bar for Alarms */}
+          <SortFilterBar
+            search={alarmSearch}
+            onSearchChange={setAlarmSearch}
+            searchPlaceholder="Search alarms, ringtones, notes…"
+            sortBy={alarmSortBy}
+            onSortByChange={(v) => setAlarmSortBy(v as typeof alarmSortBy)}
+            sortOptions={[
+              { value: 'time', label: 'Clock Time' },
+              { value: 'next', label: 'Next to Ring' },
+              { value: 'title', label: 'Title (A–Z)' },
+              { value: 'profile', label: 'Profile' },
+            ]}
+            sortDir={alarmSortDir}
+            onSortDirToggle={() => setAlarmSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            chips={[
+              { value: 'all', label: 'All' },
+              { value: 'enabled', label: 'Enabled' },
+              { value: 'disabled', label: 'Paused' },
+              { value: 'recurring', label: 'Repeating' },
+              { value: 'once', label: 'Scheduled Date' },
+            ]}
+            activeChip={alarmFilterChip}
+            onChipChange={(v) => setAlarmFilterChip(v as typeof alarmFilterChip)}
+            extraFilters={[
+              {
+                label: 'Filter by profile',
+                value: alarmProfileFilter,
+                onChange: setAlarmProfileFilter,
+                options: [
+                  { value: 'all', label: 'All Profiles' },
+                  ...Array.from(new Set([...ALARM_PROFILES, ...alarms.map((a) => normalizeAlarmPayload(a.payload as Record<string, unknown>).profile)])).map(
+                    (pr) => ({ value: pr, label: pr })
+                  ),
+                ],
+              },
+            ]}
+            totalCount={alarms.length}
+            shownCount={filteredSortedAlarms.length}
+            onReset={() => {
+              setAlarmSearch('');
+              setAlarmFilterChip('all');
+              setAlarmProfileFilter('all');
+            }}
+          />
+
           <div className="dp-stack">
-            {alarms.map((a) => {
-              const p = a.payload as { time: string; profile: string; enabled: boolean; challenge: string; skipNext?: boolean };
-              return (
-                <div key={a.id} className="dp-card dp-between" style={{ padding: 12 }}>
-                  <div>
-                    <strong style={{ fontSize: '1.1rem' }}>{p.time}</strong> · {a.title}{' '}
-                    <span className="dp-pill">{p.profile}</span>
-                    {p.challenge !== 'none' && <span className="dp-pill">Challenge: {p.challenge}</span>}
-                    {p.skipNext && <span className="dp-pill highlight">Skipping next</span>}
+            {filteredSortedAlarms.length === 0 ? (
+              <p className="dp-muted">No alarms match your filter.</p>
+            ) : (
+              filteredSortedAlarms.map((a) => {
+                const p = normalizeAlarmPayload(a.payload as Record<string, unknown>);
+                const nextTrigger = computeNextAlarmTrigger(a.payload as Record<string, unknown>, now);
+                return (
+                  <div
+                    key={a.id}
+                    className="dp-card dp-between"
+                    style={{
+                      padding: 12,
+                      flexWrap: 'wrap',
+                      gap: 10,
+                      opacity: p.enabled ? 1 : 0.65,
+                    }}
+                  >
+                    <div className="dp-stack" style={{ gap: 4 }}>
+                      <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                        <strong style={{ fontSize: '1.2rem', fontFamily: 'var(--dp-font-mono)' }}>{p.time}</strong>
+                        <strong>{a.title}</strong>
+                        <span className="dp-pill">{p.profile}</span>
+                        <span className="dp-pill highlight">
+                          {formatRepeatDaysSummary(p.repeatDays, p.scheduleType, p.scheduleDate)}
+                        </span>
+                        {nextTrigger && (
+                          <span className="dp-pill" style={{ background: 'color-mix(in oklch, var(--dp-ok) 15%, var(--dp-surface))' }}>
+                            Rings {nextTrigger.countdownText}
+                          </span>
+                        )}
+                      </div>
+                      <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6, fontSize: '0.78rem' }}>
+                        <span className="dp-muted">{getRingtoneLabel(p.ringtone, p.ringtoneName)} · {p.volume ?? 85}% vol</span>
+                        {p.challenge !== 'none' && <span className="dp-pill">Challenge: {p.challenge}</span>}
+                        {p.skipNext && <span className="dp-pill highlight">Skipping next</span>}
+                        {p.notes && <span className="dp-muted">· {p.notes}</span>}
+                      </div>
+                    </div>
+                    <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="dp-btn dp-btn-sm"
+                        onClick={() => triggerAlarmRing(a)}
+                      >
+                        ▶ Test Ring
+                      </button>
+                      <button
+                        type="button"
+                        className="dp-btn dp-btn-sm"
+                        onClick={() => loadAlarmForEdit(a)}
+                      >
+                        <Edit3 size={13} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="dp-btn dp-btn-sm"
+                        onClick={() => void updateRecord(a.id, (c) => ({ ...c, payload: { ...c.payload, skipNext: !p.skipNext } }))}
+                      >
+                        {p.skipNext ? 'Unskip' : 'Skip Next'}
+                      </button>
+                      <input
+                        type="checkbox"
+                        aria-label={`Enable ${a.title}`}
+                        checked={p.enabled}
+                        onChange={(e) => void updateRecord(a.id, (c) => ({ ...c, payload: { ...c.payload, enabled: e.target.checked } }))}
+                      />
+                      <button type="button" className="dp-btn dp-btn-danger dp-btn-sm" onClick={() => void softDeleteRecord(a.id)}>
+                        Trash
+                      </button>
+                    </div>
                   </div>
-                  <div className="dp-row">
-                    <button
-                      type="button"
-                      className="dp-btn dp-btn-sm"
-                      onClick={() => {
-                        const vol = Math.max(0.05, (settings.notificationPrefs.volume ?? 75) / 100);
-                        audioEngine.playChime(settings.notificationPrefs.chimeStyle ?? 'bell', vol);
-                        setChallengeAnswer('');
-                        setRingingAlarm(a);
-                      }}
-                    >
-                      Test Ring
-                    </button>
-                    <button
-                      type="button"
-                      className="dp-btn dp-btn-sm"
-                      onClick={() => void updateRecord(a.id, (c) => ({ ...c, payload: { ...c.payload, skipNext: !p.skipNext } }))}
-                    >
-                      {p.skipNext ? 'Unskip' : 'Skip Next'}
-                    </button>
-                    <input
-                      type="checkbox"
-                      aria-label={`Enable ${a.title}`}
-                      checked={p.enabled}
-                      onChange={(e) => void updateRecord(a.id, (c) => ({ ...c, payload: { ...c.payload, enabled: e.target.checked } }))}
-                    />
-                    <button type="button" className="dp-btn dp-btn-danger dp-btn-sm" onClick={() => void softDeleteRecord(a.id)}>
-                      Trash
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -630,12 +1132,102 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                   onClick={() => {
                     const total = timerHours * 3600 + timerMin * 60 + timerSec;
                     if (total <= 0) return;
-                    void startCountdownTimer(timerLabel || 'Timer', total);
+                    void startCountdownTimer(timerLabel || 'Timer', total, 'countdown', null, {
+                      customSound: timerSound !== 'default' ? timerSound : undefined,
+                      customVolume: timerVolOverride !== '' ? Number(timerVolOverride) : null,
+                    });
                   }}
                 >
                   Start
                 </button>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  title="Save this label + time as a permanent 1-tap custom preset"
+                  onClick={() => {
+                    const total = timerHours * 3600 + timerMin * 60 + timerSec;
+                    if (total <= 0) return;
+                    const nm = timerLabel.trim() || `${timerMin}m ${timerSec}s`;
+                    void patchSettings({
+                      customTimerPresets: [
+                        ...(settings.customTimerPresets ?? []),
+                        { id: createId('tpre'), label: nm, seconds: total },
+                      ],
+                    });
+                    pushToast(`Saved custom timer preset "${nm}"`);
+                  }}
+                >
+                  ★ Save Preset
+                </button>
               </div>
+              {/* Per-Timer Specific Sound & Volume Override */}
+              <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6, fontSize: '0.8rem' }}>
+                <span className="dp-muted">This Timer&apos;s Sound:</span>
+                <select
+                  aria-label="Per-timer sound override"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '3px 8px', fontSize: '0.8rem' }}
+                  value={timerSound}
+                  onChange={(e) => setTimerSound(e.target.value)}
+                >
+                  <option value="default">Default ({settings.notificationPrefs.chimeStyle})</option>
+                  <option value="bell">🔔 Bell</option>
+                  <option value="soft">🌿 Soft</option>
+                  <option value="marimba">🎵 Marimba</option>
+                  <option value="classic_alarm">⏰ Classic Alarm</option>
+                  {ALARM_RINGTONES.map((rt) => (
+                    <option key={rt.id} value={rt.id}>{rt.emoji} {rt.name}</option>
+                  ))}
+                  {(settings.customRingtones ?? []).map((cr) => (
+                    <option key={cr.hash} value={`blob:${cr.hash}`}>🎶 {cr.name}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  aria-label="Per-timer volume percent"
+                  placeholder={`Vol ${settings.notificationPrefs.volume}%`}
+                  className="dp-input"
+                  style={{ width: 86, padding: '3px 6px', fontSize: '0.8rem' }}
+                  value={timerVolOverride}
+                  onChange={(e) => setTimerVolOverride(e.target.value)}
+                />
+              </div>
+              {settings.customTimerPresets?.length > 0 && (
+                <div className="dp-row" style={{ gap: 5 }}>
+                  <span className="dp-muted" style={{ fontSize: '0.76rem' }}>My Presets:</span>
+                  {settings.customTimerPresets.map((cp) => {
+                    const pm = Math.floor(cp.seconds / 60);
+                    const ps = cp.seconds % 60;
+                    const fmt = pm > 0 ? `${pm}m${ps ? ` ${ps}s` : ''}` : `${ps}s`;
+                    return (
+                      <span key={cp.id} className="dp-pill highlight">
+                        <button
+                          type="button"
+                          className="dp-btn dp-btn-ghost dp-btn-sm"
+                          style={{ padding: 0, minHeight: 'auto' }}
+                          onClick={() => void startCountdownTimer(cp.label, cp.seconds)}
+                        >
+                          ▶ {cp.label} ({fmt})
+                        </button>
+                        <button
+                          type="button"
+                          className="dp-btn dp-btn-ghost dp-btn-sm"
+                          style={{ padding: '0 3px', minHeight: 'auto' }}
+                          onClick={() =>
+                            void patchSettings({
+                              customTimerPresets: settings.customTimerPresets.filter((x) => x.id !== cp.id),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
               <div className="dp-row" style={{ gap: 5 }}>
                 {(
                   [
@@ -1013,57 +1605,6 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
           </div>
         </div>
       )}
-
-      {/* Smart Alarm Dismiss Challenge Modal (Section 10.02) */}
-      <ModalDialog open={Boolean(ringingAlarm)} onClose={() => setRingingAlarm(null)} title={`⏰ Alarm: ${ringingAlarm?.title || ''}`}>
-        {ringingAlarm && (
-          <div className="dp-stack">
-            {(ringingAlarm.payload as { challenge?: string }).challenge === 'math' ? (
-              <label className="dp-stack" style={{ gap: 6 }}>
-                <span>Solve to dismiss: <strong>{mathPair[0]} + {mathPair[1]} = ?</strong></span>
-                <input className="dp-input" value={challengeAnswer} onChange={(e) => setChallengeAnswer(e.target.value)} />
-              </label>
-            ) : (ringingAlarm.payload as { challenge?: string }).challenge === 'affirmation' ? (
-              <label className="dp-stack" style={{ gap: 6 }}>
-                <span>Type to dismiss: <strong>I am ready for a calm day</strong></span>
-                <input className="dp-input" value={challengeAnswer} onChange={(e) => setChallengeAnswer(e.target.value)} />
-              </label>
-            ) : null}
-            <div className="dp-between">
-              <button
-                type="button"
-                className="dp-btn dp-btn-ghost dp-btn-sm"
-                onClick={() => {
-                  setRingingAlarm(null);
-                  pushToast('Emergency bypass used — alarm dismissed.');
-                }}
-              >
-                Emergency Bypass
-              </button>
-              <button
-                type="button"
-                className="dp-btn dp-btn-primary"
-                onClick={() => {
-                  const ch = (ringingAlarm.payload as { challenge?: string }).challenge;
-                  if (ch === 'math' && Number(challengeAnswer.trim()) !== mathPair[0] + mathPair[1]) {
-                    pushToast('Check the math answer to dismiss.', { tone: 'warn' });
-                    return;
-                  }
-                  if (ch === 'affirmation' && challengeAnswer.trim().toLowerCase() !== 'i am ready for a calm day') {
-                    pushToast('Type the affirmation phrase to dismiss.', { tone: 'warn' });
-                    return;
-                  }
-                  setRingingAlarm(null);
-                  setActiveView('today');
-                  pushToast('Good morning! Handed off to Today Spread.');
-                }}
-              >
-                Dismiss & Open Today
-              </button>
-            </div>
-          </div>
-        )}
-      </ModalDialog>
     </div>
   );
 };

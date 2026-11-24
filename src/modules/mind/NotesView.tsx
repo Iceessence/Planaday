@@ -17,11 +17,14 @@ import { getBlobObjectUrl, storeBlob } from '../../core/db';
 import { DEFAULT_NOTEBOOKS } from '../../data/sampleData';
 import { extractInlineEntities } from '../../core/mindActions';
 import { ModalDialog } from '../../components/Common/ModalDialog';
-import type { LifeRecord, NotePayload, RevisionRecord, TaskPayload } from '../../core/types';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import type { FontPairing, LifeRecord, NotePayload, PaperMaterial, RevisionRecord, TaskPayload } from '../../core/types';
 
 export const NotesView: React.FC = () => {
   const {
     settings,
+    patchSettings,
     records,
     logicalToday,
     pushToast,
@@ -30,6 +33,10 @@ export const NotesView: React.FC = () => {
   } = useApp();
 
   const [activeNotebook, setActiveNotebook] = useState<string>('all');
+  const [noteSearch, setNoteSearch] = useState('');
+  const [notePinFilter, setNotePinFilter] = useState<'all' | 'pinned'>('all');
+  const [noteSortBy, setNoteSortBy] = useState<'updated' | 'created' | 'title' | 'words'>('updated');
+  const [noteSortDir, setNoteSortDir] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'graph'>('edit');
   const [revisionsOpen, setRevisionsOpen] = useState(false);
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
@@ -61,10 +68,31 @@ export const NotesView: React.FC = () => {
     [records]
   );
 
-  const visibleNotes = useMemo(
-    () => (activeNotebook === 'all' ? notes : notes.filter((n) => n.payload.notebookId === activeNotebook)),
-    [notes, activeNotebook]
-  );
+  const visibleNotes = useMemo(() => {
+    const q = noteSearch.trim().toLowerCase();
+    const list = notes.filter((n) => {
+      if (activeNotebook !== 'all' && n.payload.notebookId !== activeNotebook) return false;
+      if (notePinFilter === 'pinned' && !n.payload.pinned) return false;
+      if (q) {
+        const hay = `${n.title} ${n.payload.content ?? ''} ${(n.tags ?? []).join(' ')}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const dir = noteSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const pinDiff = Number(Boolean(b.payload.pinned)) - Number(Boolean(a.payload.pinned));
+      if (pinDiff !== 0) return pinDiff;
+      if (noteSortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      if (noteSortBy === 'created') return a.createdAt.localeCompare(b.createdAt) * dir;
+      if (noteSortBy === 'words') {
+        const wa = (a.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length;
+        const wb = (b.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length;
+        return (wa - wb) * dir;
+      }
+      return a.updatedAt.localeCompare(b.updatedAt) * dir;
+    });
+  }, [notes, activeNotebook, noteSearch, notePinFilter, noteSortBy, noteSortDir]);
 
   const activeNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId) ?? visibleNotes[0] ?? null,
@@ -263,6 +291,62 @@ export const NotesView: React.FC = () => {
         </div>
       </div>
 
+      {/* In-Tab Notes Typography & Paper Settings Drawer */}
+      <TabSettingsDrawer title="Notes Editor Settings" subtitle="Adjust reading font, text size, line spacing & paper surface right here.">
+        <div className="dp-grid-3" style={{ gap: 8, fontSize: '0.83rem' }}>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Paper Surface</span>
+            <select
+              className="dp-select"
+              value={settings.paperMaterial}
+              onChange={(e) => void patchSettings({ paperMaterial: e.target.value as PaperMaterial })}
+            >
+              <option value="plain">Plain</option>
+              <option value="dot">Dot Grid</option>
+              <option value="lined">Lined</option>
+              <option value="grid">Grid</option>
+              <option value="cornell">Cornell</option>
+            </select>
+          </label>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Font Pairing</span>
+            <select
+              className="dp-select"
+              value={settings.fontPairing}
+              onChange={(e) => void patchSettings({ fontPairing: e.target.value as FontPairing })}
+            >
+              <option value="editorial-serif">Editorial Serif</option>
+              <option value="modern-sans">Modern Sans</option>
+              <option value="mono-studio">Mono Studio</option>
+              <option value="warm-humanist">Warm Humanist</option>
+              <option value="dyslexia-friendly">Dyslexia-Friendly</option>
+            </select>
+          </label>
+          <label className="dp-stack" style={{ gap: 4 }}>
+            <span className="dp-muted">Font Size ({settings.fontSizePx}px) &amp; Line Height ({settings.lineHeight})</span>
+            <div className="dp-row" style={{ gap: 6 }}>
+              <input
+                type="range"
+                min={12}
+                max={24}
+                style={{ flex: 1 }}
+                value={settings.fontSizePx}
+                onChange={(e) => void patchSettings({ fontSizePx: Number(e.target.value) })}
+              />
+              <input
+                type="range"
+                min={1.3}
+                max={1.9}
+                step={0.05}
+                style={{ flex: 1 }}
+                value={settings.lineHeight}
+                onChange={(e) => void patchSettings({ lineHeight: Number(e.target.value) })}
+              />
+            </div>
+          </label>
+        </div>
+      </TabSettingsDrawer>
+
       {/* Subject Notebooks Bar (9 editable defaults + custom) */}
       <div className="dp-row" style={{ gap: 6 }}>
         <button
@@ -296,6 +380,36 @@ export const NotesView: React.FC = () => {
           }}
         />
       </div>
+
+      {/* Easy Sort & Filter Bar for Notes */}
+      <SortFilterBar
+        search={noteSearch}
+        onSearchChange={setNoteSearch}
+        searchPlaceholder="Search note titles, content, #tags…"
+        sortBy={noteSortBy}
+        onSortByChange={(v) => setNoteSortBy(v as typeof noteSortBy)}
+        sortOptions={[
+          { value: 'updated', label: 'Last Edited' },
+          { value: 'created', label: 'Created Date' },
+          { value: 'title', label: 'Title (A–Z)' },
+          { value: 'words', label: 'Word Count' },
+        ]}
+        sortDir={noteSortDir}
+        onSortDirToggle={() => setNoteSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        chips={[
+          { value: 'all', label: 'All Notes' },
+          { value: 'pinned', label: '📌 Pinned Only' },
+        ]}
+        activeChip={notePinFilter}
+        onChipChange={(v) => setNotePinFilter(v as typeof notePinFilter)}
+        totalCount={notes.length}
+        shownCount={visibleNotes.length}
+        onReset={() => {
+          setNoteSearch('');
+          setNotePinFilter('all');
+          setActiveNotebook('all');
+        }}
+      />
 
       {viewMode === 'graph' ? (
         <div className="dp-card dp-stack">

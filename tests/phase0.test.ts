@@ -36,13 +36,13 @@ describe('Phase 0 — Kernel & UX Shell Verification Gate', () => {
     await db.syncConflicts.clear();
   });
 
-  it('bundles all 208 Appendix A stickers across 16 categories (13 each), 40 Appendix B facts, and 10 cooking densities offline', () => {
+  it('bundles all 208 Appendix A stickers across 16 categories (13 each), 120+ offline facts, and 10 cooking densities offline', () => {
     expect(STICKER_CATEGORIES).toHaveLength(16);
     expect(BUILTIN_STICKERS).toHaveLength(208);
     for (const cat of STICKER_CATEGORIES) {
       expect(BUILTIN_STICKERS.filter((s) => s.category === cat)).toHaveLength(13);
     }
-    expect(OFFLINE_LEARNING_FACTS).toHaveLength(40);
+    expect(OFFLINE_LEARNING_FACTS.length).toBeGreaterThanOrEqual(120);
     expect(COOKING_DENSITIES).toHaveLength(10);
   });
 

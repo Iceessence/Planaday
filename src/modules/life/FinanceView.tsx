@@ -3,6 +3,8 @@ import { AlertTriangle, Plus, Receipt, ShieldCheck, Trash2, Wallet } from 'lucid
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord } from '../../core/repository';
 import { addDaysIso, diffDaysIso } from '../../core/temporal';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
 
 /**
  * Multi-currency accumulator — NEVER silently sums mixed currencies! (Section 13.03)
@@ -17,7 +19,7 @@ export function sumByCurrency(items: Array<{ amount: number; currency: string }>
 }
 
 export const FinanceView: React.FC = () => {
-  const { settings, records, logicalToday, pushToast } = useApp();
+  const { settings, patchSettings, records, logicalToday, pushToast } = useApp();
 
   // Bill / subscription form
   const [billTitle, setBillTitle] = useState('');
@@ -31,7 +33,13 @@ export const FinanceView: React.FC = () => {
   // Envelope budget form
   const [envCategory, setEnvCategory] = useState('Groceries');
   const [envLimit, setEnvLimit] = useState(600);
-  const [envCurrency, setEnvCurrency] = useState('USD');
+  const [envCurrency, setEnvCurrency] = useState(settings.defaultCurrency || 'USD');
+
+  // Quick Expense Logger (feeds straight into Envelope progress bars!)
+  const [expTitle, setExpTitle] = useState('');
+  const [expAmount, setExpAmount] = useState(25);
+  const [expCategory, setExpCategory] = useState('Groceries');
+  const [expCurrency, setExpCurrency] = useState(settings.defaultCurrency || 'USD');
 
   // Warranty & Wishlist forms
   const [warrantyItem, setWarrantyItem] = useState('');
@@ -39,7 +47,32 @@ export const FinanceView: React.FC = () => {
   const [wishItem, setWishItem] = useState('');
   const [wishPrice, setWishPrice] = useState(80);
 
+  // Bills Sort & Filter
+  const [billSearch, setBillSearch] = useState('');
+  const [billFilter, setBillFilter] = useState<'all' | 'autopay' | 'manual' | 'trial'>('all');
+  const [billSortBy, setBillSortBy] = useState<'due' | 'amount' | 'title'>('due');
+  const [billSortDir, setBillSortDir] = useState<'asc' | 'desc'>('asc');
+
   const bills = useMemo(() => records.filter((r) => r.type === 'bill'), [records]);
+  const filteredBills = useMemo(() => {
+    const q = billSearch.trim().toLowerCase();
+    const list = bills.filter((b) => {
+      const p = b.payload as { autopay?: boolean; isFreeTrial?: boolean; currency?: string };
+      if (billFilter === 'autopay' && !p.autopay) return false;
+      if (billFilter === 'manual' && p.autopay) return false;
+      if (billFilter === 'trial' && !p.isFreeTrial) return false;
+      if (q && !b.title.toLowerCase().includes(q) && !(p.currency || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const dir = billSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const pa = a.payload as { amount?: number; dueDate?: string };
+      const pb = b.payload as { amount?: number; dueDate?: string };
+      if (billSortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      if (billSortBy === 'amount') return ((pa.amount || 0) - (pb.amount || 0)) * dir;
+      return (pa.dueDate || '9999').localeCompare(pb.dueDate || '9999') * dir;
+    });
+  }, [bills, billSearch, billFilter, billSortBy, billSortDir]);
   const envelopes = useMemo(() => records.filter((r) => r.type === 'budget_envelope'), [records]);
   const expenses = useMemo(() => records.filter((r) => r.type === 'expense'), [records]);
   const warranties = useMemo(() => records.filter((r) => r.type === 'warranty'), [records]);
@@ -87,6 +120,28 @@ export const FinanceView: React.FC = () => {
           ))}
         </div>
       </div>
+
+      <TabSettingsDrawer title="Finance Settings" subtitle="Default currency for new bills, budget envelopes, and quick expenses.">
+        <div className="dp-row" style={{ gap: 8, fontSize: '0.83rem' }}>
+          <span className="dp-muted">Default Currency:</span>
+          {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'].map((cur) => (
+            <button
+              key={cur}
+              type="button"
+              className={`dp-btn dp-btn-sm ${settings.defaultCurrency === cur ? 'dp-btn-primary' : ''}`}
+              onClick={() => {
+                void patchSettings({ defaultCurrency: cur });
+                setBillCurrency(cur);
+                setEnvCurrency(cur);
+                setExpCurrency(cur);
+                pushToast(`Default currency set to ${cur}`);
+              }}
+            >
+              {cur}
+            </button>
+          ))}
+        </div>
+      </TabSettingsDrawer>
 
       {trialAlerts.length > 0 && (
         <div className="dp-banner danger" style={{ margin: 0 }}>
@@ -140,7 +195,36 @@ export const FinanceView: React.FC = () => {
           <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm"><Plus size={14} /> Add</button>
         </form>
 
-        {bills.map((b) => {
+        <SortFilterBar
+          search={billSearch}
+          onSearchChange={setBillSearch}
+          searchPlaceholder="Search bills & subscriptions…"
+          sortBy={billSortBy}
+          onSortByChange={(v) => setBillSortBy(v as typeof billSortBy)}
+          sortOptions={[
+            { value: 'due', label: 'Due Date' },
+            { value: 'amount', label: 'Amount' },
+            { value: 'title', label: 'Title (A–Z)' },
+          ]}
+          sortDir={billSortDir}
+          onSortDirToggle={() => setBillSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          chips={[
+            { value: 'all', label: 'All' },
+            { value: 'autopay', label: 'Autopay' },
+            { value: 'manual', label: 'Manual' },
+            { value: 'trial', label: 'Free Trials' },
+          ]}
+          activeChip={billFilter}
+          onChipChange={(v) => setBillFilter(v as typeof billFilter)}
+          totalCount={bills.length}
+          shownCount={filteredBills.length}
+          onReset={() => {
+            setBillSearch('');
+            setBillFilter('all');
+          }}
+        />
+
+        {filteredBills.map((b) => {
           const p = b.payload as { amount: number; currency: string; cadence: string; dueDate: string; autopay: boolean; isFreeTrial?: boolean };
           return (
             <div key={b.id} className="dp-between" style={{ padding: 8, background: 'var(--dp-surface-2)', borderRadius: 6, fontSize: '0.88rem' }}>
@@ -209,6 +293,48 @@ export const FinanceView: React.FC = () => {
               </div>
             );
           })}
+
+          {/* Quick Expense Logger */}
+          <div style={{ borderTop: '1px dashed var(--dp-border)', paddingTop: 10 }} className="dp-stack">
+            <strong style={{ fontSize: '0.88rem' }}>Log Expense Against Budget ({expenses.length})</strong>
+            <form
+              className="dp-row"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!expTitle.trim()) return;
+                await createRecord(
+                  'expense',
+                  expTitle.trim(),
+                  { amount: expAmount, currency: expCurrency, date: logicalToday },
+                  { category: expCategory.trim() || 'General' }
+                );
+                setExpTitle('');
+                pushToast(`Logged expense (${expCurrency} ${expAmount.toFixed(2)})`, { canUndo: true });
+              }}
+            >
+              <input className="dp-input" style={{ flex: 2 }} placeholder="Expense (e.g., Trader Joe's)" value={expTitle} onChange={(e) => setExpTitle(e.target.value)} />
+              <input list="dp-budget-cats" className="dp-input" style={{ width: 115 }} value={expCategory} onChange={(e) => setExpCategory(e.target.value)} placeholder="Category" />
+              <input type="number" step={0.01} min={0} className="dp-input" style={{ width: 82 }} value={expAmount} onChange={(e) => setExpAmount(Number(e.target.value) || 0)} />
+              <input list="dp-currencies" className="dp-input" style={{ width: 68 }} value={expCurrency} onChange={(e) => setExpCurrency(e.target.value.toUpperCase())} />
+              <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm">+ Log</button>
+            </form>
+            {expenses.slice(0, 6).map((ex) => {
+              const ep = ex.payload as { amount?: number; currency?: string; date?: string };
+              return (
+                <div key={ex.id} className="dp-between" style={{ fontSize: '0.82rem' }}>
+                  <span>
+                    <strong>{ex.title}</strong> <span className="dp-muted">({ex.category || 'General'} · {ep.date || logicalToday})</span>
+                  </span>
+                  <div className="dp-row" style={{ gap: 6 }}>
+                    <span className="dp-pill">{ep.currency || 'USD'} {Number(ep.amount || 0).toFixed(2)}</span>
+                    <button type="button" className="dp-icon-btn" style={{ width: 22, height: 22 }} title="Delete expense" onClick={() => void softDeleteRecord(ex.id)}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Receipt/Warranty Vault & 30-Day Cool-Off Wishlist */}

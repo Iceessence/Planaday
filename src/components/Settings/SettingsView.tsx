@@ -19,7 +19,7 @@ import {
   saveDirectToDiskFolder,
   triggerBrowserDownload,
 } from '../../core/backup';
-import { resolveConflict } from '../../core/sync';
+import { normalizeServerUrl, resolveConflict, testServerConnection } from '../../core/sync';
 import { wipeSampleData } from '../../core/repository';
 import { applyOnboardingPreset, ONBOARDING_PRESETS } from '../../data/sampleData';
 import { audioEngine } from '../../core/audio';
@@ -100,6 +100,10 @@ export const SettingsView: React.FC = () => {
   const [newTabName, setNewTabName] = useState('');
   const [newTabEmoji, setNewTabEmoji] = useState('✨');
   const [newTabColor, setNewTabColor] = useState('#a97434');
+  const [syncPrimaryDraft, setSyncPrimaryDraft] = useState(settings.syncServerUrl || '');
+  const [syncFallbackDraft, setSyncFallbackDraft] = useState(settings.syncFallbackUrl || '');
+  const [syncTestOutput, setSyncTestOutput] = useState('');
+  const [syncTesting, setSyncTesting] = useState(false);
 
   const importBackupRef = useRef<HTMLInputElement | null>(null);
   const importThemeRef = useRef<HTMLInputElement | null>(null);
@@ -870,6 +874,41 @@ export const SettingsView: React.FC = () => {
             ))}
           </div>
 
+          {/* Phone Bottom Navigation Bar Customizer */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <h4>Phone Bottom Tab Bar (Pick Your 4 Favorite Quick Tabs)</h4>
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+              Choose which 4 tabs appear along the bottom of your phone app next to Menu.
+            </p>
+            <div className="dp-grid-2" style={{ gap: 8 }}>
+              {[0, 1, 2, 3].map((slotIdx) => (
+                <label key={slotIdx} className="dp-between" style={{ fontSize: '0.84rem' }}>
+                  <span className="dp-muted">Phone Tab #{slotIdx + 1}</span>
+                  <select
+                    className="dp-select"
+                    style={{ width: 'auto' }}
+                    value={settings.mobilePrimaryTabs[slotIdx] ?? 'today'}
+                    onChange={(e) => {
+                      const next = [...settings.mobilePrimaryTabs];
+                      next[slotIdx] = e.target.value as NavView;
+                      void patchSettings({ mobilePrimaryTabs: next });
+                    }}
+                  >
+                    <option value="home">Home</option>
+                    <option value="today">Today</option>
+                    <option value="calendar">Calendar</option>
+                    <option value="tasks">Tasks</option>
+                    <option value="chores">Chores</option>
+                    <option value="timers">Timers</option>
+                    <option value="notes">Notes</option>
+                    <option value="recipes">Kitchen</option>
+                    <option value="all_in_one">All-in-One</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+          </div>
+
           {/* Hide Individual Extra Sidebar Items */}
           <details className="dp-details">
             <summary>Hide / Show Individual Utility Sidebar Links</summary>
@@ -970,25 +1009,78 @@ export const SettingsView: React.FC = () => {
 
           <div className="dp-card dp-stack">
             <div className="dp-between">
-              <h4>Sync Status &amp; Connection</h4>
+              <h4>Sync Status &amp; LAN + Tailscale Failover</h4>
               <span className="dp-pill">
-                Status: {syncState.status} · Queued ops: {syncState.pendingCount}
+                Status: {syncState.status}
+                {syncState.activeServerUrl ? ` (${syncState.activeServerUrl})` : ''} · Queued ops: {syncState.pendingCount}
               </span>
             </div>
+            <p className="dp-muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+              For the <strong>Android APK</strong> or <strong>Windows Desktop App</strong>, enter your Docker server&apos;s LAN IP below
+              (e.g. <code>http://192.168.88.31:3000</code>) and optionally its <strong>Tailscale IP</strong> (e.g. <code>http://100.x.y.z:3000</code>) as a fallback so it syncs seamlessly both at home and away!
+            </p>
             <label className="dp-stack" style={{ gap: 4 }}>
               <span className="dp-muted">
-                Docker Sync Server URL (leave blank when served directly from your Docker container, or enter e.g.{' '}
-                <code>http://192.168.88.31:3000</code>)
+                Primary Server URL (Home Wi-Fi / LAN — leave blank only when opened in a browser served directly by Docker)
               </span>
               <input
                 className="dp-input"
-                placeholder="(same origin) or http://your-docker-host:3000"
-                value={settings.syncServerUrl}
-                onChange={(e) => void patchSettings({ syncServerUrl: e.target.value })}
+                placeholder="http://192.168.88.31:3000"
+                value={syncPrimaryDraft}
+                onChange={(e) => setSyncPrimaryDraft(e.target.value)}
+              />
+            </label>
+            <label className="dp-stack" style={{ gap: 4 }}>
+              <span className="dp-muted">
+                Fallback / Tailscale Server URL (auto-used whenever you are away from home Wi-Fi)
+              </span>
+              <input
+                className="dp-input"
+                placeholder="http://100.x.y.z:3000 or https://your-host.ts.net"
+                value={syncFallbackDraft}
+                onChange={(e) => setSyncFallbackDraft(e.target.value)}
               />
             </label>
             <div className="dp-row">
-              <button type="button" className="dp-btn dp-btn-primary" onClick={() => void triggerSyncNow()}>
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary"
+                disabled={syncTesting}
+                onClick={async () => {
+                  setSyncTesting(true);
+                  setSyncTestOutput('');
+                  const normP = normalizeServerUrl(syncPrimaryDraft);
+                  const normF = normalizeServerUrl(syncFallbackDraft);
+                  setSyncPrimaryDraft(normP);
+                  setSyncFallbackDraft(normF);
+                  await patchSettings({
+                    operatingMode: 'docker-sync',
+                    syncServerUrl: normP,
+                    syncFallbackUrl: normF,
+                  });
+                  const urls = [normP, normF].filter(Boolean);
+                  const report: string[] = [];
+                  if (urls.length === 0) {
+                    const r = await testServerConnection('');
+                    report.push(r.ok ? `✓ Same-origin connected (${r.latencyMs}ms)` : `✕ ${r.error}`);
+                  } else {
+                    for (const u of urls) {
+                      const r = await testServerConnection(u);
+                      report.push(
+                        r.ok
+                          ? `✓ ${r.normalizedUrl} — Connected (${r.latencyMs}ms · ${r.recordCount ?? 0} records)`
+                          : `✕ ${r.normalizedUrl} — ${r.error}`
+                      );
+                    }
+                  }
+                  setSyncTestOutput(report.join('\n'));
+                  await triggerSyncNow();
+                  setSyncTesting(false);
+                }}
+              >
+                {syncTesting ? 'Testing…' : 'Save & Test Connection'}
+              </button>
+              <button type="button" className="dp-btn" onClick={() => void triggerSyncNow()}>
                 Sync Now
               </button>
               {syncState.lastSyncAt && (
@@ -1000,6 +1092,11 @@ export const SettingsView: React.FC = () => {
                 <span style={{ color: 'var(--dp-danger)', fontSize: '0.82rem' }}>{syncState.errorMessage}</span>
               )}
             </div>
+            {syncTestOutput && (
+              <pre className="dp-card" style={{ margin: 0, padding: 10, whiteSpace: 'pre-wrap', fontSize: '0.8rem', background: 'var(--dp-surface-2)' }}>
+                {syncTestOutput}
+              </pre>
+            )}
           </div>
 
           {openConflicts.length > 0 && (

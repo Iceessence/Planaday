@@ -5,6 +5,9 @@ import type {
   PaperMaterial,
   ThemeTokens,
 } from '../data/themes';
+import type { WeatherSnapshot } from './weather';
+
+export type { ColorSchemePreference, DensityMode, FontPairing, PaperMaterial, ThemeTokens };
 
 export type OperatingMode = 'docker-sync' | 'offline-phone' | 'offline-computer';
 
@@ -233,6 +236,9 @@ export interface ChorePayload {
   paused?: boolean;
   rotationQueueIds?: string[];
   requireApproval?: boolean;
+  notifyEnabled?: boolean; // defaults to global settings.notificationPrefs.notifyChores
+  customReminderTime?: string | null; // optional per-chore HH:MM override
+  customSound?: string; // 'default' | chimeStyle | AlarmRingtoneId | blob:<hash>
   completions: ChoreCompletionEntry[];
 }
 
@@ -267,6 +273,9 @@ export interface CalendarEventPayload {
   notes?: string;
   attachmentBlobIds?: string[];
   remindersMin?: number[];
+  notifyEnabled?: boolean; // defaults to global settings.notificationPrefs.notifyEvents
+  customSound?: string; // 'default' | chimeStyle | AlarmRingtoneId | blob:<hash>
+  customVolume?: number | null; // 0..100 override (null = use global volume)
   buffers?: EventBufferWings;
   linkedActionId?: string | null; // linked task/chore/milestone/bill/meal
   seriesMasterId?: string | null;
@@ -577,20 +586,34 @@ export interface NotificationPreferences {
   stopwatchIntervalMin: number; // notify every N minutes during stopwatch (0 = off)
 }
 
-export type CustomWidgetType = 'events' | 'tasks' | 'chores' | 'note' | 'counters' | 'timers' | 'links';
+export type CustomWidgetType =
+  | 'events'
+  | 'tasks'
+  | 'chores'
+  | 'note'
+  | 'counters'
+  | 'timers'
+  | 'links'
+  | 'weather'
+  | 'alarms'
+  | 'habits';
 
 export interface CustomTabWidget {
   id: string;
   type: CustomWidgetType;
   title: string;
+  spanFull?: boolean;
+  accentColor?: string;
+  limit?: number;
   filterCategory?: string;
   filterRoom?: string;
   filterTag?: string;
+  filterPriority?: string;
   onlySharedImportant?: boolean;
   noteContent?: string;
-  counters?: Array<{ id: string; label: string; value: number; target?: number }>;
-  timerPresets?: Array<{ label: string; seconds: number }>;
-  links?: Array<{ id: string; label: string; targetView?: NavView; url?: string }>;
+  counters?: Array<{ id: string; label: string; value: number; target?: number; unit?: string; step?: number }>;
+  timerPresets?: Array<{ id?: string; label: string; seconds: number; customSound?: string }>;
+  links?: Array<{ id: string; label: string; emoji?: string; targetView?: NavView; targetCustomTabId?: string; url?: string }>;
 }
 
 export interface CustomTabDef {
@@ -619,9 +642,27 @@ export interface AppSettings {
   cardRadius: 'sharp' | 'soft' | 'cozy';
   hiddenSidebarViews: NavView[];
   operatingMode: OperatingMode;
-  syncServerUrl: string; // empty in pure offline mode, or e.g. "" (same-origin) / "http://192.168.1.50:3000"
+  syncServerUrl: string; // Primary URL: empty in same-origin Docker browser, or e.g. http://192.168.88.31:3000
+  syncFallbackUrl: string; // Optional Tailscale / Remote fallback URL: e.g. http://100.x.y.z:3000 or https://host.ts.net
   lastSyncSeq: number;
   lastSyncAt: string | null;
+  // Weather (live Open-Meteo when online + cached offline fallback)
+  weatherEnabled: boolean;
+  weatherLocationName: string;
+  weatherLat: number | null;
+  weatherLon: number | null;
+  weatherUnit: 'F' | 'C';
+  cachedWeather: WeatherSnapshot | null;
+  // Deeper Per-Module Personalization
+  factTopicFilter: string;
+  customTimerPresets: Array<{ id: string; label: string; seconds: number }>;
+  customMoods: string[];
+  customDiaryPrompts: string[];
+  customThoughtPrompts: string[];
+  customRingtones: Array<{ hash: string; name: string }>;
+  customNotebooks: Array<{ id: string; name: string; color: string }>;
+  customMealFavorites: string[];
+  defaultCurrency: string;
   // Personalization
   themePresetId: string;
   customTokens: ThemeTokens;

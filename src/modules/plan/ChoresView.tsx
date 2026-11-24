@@ -6,10 +6,12 @@ import { computeChoreFreshnessAtDate, computeRoomHealthSummary } from '../../cor
 import { completeActionAtomically, computeChorePunctualityStats, scheduleActionOnCalendar } from '../../core/planActions';
 import { recordsToCsv, triggerBrowserDownload } from '../../core/backup';
 import { addDaysIso } from '../../core/temporal';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
 import type { ChorePayload, LifeRecord } from '../../core/types';
 
 export const ChoresView: React.FC = () => {
-  const { settings, records, logicalToday, activeDate, pushToast } = useApp();
+  const { settings, patchSettings, records, logicalToday, activeDate, pushToast } = useApp();
   const [title, setTitle] = useState('');
   const [room, setRoom] = useState('Kitchen');
   const [intervalDays, setIntervalDays] = useState(3);
@@ -18,10 +20,17 @@ export const ChoresView: React.FC = () => {
   const [estimateMin, setEstimateMin] = useState(15);
   const [energy, setEnergy] = useState<'low' | 'medium' | 'high'>('low');
   const [supplies, setSupplies] = useState('');
+  const [choreNotify, setChoreNotify] = useState(true);
+  const [choreReminderTime, setChoreReminderTime] = useState('');
   const [shareFamily, setShareFamily] = useState(true);
   const [markImportant, setMarkImportant] = useState(false);
   const [energyFilter, setEnergyFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [maxMinFilter, setMaxMinFilter] = useState(120);
+  const [choreSearch, setChoreSearch] = useState('');
+  const [roomFilter, setRoomFilter] = useState('all');
+  const [dueFilter, setDueFilter] = useState<'all' | 'overdue' | 'due_today' | 'fresh'>('all');
+  const [sortBy, setSortBy] = useState<'due' | 'freshness' | 'room' | 'difficulty' | 'title'>('due');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [replayDate, setReplayDate] = useState(activeDate);
 
   const chores = useMemo(
@@ -34,12 +43,34 @@ export const ChoresView: React.FC = () => {
   const punctualityById = useMemo(() => new Map(punctuality.perChore.map((x) => [x.choreId, x])), [punctuality]);
 
   const filtered = useMemo(() => {
-    return chores.filter((c) => {
+    const q = choreSearch.trim().toLowerCase();
+    const list = chores.filter((c) => {
       if (energyFilter !== 'all' && c.energy !== energyFilter) return false;
       if ((c.estimateMin ?? 15) > maxMinFilter) return false;
+      if (roomFilter !== 'all' && c.payload.room !== roomFilter) return false;
+      const st = computeChoreFreshnessAtDate(c.payload, replayDate);
+      if (dueFilter === 'overdue' && st.status !== 'overdue') return false;
+      if (dueFilter === 'due_today' && st.status !== 'due_today' && st.status !== 'overdue') return false;
+      if (dueFilter === 'fresh' && st.status !== 'fresh') return false;
+      if (q) {
+        const hay = `${c.title} ${c.payload.room} ${(c.payload.linkedSupplies ?? []).join(' ')}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
-  }, [chores, energyFilter, maxMinFilter]);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (sortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      if (sortBy === 'room') return a.payload.room.localeCompare(b.payload.room) * dir;
+      if (sortBy === 'difficulty') return ((a.payload.difficulty || 1) - (b.payload.difficulty || 1)) * dir;
+      if (sortBy === 'freshness') {
+        const fa = computeChoreFreshnessAtDate(a.payload, replayDate).freshnessPct;
+        const fb = computeChoreFreshnessAtDate(b.payload, replayDate).freshnessPct;
+        return (fa - fb) * dir;
+      }
+      return (a.payload.nextDueDate || '9999').localeCompare(b.payload.nextDueDate || '9999') * dir;
+    });
+  }, [chores, energyFilter, maxMinFilter, choreSearch, roomFilter, dueFilter, replayDate, sortBy, sortDir]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +92,8 @@ export const ChoresView: React.FC = () => {
           .map((s) => s.trim())
           .filter(Boolean),
         nextDueDate: logicalToday,
+        notifyEnabled: choreNotify,
+        customReminderTime: choreReminderTime || null,
         completions: [],
       },
       {
@@ -73,6 +106,8 @@ export const ChoresView: React.FC = () => {
     );
     setTitle('');
     setSupplies('');
+    setChoreReminderTime('');
+    setChoreNotify(true);
     setMarkImportant(false);
     pushToast('Chore created', { canUndo: true });
   };
@@ -124,6 +159,41 @@ export const ChoresView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* In-Tab Chore Reminder Settings Drawer */}
+      <TabSettingsDrawer
+        title="Chore Reminder Settings"
+        subtitle="Global chore digest time — you can also give any individual chore its own reminder time under More options."
+      >
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 12, fontSize: '0.83rem' }}>
+          <label className="dp-row" style={{ gap: 5 }}>
+            <input
+              type="checkbox"
+              checked={settings.notificationPrefs.notifyChores}
+              onChange={(e) =>
+                void patchSettings({
+                  notificationPrefs: { ...settings.notificationPrefs, notifyChores: e.target.checked },
+                })
+              }
+            />
+            <span>Enable Chore Reminders (Global Default)</span>
+          </label>
+          <label className="dp-row" style={{ gap: 6 }}>
+            <span className="dp-muted">Daily Due-Chore Digest Time:</span>
+            <input
+              type="time"
+              className="dp-input"
+              style={{ width: 126 }}
+              value={settings.notificationPrefs.choreReminderTime}
+              onChange={(e) =>
+                void patchSettings({
+                  notificationPrefs: { ...settings.notificationPrefs, choreReminderTime: e.target.value || '09:00' },
+                })
+              }
+            />
+          </label>
+        </div>
+      </TabSettingsDrawer>
 
       {/* Room Health & Freshness Decay Bars (Section 09.02) */}
       {roomHealth.length > 0 && (
@@ -196,6 +266,21 @@ export const ChoresView: React.FC = () => {
               <input type="number" min={1} max={5} className="dp-input" style={{ width: 56 }} value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3 | 4 | 5)} />
             </label>
             <input className="dp-input" style={{ flex: 1 }} placeholder="Linked supplies (comma separated)" value={supplies} onChange={(e) => setSupplies(e.target.value)} />
+            <label className="dp-row" style={{ fontSize: '0.82rem', gap: 5 }}>
+              <input type="checkbox" checked={choreNotify} onChange={(e) => setChoreNotify(e.target.checked)} />
+              <span>🔔 Notify</span>
+            </label>
+            <label className="dp-row" style={{ fontSize: '0.82rem', gap: 4 }}>
+              <span className="dp-muted">Specific Time (opt):</span>
+              <input
+                type="time"
+                aria-label="Per-chore reminder time"
+                className="dp-input"
+                style={{ width: 118 }}
+                value={choreReminderTime}
+                onChange={(e) => setChoreReminderTime(e.target.value)}
+              />
+            </label>
             <label className="dp-row" style={{ fontSize: '0.82rem', cursor: 'pointer' }}>
               <input type="checkbox" checked={shareFamily} onChange={(e) => setShareFamily(e.target.checked)} />
               <span>🏡 Share w/ Family</span>
@@ -208,16 +293,91 @@ export const ChoresView: React.FC = () => {
         </details>
       </form>
 
-      {/* Energy / Time Quick Filter */}
-      <div className="dp-row" style={{ fontSize: '0.84rem' }}>
-        <span className="dp-muted">Filter:</span>
-        {(['all', 'low', 'medium', 'high'] as const).map((e) => (
-          <button key={e} type="button" className={`dp-btn dp-btn-sm ${energyFilter === e ? 'dp-btn-primary' : ''}`} onClick={() => setEnergyFilter(e)}>
-            {e === 'all' ? 'All Energy' : `${e} energy`}
+      {/* 1-Click Starter Chore Templates */}
+      <div className="dp-row" style={{ fontSize: '0.8rem', gap: 5 }}>
+        <span className="dp-muted">Quick Templates:</span>
+        {[
+          { t: 'Wash Bedsheets', r: 'Bedroom', d: 7, m: 15 },
+          { t: 'Bathroom Reset', r: 'Bathroom', d: 7, m: 20 },
+          { t: 'Kitchen Counters & Sink', r: 'Kitchen', d: 1, m: 10 },
+          { t: 'Vacuum / Sweep Floors', r: 'Living Room', d: 4, m: 20 },
+          { t: 'Change Air Filter', r: 'Home', d: 90, m: 10 },
+        ].map((tpl) => (
+          <button
+            key={tpl.t}
+            type="button"
+            className="dp-btn dp-btn-sm"
+            onClick={() => {
+              setTitle(tpl.t);
+              setRoom(tpl.r);
+              setIntervalDays(tpl.d);
+              setEstimateMin(tpl.m);
+            }}
+          >
+            + {tpl.t} ({tpl.d}d)
           </button>
         ))}
+      </div>
+
+      {/* Easy Sort & Filter Bar */}
+      <SortFilterBar
+        search={choreSearch}
+        onSearchChange={setChoreSearch}
+        searchPlaceholder="Search chores, rooms, supplies…"
+        sortBy={sortBy}
+        onSortByChange={(v) => setSortBy(v as typeof sortBy)}
+        sortOptions={[
+          { value: 'due', label: 'Next Due Date' },
+          { value: 'freshness', label: 'Room Freshness %' },
+          { value: 'room', label: 'Room' },
+          { value: 'difficulty', label: 'Difficulty' },
+          { value: 'title', label: 'Title (A–Z)' },
+        ]}
+        sortDir={sortDir}
+        onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        chips={[
+          { value: 'all', label: 'All' },
+          { value: 'overdue', label: 'Overdue' },
+          { value: 'due_today', label: 'Due Today & Overdue' },
+          { value: 'fresh', label: 'Fresh' },
+        ]}
+        activeChip={dueFilter}
+        onChipChange={(v) => setDueFilter(v as typeof dueFilter)}
+        extraFilters={[
+          {
+            label: 'Filter by room',
+            value: roomFilter,
+            onChange: setRoomFilter,
+            options: [
+              { value: 'all', label: 'All Rooms' },
+              ...Array.from(new Set(chores.map((c) => c.payload.room))).sort().map((r) => ({ value: r, label: r })),
+            ],
+          },
+          {
+            label: 'Filter by energy',
+            value: energyFilter,
+            onChange: (v) => setEnergyFilter(v as typeof energyFilter),
+            options: [
+              { value: 'all', label: 'All Energy' },
+              { value: 'low', label: 'Low Energy' },
+              { value: 'medium', label: 'Medium Energy' },
+              { value: 'high', label: 'High Energy' },
+            ],
+          },
+        ]}
+        totalCount={chores.length}
+        shownCount={filtered.length}
+        onReset={() => {
+          setChoreSearch('');
+          setRoomFilter('all');
+          setDueFilter('all');
+          setEnergyFilter('all');
+          setMaxMinFilter(120);
+        }}
+      />
+      <div className="dp-row" style={{ fontSize: '0.8rem' }}>
         <label className="dp-row">
-          <span className="dp-muted">≤ {maxMinFilter} min</span>
+          <span className="dp-muted">Max time: ≤ {maxMinFilter} min</span>
           <input type="range" min={5} max={120} step={5} value={maxMinFilter} onChange={(e) => setMaxMinFilter(Number(e.target.value))} />
         </label>
       </div>

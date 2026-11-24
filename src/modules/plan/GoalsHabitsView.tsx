@@ -5,6 +5,7 @@ import { createRecord, softDeleteRecord, updateRecord } from '../../core/reposit
 import { scheduleActionOnCalendar } from '../../core/planActions';
 import { addDaysIso } from '../../core/temporal';
 import { createId } from '../../core/db';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import type { GoalPayload, HabitPayload, LifeRecord } from '../../core/types';
 
 function computeHabitStats(habit: HabitPayload, todayIso: string) {
@@ -51,14 +52,55 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
   const [routineTitle, setRoutineTitle] = useState('');
   const [routineSteps, setRoutineSteps] = useState('Drink water (2m), Stretch (5m), Review Today (3m)');
 
+  // Sort & Filter state for Goals & Habits
+  const [ghSearch, setGhSearch] = useState('');
+  const [ghSortBy, setGhSortBy] = useState<'progress' | 'target' | 'title'>('target');
+  const [ghSortDir, setGhSortDir] = useState<'asc' | 'desc'>('asc');
+  const [habitSortBy, setHabitSortBy] = useState<'streak' | 'consistency' | 'title'>('streak');
+  const [habitSortDir, setHabitSortDir] = useState<'asc' | 'desc'>('desc');
+  const [habitFilter, setHabitFilter] = useState<'all' | 'done_today' | 'not_done_today'>('all');
+
   const goals = useMemo(
     () => records.filter((r) => r.type === 'goal') as Array<LifeRecord<GoalPayload>>,
     [records]
   );
+  const filteredGoals = useMemo(() => {
+    const q = ghSearch.trim().toLowerCase();
+    const list = goals.filter((g) => !q || g.title.toLowerCase().includes(q));
+    const dir = ghSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (ghSortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      if (ghSortBy === 'progress') {
+        const pa = a.payload.milestones?.length ? a.payload.milestones.filter((m) => m.done).length / a.payload.milestones.length : 0;
+        const pb = b.payload.milestones?.length ? b.payload.milestones.filter((m) => m.done).length / b.payload.milestones.length : 0;
+        return (pa - pb) * dir;
+      }
+      return (a.payload.targetDate || '9999').localeCompare(b.payload.targetDate || '9999') * dir;
+    });
+  }, [goals, ghSearch, ghSortBy, ghSortDir]);
+
   const habits = useMemo(
     () => records.filter((r) => r.type === 'habit') as Array<LifeRecord<HabitPayload>>,
     [records]
   );
+  const filteredHabits = useMemo(() => {
+    const q = ghSearch.trim().toLowerCase();
+    const list = habits.filter((h) => {
+      const doneToday = Boolean(h.payload.logs?.[logicalToday]?.value);
+      if (habitFilter === 'done_today' && !doneToday) return false;
+      if (habitFilter === 'not_done_today' && doneToday) return false;
+      if (q && !h.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const dir = habitSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (habitSortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      const sa = computeHabitStats(a.payload, logicalToday);
+      const sb = computeHabitStats(b.payload, logicalToday);
+      if (habitSortBy === 'consistency') return (sa.consistency28 - sb.consistency28) * dir;
+      return (sa.streak - sb.streak) * dir;
+    });
+  }, [habits, ghSearch, habitFilter, habitSortBy, habitSortDir, logicalToday]);
   const routines = useMemo(() => records.filter((r) => r.type === 'routine'), [records]);
 
   const last7Days = useMemo(
@@ -96,8 +138,26 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
           </button>
         </form>
 
+        <SortFilterBar
+          search={ghSearch}
+          onSearchChange={setGhSearch}
+          searchPlaceholder="Search goals…"
+          sortBy={ghSortBy}
+          onSortByChange={(v) => setGhSortBy(v as typeof ghSortBy)}
+          sortOptions={[
+            { value: 'target', label: 'Target Date' },
+            { value: 'progress', label: 'Completion %' },
+            { value: 'title', label: 'Title (A–Z)' },
+          ]}
+          sortDir={ghSortDir}
+          onSortDirToggle={() => setGhSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          totalCount={goals.length}
+          shownCount={filteredGoals.length}
+          onReset={() => setGhSearch('')}
+        />
+
         <div className="dp-stack">
-          {goals.map((g) => {
+          {filteredGoals.map((g) => {
             const ms = g.payload.milestones ?? [];
             const doneCount = ms.filter((m) => m.done).length;
             const pct = ms.length > 0 ? Math.round((doneCount / ms.length) * 100) : 0;
@@ -261,8 +321,36 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
         </button>
       </form>
 
+      <SortFilterBar
+        search={ghSearch}
+        onSearchChange={setGhSearch}
+        searchPlaceholder="Search habits…"
+        sortBy={habitSortBy}
+        onSortByChange={(v) => setHabitSortBy(v as typeof habitSortBy)}
+        sortOptions={[
+          { value: 'streak', label: 'Streak Length' },
+          { value: 'consistency', label: '28d Consistency %' },
+          { value: 'title', label: 'Title (A–Z)' },
+        ]}
+        sortDir={habitSortDir}
+        onSortDirToggle={() => setHabitSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        chips={[
+          { value: 'all', label: 'All Habits' },
+          { value: 'not_done_today', label: 'Remaining Today' },
+          { value: 'done_today', label: 'Done Today ✓' },
+        ]}
+        activeChip={habitFilter}
+        onChipChange={(v) => setHabitFilter(v as typeof habitFilter)}
+        totalCount={habits.length}
+        shownCount={filteredHabits.length}
+        onReset={() => {
+          setGhSearch('');
+          setHabitFilter('all');
+        }}
+      />
+
       <div className="dp-stack">
-        {habits.map((h) => {
+        {filteredHabits.map((h) => {
           const stats = computeHabitStats(h.payload, logicalToday);
           return (
             <div key={h.id} className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>

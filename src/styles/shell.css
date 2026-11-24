@@ -469,28 +469,102 @@ dialog::backdrop {
   cursor: pointer;
 }
 
-/* --- Phone Bottom Tabs & Thumb-Reachable FAB (Section 02.02) --- */
+/* --- Phone Bottom Tabs, Safe Area Insets & Native App Feel --- */
 .dp-mobile-nav,
-.dp-mobile-fab {
+.dp-mobile-fab,
+.dp-mobile-only {
   display: none;
 }
 
+.dp-mobile-title {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--dp-font-heading);
+  font-size: 1.08rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dp-mobile-tab-pill {
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 28px;
+  border-radius: 99px;
+  transition: background-color 140ms ease, transform 120ms ease;
+}
+
 @media (max-width: 860px) {
+  html,
+  body {
+    overflow-x: clip;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .dp-app,
   .dp-app.sidebar-collapsed {
     grid-template-columns: 1fr;
   }
 
-  .dp-sidebar {
-    display: none;
+  .dp-sidebar,
+  .dp-desktop-only {
+    display: none !important;
+  }
+
+  .dp-mobile-only {
+    display: inline-flex;
+  }
+
+  .dp-mobile-title.dp-mobile-only {
+    display: flex;
   }
 
   .dp-content {
-    padding: 12px 10px 88px;
+    padding: 10px 10px calc(92px + env(safe-area-inset-bottom));
   }
 
   .dp-topbar {
-    padding: 6px 10px;
+    padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+    min-height: calc(54px + env(safe-area-inset-top));
+    gap: 6px;
+  }
+
+  .dp-btn {
+    min-height: 38px;
+  }
+
+  .dp-btn-sm {
+    min-height: 34px;
+    padding: 5px 10px;
+  }
+
+  .dp-icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .dp-input,
+  .dp-select {
+    min-height: 40px;
+    font-size: 16px; /* Prevents automatic iOS/Android input zoom */
+  }
+
+  .dp-paper-sheet {
+    padding: 14px !important;
+    border-radius: var(--dp-radius-md);
+  }
+
+  .dp-card {
+    padding: 12px;
+  }
+
+  dialog.dp-dialog.sheet {
+    max-height: 86dvh;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .dp-mobile-nav {
@@ -500,10 +574,11 @@ dialog::backdrop {
     z-index: 40;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    background: var(--dp-paper);
+    background: color-mix(in oklch, var(--dp-paper) 96%, transparent);
+    backdrop-filter: blur(12px);
     border-top: 1px solid var(--dp-border);
-    padding: 4px 4px max(6px, env(safe-area-inset-bottom));
-    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.08);
+    padding: 6px 4px max(8px, env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 20px rgb(0 0 0 / 0.1);
   }
 
   .dp-mobile-tab {
@@ -512,28 +587,33 @@ dialog::backdrop {
     align-items: center;
     justify-content: center;
     gap: 2px;
-    padding: 5px 2px;
+    padding: 2px;
     border: none;
     background: transparent;
     color: var(--dp-muted);
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 600;
     cursor: pointer;
-    min-height: 44px;
+    min-height: 48px;
   }
 
   .dp-mobile-tab.active {
     color: var(--dp-accent);
   }
 
+  .dp-mobile-tab.active .dp-mobile-tab-pill {
+    background: color-mix(in oklch, var(--dp-accent) 16%, transparent);
+    transform: translateY(-1px);
+  }
+
   .dp-mobile-fab {
     position: fixed;
-    bottom: calc(68px + env(safe-area-inset-bottom));
+    bottom: calc(74px + env(safe-area-inset-bottom));
     inset-inline-end: 16px;
     z-index: 42;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
     border: none;
     background: var(--dp-accent);
     color: var(--dp-on-accent);
@@ -544,8 +624,9 @@ dialog::backdrop {
   }
 
   .dp-toast-stack {
-    bottom: 76px;
-    inset-inline-end: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    inset-inline: 12px;
+    max-width: none;
   }
 }
 
@@ -553,8 +634,5 @@ dialog::backdrop {
 @media (max-width: 380px) {
   .dp-topbar {
     gap: 4px;
-  }
-  .dp-sync-pill span.dp-hide-xs {
-    display: none;
   }
 }

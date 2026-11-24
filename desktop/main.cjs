@@ -89,6 +89,11 @@ function startLocalStaticServer() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       const reqPath = (req.url || '/').split('?')[0];
+      if (reqPath.startsWith('/api/')) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Local desktop bundle has no built-in sync API. Set your Docker LAN or Tailscale Server URL in Settings → 3-Mode Sync.' }));
+        return;
+      }
       let filePath = path.join(webRoot, reqPath === '/' ? 'index.html' : reqPath);
       if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         filePath = path.join(webRoot, 'index.html');

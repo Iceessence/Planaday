@@ -21,6 +21,7 @@ import { addDaysIso, diffDaysIso, formatDateLocalized, formatTimeDisplay } from 
 import { computeChoreFreshnessAtDate, expandRecurrenceDates } from '../../core/recurrence';
 import { completeActionAtomically, timeToMinutes } from '../../core/planActions';
 import { createRecord, updateRecord } from '../../core/repository';
+import { WeatherCard } from '../../components/Common/WeatherCard';
 import type {
   CalendarEventPayload,
   ChorePayload,
@@ -215,6 +216,9 @@ export const HomeDashboard: React.FC = () => {
           <div className="dp-progress-fill" style={{ width: `${dayProgressPct}%`, background: 'var(--dp-ok)' }} />
         </div>
       </div>
+
+      {/* Live Weather Widget (Online Open-Meteo + Graceful Offline Cache) */}
+      <WeatherCard />
 
       {/* Shared Family Important Board */}
       {sharedImportantItems.length > 0 && (

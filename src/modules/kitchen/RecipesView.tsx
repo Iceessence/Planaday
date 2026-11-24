@@ -26,6 +26,7 @@ import { COOKING_DENSITIES } from '../../data/densities';
 import { triggerBrowserDownload } from '../../core/backup';
 import { createId, getBlobObjectUrl, storeBlob } from '../../core/db';
 import { ModalDialog } from '../../components/Common/ModalDialog';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import type { LifeRecord, PantryLotPayload, RecipePayload } from '../../core/types';
 
 export const RecipesView: React.FC = () => {
@@ -33,6 +34,10 @@ export const RecipesView: React.FC = () => {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [cuisineFilter, setCuisineFilter] = useState('all');
+  const [diffFilter, setDiffFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
+  const [recipeSortBy, setRecipeSortBy] = useState<'title' | 'time' | 'servings' | 'made'>('title');
+  const [recipeSortDir, setRecipeSortDir] = useState<'asc' | 'desc'>('asc');
   const [showWhatCanIMake, setShowWhatCanIMake] = useState(false);
   const [clipperOpen, setClipperOpen] = useState(false);
   const [clipUrl, setClipUrl] = useState('');
@@ -71,14 +76,26 @@ export const RecipesView: React.FC = () => {
 
   const filteredRecipes = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return recipes;
-    return recipes.filter(
-      (r) =>
-        r.title.toLowerCase().includes(q) ||
-        (r.payload.cuisine || '').toLowerCase().includes(q) ||
-        r.payload.ingredients.some((i) => i.name.toLowerCase().includes(q))
-    );
-  }, [recipes, search]);
+    const list = recipes.filter((r) => {
+      if (cuisineFilter !== 'all' && (r.payload.cuisine || 'Home') !== cuisineFilter) return false;
+      if (diffFilter !== 'all' && (r.payload.difficulty || 'easy').toLowerCase() !== diffFilter) return false;
+      if (q) {
+        const hit =
+          r.title.toLowerCase().includes(q) ||
+          (r.payload.cuisine || '').toLowerCase().includes(q) ||
+          r.payload.ingredients.some((i) => i.name.toLowerCase().includes(q));
+        if (!hit) return false;
+      }
+      return true;
+    });
+    const dir = recipeSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (recipeSortBy === 'time') return (a.payload.prepMin + a.payload.cookMin - (b.payload.prepMin + b.payload.cookMin)) * dir;
+      if (recipeSortBy === 'servings') return ((a.payload.servings || 1) - (b.payload.servings || 1)) * dir;
+      if (recipeSortBy === 'made') return ((a.payload.madeCount || 0) - (b.payload.madeCount || 0)) * dir;
+      return a.title.localeCompare(b.title) * dir;
+    });
+  }, [recipes, search, cuisineFilter, diffFilter, recipeSortBy, recipeSortDir]);
 
   const activeRecipe = useMemo(
     () => recipes.find((r) => r.id === selectedId) ?? filteredRecipes[0] ?? null,
@@ -285,11 +302,52 @@ export const RecipesView: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 260px) minmax(0, 1fr)', gap: 16 }}>
-          {/* Recipe List */}
-          <div className="dp-stack" style={{ gap: 8 }}>
-            <input className="dp-input" placeholder="Search recipes or ingredients…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            {filteredRecipes.map((r) => (
+        <div className="dp-stack" style={{ gap: 12 }}>
+          <SortFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search recipes, ingredients, cuisines…"
+            sortBy={recipeSortBy}
+            onSortByChange={(v) => setRecipeSortBy(v as typeof recipeSortBy)}
+            sortOptions={[
+              { value: 'title', label: 'Title (A–Z)' },
+              { value: 'time', label: 'Total Cook Time' },
+              { value: 'servings', label: 'Servings' },
+              { value: 'made', label: 'Most Made' },
+            ]}
+            sortDir={recipeSortDir}
+            onSortDirToggle={() => setRecipeSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            chips={[
+              { value: 'all', label: 'All' },
+              { value: 'easy', label: 'Easy' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'hard', label: 'Hard' },
+            ]}
+            activeChip={diffFilter}
+            onChipChange={(v) => setDiffFilter(v as typeof diffFilter)}
+            extraFilters={[
+              {
+                label: 'Filter by cuisine',
+                value: cuisineFilter,
+                onChange: setCuisineFilter,
+                options: [
+                  { value: 'all', label: 'All Cuisines' },
+                  ...Array.from(new Set(recipes.map((r) => r.payload.cuisine || 'Home'))).sort().map((c) => ({ value: c, label: c })),
+                ],
+              },
+            ]}
+            totalCount={recipes.length}
+            shownCount={filteredRecipes.length}
+            onReset={() => {
+              setSearch('');
+              setCuisineFilter('all');
+              setDiffFilter('all');
+            }}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 260px) minmax(0, 1fr)', gap: 16 }}>
+            {/* Recipe List */}
+            <div className="dp-stack" style={{ gap: 8 }}>
+              {filteredRecipes.map((r) => (
               <button
                 key={r.id}
                 type="button"
@@ -497,6 +555,7 @@ export const RecipesView: React.FC = () => {
               </button>
             </div>
           )}
+          </div>
         </div>
       )}
 

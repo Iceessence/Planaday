@@ -13,7 +13,7 @@ import type { LifeRecord, MealPlanPayload, PantryLotPayload, RecipePayload } fro
 const SLOTS: Array<MealPlanPayload['slot']> = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 export const MealsView: React.FC = () => {
-  const { settings, records, activeDate, setActiveDate, logicalToday, pushToast, setActiveView } = useApp();
+  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, setActiveView } = useApp();
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [customMealText, setCustomMealText] = useState('');
   const [addPrepReminder, setAddPrepReminder] = useState(true);
@@ -134,6 +134,21 @@ export const MealsView: React.FC = () => {
           value={customMealText}
           onChange={(e) => setCustomMealText(e.target.value)}
         />
+        <button
+          type="button"
+          className="dp-btn dp-btn-sm"
+          title="Save as a 1-tap favorite meal"
+          onClick={() => {
+            const fav = customMealText.trim();
+            if (!fav) return;
+            if (!(settings.customMealFavorites ?? []).includes(fav)) {
+              void patchSettings({ customMealFavorites: [...(settings.customMealFavorites ?? []), fav] });
+              pushToast(`Saved favorite meal "${fav}"`);
+            }
+          }}
+        >
+          ★ Save Fav
+        </button>
         <label className="dp-row" style={{ fontSize: '0.84rem' }}>
           <input type="checkbox" checked={addPrepReminder} onChange={(e) => setAddPrepReminder(e.target.checked)} />
           <span>Auto defrost/prep reminder</span>
@@ -142,6 +157,35 @@ export const MealsView: React.FC = () => {
           <span className="dp-pill">Week est: {weekNutrition.cal} kcal · {weekNutrition.protein}g protein</span>
         )}
       </div>
+
+      {(settings.customMealFavorites ?? []).length > 0 && (
+        <div className="dp-row" style={{ fontSize: '0.82rem', gap: 6 }}>
+          <span className="dp-muted">★ Quick Favorites (tap then click + on any day):</span>
+          {settings.customMealFavorites.map((fav) => (
+            <span key={fav} className="dp-pill">
+              <button
+                type="button"
+                className="dp-btn dp-btn-ghost dp-btn-sm"
+                style={{ padding: 0, minHeight: 'auto' }}
+                onClick={() => {
+                  setSelectedRecipeId('');
+                  setCustomMealText(fav);
+                }}
+              >
+                {fav}
+              </button>
+              <button
+                type="button"
+                className="dp-btn dp-btn-ghost dp-btn-sm"
+                style={{ padding: '0 3px', minHeight: 'auto' }}
+                onClick={() => void patchSettings({ customMealFavorites: settings.customMealFavorites.filter((x) => x !== fav) })}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {leftovers.length > 0 && (
         <div className="dp-row" style={{ fontSize: '0.82rem' }}>

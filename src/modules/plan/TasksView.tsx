@@ -4,6 +4,7 @@ import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { completeActionAtomically, scheduleActionOnCalendar } from '../../core/planActions';
 import { createId } from '../../core/db';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
 import type { LifeRecord, SubtaskItem, TaskPayload } from '../../core/types';
 
 function countSubtasks(list: SubtaskItem[]): { done: number; total: number } {
@@ -79,6 +80,11 @@ export const TasksView: React.FC = () => {
   const [markImportant, setMarkImportant] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
   const [smartFilter, setSmartFilter] = useState<'all' | 'today' | 'low_quick' | 'overdue_hard' | 'completed'>('all');
+  const [taskSearch, setTaskSearch] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | 'urgent' | 'high' | 'medium' | 'low' | 'none'>('all');
+  const [energyFilter, setEnergyFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [taskSortBy, setTaskSortBy] = useState<'doDate' | 'dueDate' | 'priority' | 'estimate' | 'title' | 'created'>('doDate');
+  const [taskSortDir, setTaskSortDir] = useState<'asc' | 'desc'>('asc');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [newSubText, setNewSubText] = useState('');
 
@@ -88,16 +94,36 @@ export const TasksView: React.FC = () => {
   );
 
   const filtered = useMemo(() => {
-    return tasks.filter((t) => {
-      if (smartFilter === 'completed') return t.status === 'done';
-      if (t.status === 'done') return false;
-      if (smartFilter === 'today') return t.doDate === activeDate;
-      if (smartFilter === 'low_quick') return t.energy === 'low' && (t.estimateMin ?? 30) <= 15;
-      // Only a missed HARD dueDate triggers overdue (Section 09.01)
-      if (smartFilter === 'overdue_hard') return Boolean(t.dueDate && t.dueDate < logicalToday);
+    const q = taskSearch.trim().toLowerCase();
+    const list = tasks.filter((t) => {
+      if (smartFilter === 'completed') {
+        if (t.status !== 'done') return false;
+      } else {
+        if (t.status === 'done') return false;
+        if (smartFilter === 'today' && t.doDate !== activeDate) return false;
+        if (smartFilter === 'low_quick' && !(t.energy === 'low' && (t.estimateMin ?? 30) <= 15)) return false;
+        // Only a missed HARD dueDate triggers overdue (Section 09.01)
+        if (smartFilter === 'overdue_hard' && !(t.dueDate && t.dueDate < logicalToday)) return false;
+      }
+      if (priorityFilter !== 'all' && (t.priority || 'none') !== priorityFilter) return false;
+      if (energyFilter !== 'all' && (t.energy || 'medium') !== energyFilter) return false;
+      if (q) {
+        const hay = `${t.title} ${(t.tags ?? []).join(' ')} ${t.payload.notes ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
-  }, [tasks, smartFilter, activeDate, logicalToday]);
+    const priRank: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1, none: 0 };
+    const dir = taskSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (taskSortBy === 'title') return a.title.localeCompare(b.title) * dir;
+      if (taskSortBy === 'priority') return ((priRank[b.priority || 'none'] ?? 0) - (priRank[a.priority || 'none'] ?? 0)) * dir;
+      if (taskSortBy === 'estimate') return ((a.estimateMin ?? 30) - (b.estimateMin ?? 30)) * dir;
+      if (taskSortBy === 'dueDate') return (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31') * dir;
+      if (taskSortBy === 'created') return a.createdAt.localeCompare(b.createdAt) * dir;
+      return (a.doDate || '9999-12-31').localeCompare(b.doDate || '9999-12-31') * dir;
+    });
+  }, [tasks, smartFilter, activeDate, logicalToday, taskSearch, priorityFilter, energyFilter, taskSortBy, taskSortDir]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -454,27 +480,67 @@ export const TasksView: React.FC = () => {
         </details>
       </form>
 
-      {/* Saved Smart Filters */}
-      <div className="dp-row">
-        {(
-          [
-            ['all', 'All Active'],
-            ['today', `Do Today (${activeDate})`],
-            ['low_quick', 'Low Energy ≤ 15m'],
-            ['overdue_hard', 'Missed Hard Due'],
-            ['completed', 'Completed'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`dp-btn dp-btn-sm ${smartFilter === id ? 'dp-btn-primary' : ''}`}
-            onClick={() => setSmartFilter(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Easy Sort & Filter Bar for Tasks */}
+      <SortFilterBar
+        search={taskSearch}
+        onSearchChange={setTaskSearch}
+        searchPlaceholder="Search tasks, #tags, notes…"
+        sortBy={taskSortBy}
+        onSortByChange={(v) => setTaskSortBy(v as typeof taskSortBy)}
+        sortOptions={[
+          { value: 'doDate', label: 'Do Date' },
+          { value: 'dueDate', label: 'Hard Due Date' },
+          { value: 'priority', label: 'Priority' },
+          { value: 'estimate', label: 'Estimate (min)' },
+          { value: 'title', label: 'Title (A–Z)' },
+          { value: 'created', label: 'Date Created' },
+        ]}
+        sortDir={taskSortDir}
+        onSortDirToggle={() => setTaskSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        chips={[
+          { value: 'all', label: 'All Active' },
+          { value: 'today', label: `Do Today (${activeDate})` },
+          { value: 'low_quick', label: 'Low Energy ≤ 15m' },
+          { value: 'overdue_hard', label: 'Missed Hard Due' },
+          { value: 'completed', label: 'Completed' },
+        ]}
+        activeChip={smartFilter}
+        onChipChange={(v) => setSmartFilter(v as typeof smartFilter)}
+        extraFilters={[
+          {
+            label: 'Filter by priority',
+            value: priorityFilter,
+            onChange: (v) => setPriorityFilter(v as typeof priorityFilter),
+            options: [
+              { value: 'all', label: 'All Priorities' },
+              { value: 'urgent', label: 'Urgent' },
+              { value: 'high', label: 'High' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'low', label: 'Low' },
+              { value: 'none', label: 'None' },
+            ],
+          },
+          {
+            label: 'Filter by energy',
+            value: energyFilter,
+            onChange: (v) => setEnergyFilter(v as typeof energyFilter),
+            options: [
+              { value: 'all', label: 'All Energy' },
+              { value: 'low', label: 'Low Energy' },
+              { value: 'medium', label: 'Medium Energy' },
+              { value: 'high', label: 'High Energy' },
+            ],
+          },
+        ]}
+        totalCount={tasks.length}
+        shownCount={filtered.length}
+        onReset={() => {
+          setTaskSearch('');
+          setSmartFilter('all');
+          setPriorityFilter('all');
+          setEnergyFilter('all');
+        }}
+      />
 
       {filtered.length === 0 ? (
         <div className="dp-empty">

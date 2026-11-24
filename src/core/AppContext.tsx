@@ -29,6 +29,12 @@ import {
   fireLocalAlert,
   scheduleNativeNotification,
 } from './nativeAlarms';
+import { audioEngine } from './audio';
+import {
+  computeNextAlarmTrigger,
+  doesAlarmMatchMoment,
+  normalizeAlarmPayload,
+} from './alarmSchedule';
 import { timeToMinutes } from './planActions';
 import { expandRecurrenceDates } from './recurrence';
 import type {
@@ -57,6 +63,8 @@ export interface RunningTimer {
   kind: 'countdown' | 'pomodoro' | 'interval' | 'cooking';
   linkedRecordId?: string | null;
   startedAtIso: string;
+  customSound?: string; // optional per-timer sound override
+  customVolume?: number | null; // optional per-timer volume override (0..100)
 }
 
 export function isRecordVisibleForProfile(record: LifeRecord, activeProfileId: string): boolean {
@@ -106,7 +114,13 @@ interface AppContextValue {
   setZenFocusText: (s: string) => void;
   // Persistent mini-bar timers (persisted as records type='timer' so they survive refresh!)
   runningTimers: RunningTimer[];
-  startCountdownTimer: (label: string, durationSec: number, kind?: RunningTimer['kind'], linkedRecordId?: string | null) => Promise<string>;
+  startCountdownTimer: (
+    label: string,
+    durationSec: number,
+    kind?: RunningTimer['kind'],
+    linkedRecordId?: string | null,
+    opts?: { customSound?: string; customVolume?: number | null }
+  ) => Promise<string>;
   toggleTimerPause: (timerId: string) => Promise<void>;
   extendTimer: (timerId: string, addSec: number) => Promise<void>;
   dismissTimer: (timerId: string) => Promise<void>;
@@ -118,10 +132,17 @@ interface AppContextValue {
   openEventInCalendar: (eventId: string, dateIso?: string) => void;
   canInstallPwa: boolean;
   triggerInstallPwa: () => Promise<boolean>;
+  mobileMenuOpen: boolean;
+  setMobileMenuOpen: (v: boolean) => void;
+  ringingAlarm: LifeRecord | null;
+  triggerAlarmRing: (alarm: LifeRecord) => void;
+  dismissRingingAlarm: (openToday?: boolean) => void;
+  snoozeRingingAlarm: (minutes?: number) => void;
   notifyUser: (
     kind: 'timer' | 'alarm' | 'event' | 'chore' | 'stopwatch',
     title: string,
-    body: string
+    body: string,
+    override?: { customSound?: string; customVolume?: number | null }
   ) => void;
 }
 
@@ -183,6 +204,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [zenFocusText, setZenFocusText] = useState('');
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [ringingAlarm, setRingingAlarm] = useState<LifeRecord | null>(null);
   const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
   const firedAlertsRef = React.useRef<Set<string>>(new Set());
   const [syncState, setSyncState] = useState<SyncStateSnapshot>({
@@ -207,6 +230,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       plannerTitle: liveSettings.plannerTitle || 'Dayplana',
       cardRadius: liveSettings.cardRadius || 'soft',
       hiddenSidebarViews: Array.isArray(liveSettings.hiddenSidebarViews) ? liveSettings.hiddenSidebarViews : [],
+      syncFallbackUrl: liveSettings.syncFallbackUrl ?? '',
+      weatherEnabled: liveSettings.weatherEnabled ?? true,
+      weatherLocationName: liveSettings.weatherLocationName ?? '',
+      weatherLat: liveSettings.weatherLat ?? null,
+      weatherLon: liveSettings.weatherLon ?? null,
+      weatherUnit: liveSettings.weatherUnit ?? 'F',
+      cachedWeather: liveSettings.cachedWeather ?? null,
+      factTopicFilter: liveSettings.factTopicFilter ?? 'All',
+      customTimerPresets: Array.isArray(liveSettings.customTimerPresets) ? liveSettings.customTimerPresets : [],
+      customMoods: Array.isArray(liveSettings.customMoods) ? liveSettings.customMoods : [],
+      customDiaryPrompts: Array.isArray(liveSettings.customDiaryPrompts) ? liveSettings.customDiaryPrompts : [],
+      customThoughtPrompts: Array.isArray(liveSettings.customThoughtPrompts) ? liveSettings.customThoughtPrompts : [],
+      customRingtones: Array.isArray(liveSettings.customRingtones) ? liveSettings.customRingtones : [],
+      customNotebooks: Array.isArray(liveSettings.customNotebooks) ? liveSettings.customNotebooks : [],
+      customMealFavorites: Array.isArray(liveSettings.customMealFavorites) ? liveSettings.customMealFavorites : [],
+      defaultCurrency: liveSettings.defaultCurrency || 'USD',
       notificationPrefs: {
         ...defaults.notificationPrefs,
         ...(liveSettings.notificationPrefs ?? {}),
@@ -327,6 +366,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           kind: p.kind ?? 'countdown',
           linkedRecordId: p.linkedRecordId ?? null,
           startedAtIso: p.startedAtIso ?? r.createdAt,
+          customSound: p.customSound,
+          customVolume: p.customVolume ?? null,
         };
       });
   }, [allRecordsIncludingTrash]);
@@ -343,8 +384,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const triggerAlarmRing = useCallback(
+    (alarm: LifeRecord) => {
+      const p = normalizeAlarmPayload(alarm.payload as Record<string, unknown>);
+      const vol01 = Math.max(0.05, Math.min(1, ((p.volume ?? settings.notificationPrefs.volume ?? 85) / 100)));
+      if (settings.notificationPrefs.soundEnabled !== false) {
+        audioEngine.startAlarmLoop(p.ringtone || 'sunrise_harp', vol01, p.volumeRampSec || 20);
+      }
+      if (p.vibrate !== false && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate?.([400, 200, 400, 200, 400]);
+        } catch {
+          // optional
+        }
+      }
+      setRingingAlarm(alarm);
+      if (
+        settings.notificationPrefs.osPushEnabled !== false &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted'
+      ) {
+        try {
+          new Notification(`⏰ ${alarm.title}`, { body: `Scheduled alarm at ${p.time} (${p.profile})`, icon: '/icons/icon.svg' });
+        } catch {
+          // fallback handled by modal + audio loop
+        }
+      }
+    },
+    [settings.notificationPrefs.soundEnabled, settings.notificationPrefs.osPushEnabled, settings.notificationPrefs.volume]
+  );
+
+  const dismissRingingAlarm = useCallback(
+    (openToday = false) => {
+      audioEngine.stopAlarmLoop();
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate?.(0);
+        } catch {
+          // ignore
+        }
+      }
+      setRingingAlarm(null);
+      if (openToday) {
+        setActiveView('today');
+        pushToast('Alarm dismissed — ready for Today Spread!');
+      } else {
+        pushToast('Alarm dismissed');
+      }
+    },
+    [pushToast]
+  );
+
+  const snoozeRingingAlarm = useCallback(
+    (minutes?: number) => {
+      const current = ringingAlarm;
+      audioEngine.stopAlarmLoop();
+      setRingingAlarm(null);
+      if (!current) return;
+      const p = normalizeAlarmPayload(current.payload as Record<string, unknown>);
+      const snoozeM = Math.max(1, minutes ?? p.snoozeMin ?? 9);
+      const fireAt = Date.now() + snoozeM * 60 * 1000;
+      void scheduleNativeNotification(`snooze-${current.id}`, `Snoozed Alarm: ${current.title}`, `Waking you up again (${snoozeM}m snooze)`, fireAt);
+      window.setTimeout(() => {
+        triggerAlarmRing(current);
+      }, snoozeM * 60 * 1000);
+      pushToast(`Snoozed "${current.title}" for ${snoozeM} min`);
+    },
+    [ringingAlarm, triggerAlarmRing, pushToast]
+  );
+
   const notifyUser = useCallback(
-    (kind: 'timer' | 'alarm' | 'event' | 'chore' | 'stopwatch', title: string, body: string) => {
+    (
+      kind: 'timer' | 'alarm' | 'event' | 'chore' | 'stopwatch',
+      title: string,
+      body: string,
+      override?: { customSound?: string; customVolume?: number | null }
+    ) => {
       const prefs = settings.notificationPrefs;
       if (!settings.notificationsEnabled || !prefs.enabled) return;
       if (kind === 'timer' && !prefs.notifyTimers) return;
@@ -353,7 +468,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (kind === 'chore' && !prefs.notifyChores) return;
       if (kind === 'stopwatch' && !prefs.notifyStopwatch) return;
 
-      fireLocalAlert(title, body, prefs.chimeStyle, prefs);
+      const effVolume =
+        typeof override?.customVolume === 'number' && Number.isFinite(override.customVolume)
+          ? override.customVolume
+          : prefs.volume;
+      const effSound = override?.customSound && override.customSound !== 'default' ? override.customSound : prefs.chimeStyle;
+
+      const isClassicChime = ['soft', 'bell', 'marimba', 'classic_alarm', 'woodblock', 'bright', 'complete'].includes(effSound);
+      if (isClassicChime) {
+        fireLocalAlert(title, body, effSound as typeof prefs.chimeStyle, { ...prefs, chimeStyle: effSound as typeof prefs.chimeStyle, volume: effVolume });
+      } else {
+        // Musical ringtone or uploaded custom audio blob
+        if (prefs.soundEnabled !== false && effVolume > 0) {
+          void audioEngine.playRingtoneOnce(effSound, Math.max(0.05, Math.min(1, effVolume / 100)));
+        }
+        fireLocalAlert(title, body, prefs.chimeStyle, { ...prefs, soundEnabled: false });
+      }
       pushToast(`🔔 ${title}: ${body}`);
     },
     [settings.notificationsEnabled, settings.notificationPrefs, pushToast]
@@ -361,7 +491,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const patchSettings = useCallback(async (patch: Partial<AppSettings>) => {
     const next = await updateSettings(patch);
-    if (patch.operatingMode !== undefined || patch.syncServerUrl !== undefined) {
+    if (patch.operatingMode !== undefined || patch.syncServerUrl !== undefined || patch.syncFallbackUrl !== undefined) {
       await startSyncDaemon();
     }
     applySettingsToDocument(next);
@@ -390,7 +520,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       label: string,
       durationSec: number,
       kind: RunningTimer['kind'] = 'countdown',
-      linkedRecordId: string | null = null
+      linkedRecordId: string | null = null,
+      opts?: { customSound?: string; customVolume?: number | null }
     ) => {
       const safeSec = Math.max(1, Math.round(durationSec));
       const now = Date.now();
@@ -415,6 +546,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           kind,
           linkedRecordId,
           startedAtIso: nowIso,
+          customSound: opts?.customSound && opts.customSound !== 'default' ? opts.customSound : undefined,
+          customVolume: typeof opts?.customVolume === 'number' ? opts.customVolume : null,
         },
         rev: 1,
         deviceId: settings.deviceId,
@@ -527,40 +660,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const nowMin = d.getHours() * 60 + d.getMinutes();
       const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
-      // 1. Timers
+      // 1. Timers (honors per-timer customSound & customVolume overrides!)
       if (prefs.notifyTimers) {
         for (const t of runningTimers) {
           if (t.targetEndMs !== null && t.targetEndMs <= nowMs && nowMs - t.targetEndMs < 15000) {
             const key = `tmr:${t.id}:${t.targetEndMs}`;
             if (!firedAlertsRef.current.has(key)) {
               firedAlertsRef.current.add(key);
-              notifyUser('timer', `Timer Finished: ${t.label}`, 'Tap to stop or add time in Dayplana.');
+              notifyUser('timer', `Timer Finished: ${t.label}`, 'Tap to stop or add time in Dayplana.', {
+                customSound: t.customSound,
+                customVolume: t.customVolume ?? null,
+              });
             }
           }
         }
       }
 
-      // 2. Smart Alarms
+      // 2. Smart Alarms (respects scheduled one-time dates, repeat days of week, & chosen ringtone!)
       if (prefs.notifyAlarms) {
         const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
+        const weekday = d.getDay();
+        const calDateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         for (const a of alarms) {
-          const p = a.payload as { time?: string; enabled?: boolean; skipNext?: boolean };
-          if (p.enabled && !p.skipNext && p.time === hhmm) {
-            const key = `alm:${a.id}:${logicalToday}:${hhmm}`;
+          const rawP = a.payload as Record<string, unknown>;
+          const p = normalizeAlarmPayload(rawP);
+          if (doesAlarmMatchMoment(rawP, calDateIso, weekday, hhmm)) {
+            const key = `alm:${a.id}:${calDateIso}:${hhmm}`;
             if (!firedAlertsRef.current.has(key)) {
               firedAlertsRef.current.add(key);
-              notifyUser('alarm', `Alarm: ${a.title}`, `Alarm ringing at ${hhmm}`);
+              triggerAlarmRing(a);
+              // Automatically turn off one-time alarms after they fire
+              if (p.scheduleType === 'once') {
+                void db.records.update(a.id, {
+                  payload: { ...rawP, enabled: false },
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             }
           }
         }
       }
 
-      // 3. Upcoming Calendar Events (custom lead time before start)
+      // 3. Upcoming Calendar Events (honors per-event notifyEnabled, lead time, sound, & volume!)
       if (prefs.notifyEvents) {
         const events = records.filter((r) => r.type === 'event' && r.status === 'active') as Array<
           LifeRecord<CalendarEventPayload>
         >;
         for (const ev of events) {
+          if (ev.payload.notifyEnabled === false) continue;
           if (ev.payload.allDay || !ev.payload.startTime) continue;
           const isToday = ev.recurrence
             ? expandRecurrenceDates(ev.payload.startDate, ev.recurrence, {
@@ -582,7 +729,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 notifyUser(
                   'event',
                   `Upcoming Event: ${ev.title}`,
-                  `${whenText}${ev.payload.location ? ` · ${ev.payload.location}` : ''}`
+                  `${whenText}${ev.payload.location ? ` · ${ev.payload.location}` : ''}`,
+                  {
+                    customSound: ev.payload.customSound,
+                    customVolume: ev.payload.customVolume ?? null,
+                  }
                 );
               }
             }
@@ -590,21 +741,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      // 4. Daily Chore Reminder Digest
-      if (prefs.notifyChores && hhmm === prefs.choreReminderTime) {
-        const key = `chores:${logicalToday}:${prefs.choreReminderTime}`;
-        if (!firedAlertsRef.current.has(key)) {
-          const chores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<
-            LifeRecord<ChorePayload>
-          >;
-          const due = chores.filter((c) => !c.payload.paused && c.payload.nextDueDate <= logicalToday);
-          if (due.length > 0) {
-            firedAlertsRef.current.add(key);
-            notifyUser(
-              'chore',
-              `${due.length} Chore${due.length === 1 ? '' : 's'} Due Today`,
-              due.slice(0, 3).map((c) => c.title).join(', ')
+      // 4. Daily Chore Reminder Digest + Per-Chore Specific Reminder Times!
+      if (prefs.notifyChores) {
+        const chores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<
+          LifeRecord<ChorePayload>
+        >;
+        if (hhmm === prefs.choreReminderTime) {
+          const key = `chores:${logicalToday}:${prefs.choreReminderTime}`;
+          if (!firedAlertsRef.current.has(key)) {
+            const due = chores.filter(
+              (c) => !c.payload.paused && c.payload.notifyEnabled !== false && !c.payload.customReminderTime && c.payload.nextDueDate <= logicalToday
             );
+            if (due.length > 0) {
+              firedAlertsRef.current.add(key);
+              notifyUser(
+                'chore',
+                `${due.length} Chore${due.length === 1 ? '' : 's'} Due Today`,
+                due.slice(0, 3).map((c) => c.title).join(', ')
+              );
+            }
+          }
+        }
+        for (const c of chores) {
+          if (c.payload.paused || c.payload.notifyEnabled === false) continue;
+          if (c.payload.customReminderTime && c.payload.customReminderTime === hhmm && c.payload.nextDueDate <= logicalToday) {
+            const key = `chore:${c.id}:${logicalToday}:${hhmm}`;
+            if (!firedAlertsRef.current.has(key)) {
+              firedAlertsRef.current.add(key);
+              notifyUser('chore', `Chore Reminder: ${c.title}`, `Due today in ${c.payload.room}`, {
+                customSound: c.payload.customSound,
+              });
+            }
           }
         }
       }
@@ -642,7 +809,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, 1000);
     return () => window.clearInterval(id);
-  }, [runningTimers, records, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser]);
+  }, [runningTimers, records, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser, triggerAlarmRing]);
+
+  // Schedule native Capacitor alerts for ALL enabled Smart Alarms' next scheduled trigger
+  useEffect(() => {
+    const prefs = settings.notificationPrefs;
+    if (!settings.notificationsEnabled || !prefs.enabled || !prefs.notifyAlarms) return;
+    const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
+    const now = new Date();
+    for (const a of alarms) {
+      const next = computeNextAlarmTrigger(a.payload as Record<string, unknown>, now);
+      if (next) {
+        const p = normalizeAlarmPayload(a.payload as Record<string, unknown>);
+        void scheduleNativeNotification(
+          a.id,
+          `Dayplana Alarm: ${a.title}`,
+          `${p.time} (${p.profile})`,
+          next.nextFireMs
+        );
+      } else {
+        void cancelNativeNotification(a.id);
+      }
+    }
+  }, [records, settings.notificationsEnabled, settings.notificationPrefs]);
 
   // Schedule native Capacitor alerts for today's upcoming events so Android rings even when closed
   useEffect(() => {
@@ -788,6 +977,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openEventInCalendar,
         canInstallPwa: Boolean(installPrompt),
         triggerInstallPwa,
+        mobileMenuOpen,
+        setMobileMenuOpen,
+        ringingAlarm,
+        triggerAlarmRing,
+        dismissRingingAlarm,
+        snoozeRingingAlarm,
         notifyUser,
       }}
     >

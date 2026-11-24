@@ -122,15 +122,17 @@ export class ServerAlarmScheduler {
       }
     }
 
-    // Resolve current local date & HH:MM in user's configured timezone
+    // Resolve current local date, weekday (0=Sun..6=Sat), & HH:MM in user's configured timezone
     let currentHHMM = '';
     let currentDate = '';
+    let currentWeekday = 0;
     try {
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: cfg.timeZone,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
+        weekday: 'short',
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
@@ -139,27 +141,40 @@ export class ServerAlarmScheduler {
       currentDate = `${get('year')}-${get('month')}-${get('day')}`;
       const h = get('hour') === '24' ? '00' : get('hour');
       currentHHMM = `${h}:${get('minute')}`;
+      const wdMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      currentWeekday = wdMap[get('weekday')] ?? now.getDay();
     } catch {
       return;
     }
     const nowMin = hhmmToMinutes(currentHHMM);
 
-    // 2. Enabled Smart Alarms
+    // 2. Enabled Smart Alarms (respects scheduled one-time dates & repeat days of week!)
     if (cfg.notifyAlarms) {
       const alarms = this.syncDb.getActiveRecordsByType('alarm');
       for (const a of alarms) {
-        const p = (a.payload ?? {}) as { time?: string; enabled?: boolean; skipNext?: boolean; profile?: string };
+        const p = (a.payload ?? {}) as {
+          time?: string;
+          enabled?: boolean;
+          skipNext?: boolean;
+          profile?: string;
+          scheduleType?: 'recurring' | 'once';
+          scheduleDate?: string | null;
+          repeatDays?: number[];
+        };
         if (!p.enabled || p.skipNext || !p.time) continue;
-        if (p.time === currentHHMM) {
-          const key = `alarm:${a.id}:${currentDate}:${currentHHMM}`;
-          if (!this.firedKeys.has(key)) {
-            this.firedKeys.add(key);
-            await this.sendPush(
-              `Dayplana Alarm: ${a.title}`,
-              `${p.time} (${p.profile || 'Alarm'}) — Open Dayplana to start your day.`,
-              'urgent'
-            );
-          }
+        if (p.time !== currentHHMM) continue;
+        if (p.scheduleType === 'once' && p.scheduleDate && p.scheduleDate !== currentDate) continue;
+        if (p.scheduleType !== 'once' && Array.isArray(p.repeatDays) && p.repeatDays.length > 0 && !p.repeatDays.includes(currentWeekday)) {
+          continue;
+        }
+        const key = `alarm:${a.id}:${currentDate}:${currentHHMM}`;
+        if (!this.firedKeys.has(key)) {
+          this.firedKeys.add(key);
+          await this.sendPush(
+            `Dayplana Alarm: ${a.title}`,
+            `${p.time} (${p.profile || 'Alarm'}) — Open Dayplana to start your day.`,
+            'urgent'
+          );
         }
       }
     }

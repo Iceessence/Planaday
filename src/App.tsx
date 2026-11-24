@@ -5,6 +5,7 @@ import { TopBar } from './components/Shell/TopBar';
 import { MiniBar } from './components/Shell/MiniBar';
 import { MobileNav } from './components/Shell/MobileNav';
 import { ToastStack } from './components/Common/ToastStack';
+import { GlobalAlarmRingModal } from './components/Common/GlobalAlarmRingModal';
 import { QuickCaptureDialog } from './components/Common/QuickCaptureDialog';
 import { GlobalSearchDialog } from './components/Common/GlobalSearchDialog';
 import { CommandPalette } from './components/Common/CommandPalette';
@@ -137,6 +138,7 @@ const ShellFrame: React.FC = () => {
       <CommandPalette />
       <OnboardingModal />
       <ToastStack />
+      <GlobalAlarmRingModal />
       <ZenSheetOverlay />
     </div>
   );

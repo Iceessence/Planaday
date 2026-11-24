@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  Calendar as CalendarIcon,
+  Copy,
   Download,
+  List,
   Plus,
   Upload,
   ZoomIn,
@@ -32,14 +35,18 @@ import { exportEventsToIcs, parseIcsCalendar } from '../../core/ics';
 import { triggerBrowserDownload } from '../../core/backup';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { ModalDialog } from '../../components/Common/ModalDialog';
+import { SortFilterBar } from '../../components/Common/SortFilterBar';
+import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
+import { ALARM_RINGTONES, audioEngine } from '../../core/audio';
 import type { CalendarEventPayload, LifeRecord, RecurrenceRule } from '../../core/types';
 
 const EVENT_TEMPLATES = [
-  { name: 'Work Meeting', emoji: '💼', duration: 45, color: '#3b6ea5', style: 'soft' as const },
-  { name: 'Focus Block', emoji: '🧠', duration: 90, color: '#4f7a65', style: 'filled' as const },
-  { name: 'Family Visit', emoji: '🏡', duration: 120, color: '#c96f53', style: 'soft' as const },
-  { name: 'Birthday', emoji: '🎂', duration: 60, color: '#b47438', style: 'outline' as const },
-  { name: 'Workout', emoji: '🏋️', duration: 45, color: '#6b5ca5', style: 'filled' as const },
+  { name: 'Work Meeting', emoji: '💼', category: 'Work', duration: 45, color: '#3b6ea5', style: 'soft' as const },
+  { name: 'Focus Block', emoji: '🧠', category: 'Focus', duration: 90, color: '#4f7a65', style: 'filled' as const },
+  { name: 'Appointment', emoji: '🏥', category: 'Health & Medical', duration: 60, color: '#a84f48', style: 'soft' as const },
+  { name: 'Family Visit', emoji: '🏡', category: 'Family', duration: 120, color: '#c96f53', style: 'soft' as const },
+  { name: 'Workout', emoji: '🏋️', category: 'Health & Medical', duration: 45, color: '#6b5ca5', style: 'filled' as const },
+  { name: 'Birthday', emoji: '🎂', category: 'Social & Fun', duration: 60, color: '#b47438', style: 'outline' as const },
 ];
 
 const ZOOM_STEPS = [5, 10, 15, 30, 60] as const;
@@ -47,7 +54,8 @@ const ZOOM_STEPS = [5, 10, 15, 30, 60] as const;
 export const FlowCalendarView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, selectedEventId, setSelectedEventId } = useApp();
 
-  // Range, positioning, zoom & 4-mode overlap state (Sections 07.01, 07.02)
+  // Range, view mode (Timeline / Agenda / Month), positioning, zoom & filter/sort state
+  const [calendarMode, setCalendarMode] = useState<'timeline' | 'agenda' | 'month'>('timeline');
   const [rangeDays, setRangeDays] = useState<number>(7);
   const [positionMode, setPositionMode] = useState<'ahead' | 'around' | 'before'>('ahead');
   const [gridStepMin, setGridStepMin] = useState<(typeof ZOOM_STEPS)[number]>(15);
@@ -56,6 +64,13 @@ export const FlowCalendarView: React.FC = () => {
   const [conflictOpen, setConflictOpen] = useState(false);
   const [icsFeedUrl, setIcsFeedUrl] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Calendar Search, Category/Chip Filter & Sort
+  const [calSearch, setCalSearch] = useState('');
+  const [calCategoryFilter, setCalCategoryFilter] = useState('all');
+  const [calChipFilter, setCalChipFilter] = useState<'all' | 'upcoming' | 'shared' | 'important' | 'recurring'>('all');
+  const [calSortBy, setCalSortBy] = useState<'date' | 'title' | 'category' | 'duration'>('date');
+  const [calSortDir, setCalSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Event Editor state (Progressive Disclosure — Section 08.01)
   const [editorOpen, setEditorOpen] = useState(false);
@@ -87,6 +102,9 @@ export const FlowCalendarView: React.FC = () => {
   const [recurSkipWeekends, setRecurSkipWeekends] = useState(false);
   const [recurUntil, setRecurUntil] = useState('');
   const [reminderLeadMin, setReminderLeadMin] = useState<number>(settings.notificationPrefs.eventLeadMinutes);
+  const [evNotifyEnabled, setEvNotifyEnabled] = useState<boolean>(true);
+  const [evCustomSound, setEvCustomSound] = useState<string>('default');
+  const [evCustomVolume, setEvCustomVolume] = useState<string>(''); // '' = default global volume
   const [sharedWithAll, setSharedWithAll] = useState(false);
   const [sharedWithProfileIds, setSharedWithProfileIds] = useState<string[]>([]);
   const [isImportant, setIsImportant] = useState(false);
@@ -110,6 +128,22 @@ export const FlowCalendarView: React.FC = () => {
     [records]
   );
 
+  const filteredEvents = useMemo(() => {
+    const q = calSearch.trim().toLowerCase();
+    return events.filter((ev) => {
+      if (calCategoryFilter !== 'all' && (ev.category || 'Personal') !== calCategoryFilter) return false;
+      if (calChipFilter === 'upcoming' && ev.payload.startDate < logicalToday && !ev.recurrence) return false;
+      if (calChipFilter === 'shared' && !ev.sharedWithAll && !(ev.sharedWithProfileIds?.length)) return false;
+      if (calChipFilter === 'important' && !ev.isImportant && ev.payload.importance !== 'must_do') return false;
+      if (calChipFilter === 'recurring' && !ev.recurrence) return false;
+      if (q) {
+        const hay = `${ev.title} ${ev.category ?? ''} ${ev.payload.location ?? ''} ${ev.payload.notes ?? ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [events, calSearch, calCategoryFilter, calChipFilter, logicalToday]);
+
   const unscheduledActions = useMemo(
     () => records.filter((r) => (r.type === 'task' || r.type === 'chore') && r.status === 'active').slice(0, 10),
     [records]
@@ -126,12 +160,12 @@ export const FlowCalendarView: React.FC = () => {
   const rangeStart = dayColumns[0];
   const rangeEnd = dayColumns[dayColumns.length - 1];
 
-  // Expand recurring & multi-day events across visible range
+  // Expand recurring & multi-day filtered events across visible range
   const eventsByDay = useMemo(() => {
     const map = new Map<string, Array<{ event: LifeRecord<CalendarEventPayload>; occurrenceDate: string }>>();
     for (const d of dayColumns) map.set(d, []);
 
-    for (const ev of events) {
+    for (const ev of filteredEvents) {
       if (ev.recurrence) {
         const occDates = expandRecurrenceDates(ev.payload.startDate, ev.recurrence, {
           rangeStart,
@@ -152,7 +186,71 @@ export const FlowCalendarView: React.FC = () => {
       }
     }
     return map;
-  }, [events, dayColumns, rangeStart, rangeEnd]);
+  }, [filteredEvents, dayColumns, rangeStart, rangeEnd]);
+
+  // Month Grid cells for Month view (42-day 6x7 grid centered on activeDate's month)
+  const monthGridDays = useMemo(() => {
+    const [yStr, mStr] = activeDate.split('-');
+    const year = Number(yStr) || 2026;
+    const monthIdx = (Number(mStr) || 1) - 1;
+    const first = new Date(year, monthIdx, 1);
+    const startPad = (first.getDay() - settings.weekStartsOn + 7) % 7;
+    const firstCellDate = new Date(year, monthIdx, 1 - startPad);
+    return Array.from({ length: 42 }, (_, i) => {
+      const dt = new Date(firstCellDate);
+      dt.setDate(firstCellDate.getDate() + i);
+      const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      return { iso, inMonth: dt.getMonth() === monthIdx, dayNum: dt.getDate() };
+    });
+  }, [activeDate, settings.weekStartsOn]);
+
+  const monthEventsByDay = useMemo(() => {
+    const map = new Map<string, Array<LifeRecord<CalendarEventPayload>>>();
+    if (calendarMode !== 'month') return map;
+    const mStart = monthGridDays[0].iso;
+    const mEnd = monthGridDays[monthGridDays.length - 1].iso;
+    for (const cell of monthGridDays) map.set(cell.iso, []);
+    for (const ev of filteredEvents) {
+      if (ev.recurrence) {
+        const occ = expandRecurrenceDates(ev.payload.startDate, ev.recurrence, { rangeStart: mStart, rangeEnd: mEnd, maxCount: 60 });
+        for (const d of occ) map.get(d)?.push(ev);
+      } else {
+        const s = ev.payload.startDate;
+        const e = ev.payload.endDate || s;
+        for (const cell of monthGridDays) {
+          if (cell.iso >= s && cell.iso <= e) map.get(cell.iso)?.push(ev);
+        }
+      }
+    }
+    return map;
+  }, [calendarMode, monthGridDays, filteredEvents]);
+
+  // Sorted Agenda occurrences across a 90-day lookahead window (or all filtered events)
+  const agendaOccurrences = useMemo(() => {
+    const list: Array<{ event: LifeRecord<CalendarEventPayload>; occurrenceDate: string; durationMin: number }> = [];
+    const aStart = addDaysIso(activeDate, -14);
+    const aEnd = addDaysIso(activeDate, 90);
+    for (const ev of filteredEvents) {
+      const dur = ev.payload.allDay
+        ? 1440
+        : Math.max(15, timeToMinutes(ev.payload.endTime || '10:00') - timeToMinutes(ev.payload.startTime || '09:00'));
+      if (ev.recurrence) {
+        const occ = expandRecurrenceDates(ev.payload.startDate, ev.recurrence, { rangeStart: aStart, rangeEnd: aEnd, maxCount: 25 });
+        for (const d of occ) list.push({ event: ev, occurrenceDate: d, durationMin: dur });
+      } else {
+        list.push({ event: ev, occurrenceDate: ev.payload.startDate, durationMin: dur });
+      }
+    }
+    const dir = calSortDir === 'asc' ? 1 : -1;
+    return list.sort((a, b) => {
+      if (calSortBy === 'title') return a.event.title.localeCompare(b.event.title) * dir;
+      if (calSortBy === 'category') return (a.event.category || 'Personal').localeCompare(b.event.category || 'Personal') * dir;
+      if (calSortBy === 'duration') return (a.durationMin - b.durationMin) * dir;
+      const cmpD = a.occurrenceDate.localeCompare(b.occurrenceDate);
+      if (cmpD !== 0) return cmpD * dir;
+      return (a.event.payload.startTime || '00:00').localeCompare(b.event.payload.startTime || '00:00') * dir;
+    });
+  }, [filteredEvents, activeDate, calSortBy, calSortDir]);
 
   const dayLayouts = useMemo(() => {
     const out = new Map<string, ReturnType<typeof layoutDayEvents>>();
@@ -215,6 +313,9 @@ export const FlowCalendarView: React.FC = () => {
     setRecurSkipWeekends(false);
     setRecurUntil('');
     setReminderLeadMin(settings.notificationPrefs.eventLeadMinutes);
+    setEvNotifyEnabled(true);
+    setEvCustomSound('default');
+    setEvCustomVolume('');
     setSharedWithAll(false);
     setSharedWithProfileIds([]);
     setIsImportant(false);
@@ -251,6 +352,9 @@ export const FlowCalendarView: React.FC = () => {
     setRecurSkipWeekends(Boolean(ev.recurrence?.skipWeekends));
     setRecurUntil(ev.recurrence?.until ?? '');
     setReminderLeadMin(ev.payload.remindersMin?.[0] ?? settings.notificationPrefs.eventLeadMinutes);
+    setEvNotifyEnabled(ev.payload.notifyEnabled !== false);
+    setEvCustomSound(ev.payload.customSound || 'default');
+    setEvCustomVolume(typeof ev.payload.customVolume === 'number' ? String(ev.payload.customVolume) : '');
     setSharedWithAll(Boolean(ev.sharedWithAll));
     setSharedWithProfileIds(ev.sharedWithProfileIds ?? []);
     setIsImportant(Boolean(ev.isImportant));
@@ -314,6 +418,9 @@ export const FlowCalendarView: React.FC = () => {
       url: url.trim() || undefined,
       notes: notes.trim() || undefined,
       remindersMin: reminderLeadMin >= 0 ? [reminderLeadMin] : [],
+      notifyEnabled: evNotifyEnabled,
+      customSound: evCustomSound !== 'default' ? evCustomSound : undefined,
+      customVolume: evCustomVolume !== '' ? Math.max(0, Math.min(100, Number(evCustomVolume) || 0)) : null,
       buffers:
         prepMin || travelMin || decompressMin
           ? { prepMin: prepMin || undefined, travelMin: travelMin || undefined, decompressMin: decompressMin || undefined }
@@ -445,24 +552,65 @@ export const FlowCalendarView: React.FC = () => {
     <div className="dp-stack">
       {/* Flow Calendar Control Strip */}
       <div className="dp-card dp-stack" style={{ padding: 12, gap: 10 }}>
-        <div className="dp-between">
-          <div className="dp-row">
+        <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
             <h2 style={{ fontSize: '1.2rem' }}>Flow Calendar</h2>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(addDaysIso(activeDate, -rangeDays))}>
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              onClick={() => setActiveDate(addDaysIso(activeDate, calendarMode === 'month' ? -30 : -rangeDays))}
+            >
               ←
             </button>
             <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(logicalToday)}>
               Today
             </button>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(addDaysIso(activeDate, rangeDays))}>
+            <button
+              type="button"
+              className="dp-btn dp-btn-sm"
+              onClick={() => setActiveDate(addDaysIso(activeDate, calendarMode === 'month' ? 30 : rangeDays))}
+            >
               →
             </button>
-            <span className="dp-muted" style={{ fontSize: '0.84rem' }}>
-              {rangeStart} → {rangeEnd}
+            <input
+              type="date"
+              aria-label="Jump to date"
+              className="dp-input"
+              style={{ width: 'auto', padding: '4px 8px', fontSize: '0.82rem' }}
+              value={activeDate}
+              onChange={(e) => e.target.value && setActiveDate(e.target.value)}
+            />
+            <span className="dp-muted" style={{ fontSize: '0.82rem' }}>
+              {calendarMode === 'month'
+                ? formatDateLocalized(activeDate, settings.locale, { month: 'long', year: 'numeric' })
+                : `${rangeStart} → ${rangeEnd}`}
             </span>
           </div>
 
-          <div className="dp-row">
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <div className="dp-row" style={{ gap: 4 }}>
+              <button
+                type="button"
+                className={`dp-btn dp-btn-sm ${calendarMode === 'timeline' ? 'dp-btn-primary' : ''}`}
+                onClick={() => setCalendarMode('timeline')}
+              >
+                Timeline
+              </button>
+              <button
+                type="button"
+                className={`dp-btn dp-btn-sm ${calendarMode === 'month' ? 'dp-btn-primary' : ''}`}
+                onClick={() => setCalendarMode('month')}
+              >
+                <CalendarIcon size={13} /> Month
+              </button>
+              <button
+                type="button"
+                className={`dp-btn dp-btn-sm ${calendarMode === 'agenda' ? 'dp-btn-primary' : ''}`}
+                onClick={() => setCalendarMode('agenda')}
+              >
+                <List size={13} /> Agenda ({agendaOccurrences.length})
+              </button>
+            </div>
             <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => openNewEvent(activeDate)}>
               <Plus size={14} /> New Event
             </button>
@@ -478,6 +626,168 @@ export const FlowCalendarView: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* In-Tab Calendar Settings Drawer (syncs with Global Settings defaults!) */}
+        <TabSettingsDrawer
+          title="Calendar Settings"
+          subtitle="Defaults for all events — you can still override sound, volume, lead time & timezone on any individual event."
+        >
+          <div className="dp-grid-3" style={{ gap: 8, fontSize: '0.83rem' }}>
+            <label className="dp-stack" style={{ gap: 4 }}>
+              <span className="dp-muted">Week Starts On</span>
+              <select
+                className="dp-select"
+                value={settings.weekStartsOn}
+                onChange={(e) => void patchSettings({ weekStartsOn: Number(e.target.value) as 0 | 1 })}
+              >
+                <option value={0}>Sunday</option>
+                <option value={1}>Monday</option>
+              </select>
+            </label>
+            <label className="dp-stack" style={{ gap: 4 }}>
+              <span className="dp-muted">Time Format</span>
+              <select
+                className="dp-select"
+                value={settings.timeFormat}
+                onChange={(e) => void patchSettings({ timeFormat: e.target.value as '12h' | '24h' })}
+              >
+                <option value="12h">12-Hour (AM/PM)</option>
+                <option value="24h">24-Hour</option>
+              </select>
+            </label>
+            <label className="dp-stack" style={{ gap: 4 }}>
+              <span className="dp-muted">Default Event Lead Time</span>
+              <select
+                className="dp-select"
+                value={settings.notificationPrefs.eventLeadMinutes}
+                onChange={(e) =>
+                  void patchSettings({
+                    notificationPrefs: { ...settings.notificationPrefs, eventLeadMinutes: Number(e.target.value) },
+                  })
+                }
+              >
+                <option value={0}>At start time</option>
+                <option value={5}>5 min before</option>
+                <option value={10}>10 min before</option>
+                <option value={15}>15 min before</option>
+                <option value={30}>30 min before</option>
+                <option value={60}>1 hour before</option>
+              </select>
+            </label>
+          </div>
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 12, fontSize: '0.83rem' }}>
+            <label className="dp-row" style={{ gap: 5 }}>
+              <input
+                type="checkbox"
+                checked={settings.notificationPrefs.notifyEvents}
+                onChange={(e) =>
+                  void patchSettings({
+                    notificationPrefs: { ...settings.notificationPrefs, notifyEvents: e.target.checked },
+                  })
+                }
+              />
+              <span>Notify for Upcoming Events (Global Default)</span>
+            </label>
+            <label className="dp-row" style={{ gap: 5 }}>
+              <span className="dp-muted">Primary TZ:</span>
+              <select
+                className="dp-select"
+                style={{ width: 'auto' }}
+                value={settings.defaultTimeZone}
+                onChange={(e) => void patchSettings({ defaultTimeZone: e.target.value })}
+              >
+                {COMMON_TIMEZONES.map((z) => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
+            </label>
+            <label className="dp-row" style={{ gap: 5 }}>
+              <span className="dp-muted">Secondary TZ:</span>
+              <select
+                className="dp-select"
+                style={{ width: 'auto' }}
+                value={settings.secondaryTimeZone}
+                onChange={(e) => void patchSettings({ secondaryTimeZone: e.target.value })}
+              >
+                {COMMON_TIMEZONES.map((z) => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </TabSettingsDrawer>
+
+        {/* Quick 1-Tap Event Templates */}
+        <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap', fontSize: '0.8rem' }}>
+          <span className="dp-muted">Quick Template:</span>
+          {EVENT_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.name}
+              type="button"
+              className="dp-chip"
+              onClick={() => {
+                openNewEvent(activeDate, '10:00');
+                setTitle(tpl.name);
+                setEmoji(tpl.emoji);
+                setCategory(tpl.category);
+                setColor(tpl.color);
+                setStyle(tpl.style);
+                setEndTime(minutesToTime(timeToMinutes('10:00') + tpl.duration));
+              }}
+            >
+              {tpl.emoji} {tpl.name} ({tpl.duration}m)
+            </button>
+          ))}
+        </div>
+
+        {/* Easy Search, Category Filter, Status Filter & Sort Bar */}
+        <SortFilterBar
+          search={calSearch}
+          onSearchChange={setCalSearch}
+          searchPlaceholder="Search events, locations, notes…"
+          sortBy={calSortBy}
+          onSortByChange={(v) => setCalSortBy(v as typeof calSortBy)}
+          sortOptions={[
+            { value: 'date', label: 'Date & Time' },
+            { value: 'title', label: 'Title (A–Z)' },
+            { value: 'category', label: 'Category' },
+            { value: 'duration', label: 'Duration' },
+          ]}
+          sortDir={calSortDir}
+          onSortDirToggle={() => setCalSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          chips={[
+            { value: 'all', label: 'All' },
+            { value: 'upcoming', label: 'Upcoming' },
+            { value: 'important', label: '★ Important' },
+            { value: 'shared', label: '🏡 Shared' },
+            { value: 'recurring', label: '🔁 Recurring' },
+          ]}
+          activeChip={calChipFilter}
+          onChipChange={(v) => setCalChipFilter(v as typeof calChipFilter)}
+          extraFilters={[
+            {
+              label: 'Filter by category',
+              value: calCategoryFilter,
+              onChange: setCalCategoryFilter,
+              options: [
+                { value: 'all', label: 'All Categories' },
+                ...Array.from(
+                  new Set([
+                    ...settings.eventCategories.map((c) => c.name),
+                    ...events.map((e) => e.category || 'Personal'),
+                  ])
+                ).map((cat) => ({ value: cat, label: cat })),
+              ],
+            },
+          ]}
+          totalCount={events.length}
+          shownCount={filteredEvents.length}
+          onReset={() => {
+            setCalSearch('');
+            setCalCategoryFilter('all');
+            setCalChipFilter('all');
+          }}
+        />
 
         {/* Range presets (1..62d), positioning, 4-mode overlap, zoom, dual TZ */}
         <div className="dp-row" style={{ fontSize: '0.82rem' }}>
@@ -586,7 +896,152 @@ export const FlowCalendarView: React.FC = () => {
         )}
       </div>
 
-      {/* Main Multi-Day Virtualized Flow Grid */}
+      {/* View 1: Month Grid View */}
+      {calendarMode === 'month' && (
+        <div className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, textAlign: 'center', fontSize: '0.78rem', fontWeight: 700, color: 'var(--dp-muted)' }}>
+            {(settings.weekStartsOn === 1 ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((wd) => (
+              <div key={wd}>{wd}</div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
+            {monthGridDays.map((cell) => {
+              const dayEvs = monthEventsByDay.get(cell.iso) ?? [];
+              const isToday = cell.iso === logicalToday;
+              const isActive = cell.iso === activeDate;
+              return (
+                <div
+                  key={cell.iso}
+                  onClick={() => setActiveDate(cell.iso)}
+                  onDoubleClick={() => openNewEvent(cell.iso)}
+                  style={{
+                    minHeight: 82,
+                    padding: 6,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    opacity: cell.inMonth ? 1 : 0.45,
+                    border: isActive ? '2px solid var(--dp-accent)' : '1px solid var(--dp-border)',
+                    background: isToday ? 'color-mix(in oklch, var(--dp-highlight) 45%, var(--dp-surface))' : 'var(--dp-surface)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 3,
+                  }}
+                >
+                  <div className="dp-between" style={{ fontSize: '0.78rem' }}>
+                    <strong style={{ color: isToday ? 'var(--dp-accent)' : undefined }}>{cell.dayNum}</strong>
+                    <button
+                      type="button"
+                      className="dp-icon-btn"
+                      style={{ width: 18, height: 18, border: 'none' }}
+                      aria-label={`Add on ${cell.iso}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openNewEvent(cell.iso);
+                      }}
+                    >
+                      <Plus size={11} />
+                    </button>
+                  </div>
+                  {dayEvs.slice(0, 3).map((ev) => (
+                    <div
+                      key={ev.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditEvent(ev, cell.iso);
+                      }}
+                      style={{
+                        fontSize: '0.7rem',
+                        padding: '1px 4px',
+                        borderRadius: 4,
+                        background: `color-mix(in oklch, ${ev.color || 'var(--dp-accent)'} 22%, var(--dp-surface))`,
+                        borderInlineStart: `3px solid ${ev.color || 'var(--dp-accent)'}`,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {ev.payload.emoji ? `${ev.payload.emoji} ` : ''}{ev.title}
+                    </div>
+                  ))}
+                  {dayEvs.length > 3 && (
+                    <span className="dp-muted" style={{ fontSize: '0.68rem' }}>+{dayEvs.length - 3} more</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* View 2: Clean Sortable Agenda List View (Super Friendly on Phones & Desktops!) */}
+      {calendarMode === 'agenda' && (
+        <div className="dp-card dp-stack" style={{ padding: 14, gap: 8 }}>
+          {agendaOccurrences.length === 0 ? (
+            <p className="dp-muted" style={{ margin: 0 }}>No events match your current search or filters.</p>
+          ) : (
+            agendaOccurrences.map((item, idx) => {
+              const ev = item.event;
+              return (
+                <div
+                  key={`${ev.id}-${item.occurrenceDate}-${idx}`}
+                  className="dp-card dp-between"
+                  style={{
+                    padding: '10px 12px',
+                    borderInlineStart: `4px solid ${ev.color || 'var(--dp-accent)'}`,
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => openEditEvent(ev, item.occurrenceDate)}
+                >
+                  <div className="dp-stack" style={{ gap: 2 }}>
+                    <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                      <strong>
+                        {ev.isImportant ? '★ ' : ''}
+                        {ev.payload.emoji ? `${ev.payload.emoji} ` : ''}
+                        {ev.title}
+                      </strong>
+                      <span className="dp-pill">{ev.category || 'Personal'}</span>
+                      {ev.recurrence && <span className="dp-pill">🔁 {ev.recurrence.freq}</span>}
+                      {(ev.sharedWithAll || (ev.sharedWithProfileIds?.length ?? 0) > 0) && <span className="dp-pill">🏡 Shared</span>}
+                    </div>
+                    <div className="dp-muted" style={{ fontSize: '0.8rem' }}>
+                      {formatDateLocalized(item.occurrenceDate, settings.locale, { weekday: 'short', month: 'short', day: 'numeric' })} ·{' '}
+                      {ev.payload.allDay
+                        ? 'All Day'
+                        : `${formatTimeDisplay(ev.payload.startTime || '09:00', settings.timeFormat)} – ${formatTimeDisplay(ev.payload.endTime || '10:00', settings.timeFormat)} (${item.durationMin}m)`}
+                      {ev.payload.location ? ` · 📍 ${ev.payload.location}` : ''}
+                    </div>
+                  </div>
+                  <div className="dp-row" style={{ gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-sm"
+                      onClick={async () => {
+                        await createRecord<CalendarEventPayload>(
+                          'event',
+                          `${ev.title} (Copy)`,
+                          { ...ev.payload, startDate: item.occurrenceDate, endDate: item.occurrenceDate },
+                          { color: ev.color, category: ev.category, sharedWithAll: ev.sharedWithAll, isImportant: ev.isImportant }
+                        );
+                        pushToast(`Duplicated "${ev.title}"`, { canUndo: true });
+                      }}
+                    >
+                      <Copy size={13} /> Duplicate
+                    </button>
+                    <button type="button" className="dp-btn dp-btn-sm" onClick={() => openEditEvent(ev, item.occurrenceDate)}>
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* View 3: Main Multi-Day Virtualized Flow Grid */}
+      {calendarMode === 'timeline' && (
       <div className="dp-flow-shell">
         <div className="dp-flow-scroll" ref={scrollRef}>
           <div
@@ -601,9 +1056,18 @@ export const FlowCalendarView: React.FC = () => {
               Time
             </div>
 
-            {/* Day Headers + All-Day strip */}
+            {/* Day Headers + Daily Planned Hours Badge + All-Day strip */}
             {dayColumns.map((d) => {
-              const allDayEvs = (eventsByDay.get(d) ?? []).filter((x) => x.event.payload.allDay);
+              const dayList = eventsByDay.get(d) ?? [];
+              const allDayEvs = dayList.filter((x) => x.event.payload.allDay);
+              const totalPlannedMin = dayList
+                .filter((x) => !x.event.payload.allDay)
+                .reduce(
+                  (acc, x) =>
+                    acc + Math.max(0, timeToMinutes(x.event.payload.endTime || '10:00') - timeToMinutes(x.event.payload.startTime || '09:00')),
+                  0
+                );
+              const plannedHrsLabel = totalPlannedMin > 0 ? `${(totalPlannedMin / 60).toFixed(1).replace(/\.0$/, '')}h` : '';
               return (
                 <div
                   key={d}
@@ -613,7 +1077,12 @@ export const FlowCalendarView: React.FC = () => {
                   }}
                 >
                   <div className="dp-between">
-                    <span>{formatDateLocalized(d, settings.locale, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                    <span>
+                      {formatDateLocalized(d, settings.locale, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {plannedHrsLabel && (
+                        <span className="dp-muted" style={{ fontSize: '0.7rem', marginInlineStart: 5 }}>({plannedHrsLabel})</span>
+                      )}
+                    </span>
                     <button
                       type="button"
                       className="dp-icon-btn"
@@ -897,6 +1366,7 @@ export const FlowCalendarView: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* ICS Interoperability Bar (Section 08.04) */}
       <div className="dp-card dp-between" style={{ padding: 10 }}>
@@ -1152,6 +1622,67 @@ export const FlowCalendarView: React.FC = () => {
             </label>
           </div>
 
+          {/* Per-Event Specific Notification & Sound Overrides (Defaults to Global Settings) */}
+          <div className="dp-card dp-stack" style={{ padding: 10, gap: 6, background: 'var(--dp-surface-2)' }}>
+            <div className="dp-row" style={{ flexWrap: 'wrap', gap: 10, fontSize: '0.82rem' }}>
+              <label className="dp-row" style={{ gap: 5, cursor: 'pointer' }}>
+                <input type="checkbox" checked={evNotifyEnabled} onChange={(e) => setEvNotifyEnabled(e.target.checked)} />
+                <strong>Notify for this event</strong>
+              </label>
+              <label className="dp-row" style={{ gap: 5 }}>
+                <span className="dp-muted">Sound:</span>
+                <select
+                  aria-label="Per-event alert sound"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '3px 8px' }}
+                  value={evCustomSound}
+                  onChange={(e) => setEvCustomSound(e.target.value)}
+                >
+                  <option value="default">Use Default ({settings.notificationPrefs.chimeStyle})</option>
+                  <option value="bell">🔔 Bell Chime</option>
+                  <option value="soft">🌿 Soft Tone</option>
+                  <option value="marimba">🎵 Marimba</option>
+                  <option value="bright">✨ Bright Chime</option>
+                  <option value="classic_alarm">⏰ Classic Alarm</option>
+                  {ALARM_RINGTONES.map((rt) => (
+                    <option key={rt.id} value={rt.id}>{rt.emoji} {rt.name}</option>
+                  ))}
+                  {(settings.customRingtones ?? []).map((cr) => (
+                    <option key={cr.hash} value={`blob:${cr.hash}`}>🎶 {cr.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => {
+                    const vol = (evCustomVolume !== '' ? Number(evCustomVolume) : settings.notificationPrefs.volume) / 100;
+                    const snd = evCustomSound === 'default' ? settings.notificationPrefs.chimeStyle : evCustomSound;
+                    if (['soft', 'bell', 'marimba', 'classic_alarm', 'woodblock', 'bright'].includes(snd)) {
+                      audioEngine.playChime(snd as 'bell', vol);
+                    } else {
+                      void audioEngine.playRingtoneOnce(snd, vol);
+                    }
+                  }}
+                >
+                  ▶
+                </button>
+              </label>
+              <label className="dp-row" style={{ gap: 5 }}>
+                <span className="dp-muted">Vol % (blank = default {settings.notificationPrefs.volume}%):</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder={String(settings.notificationPrefs.volume)}
+                  className="dp-input"
+                  style={{ width: 68, padding: '3px 6px' }}
+                  value={evCustomVolume}
+                  onChange={(e) => setEvCustomVolume(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
           {/* Family Sharing & Important Notice Controls */}
           <div className="dp-card dp-stack" style={{ padding: 10, gap: 6, background: 'var(--dp-surface-2)' }}>
             <div className="dp-row" style={{ gap: 12 }}>
@@ -1311,19 +1842,53 @@ export const FlowCalendarView: React.FC = () => {
             </div>
           </details>
 
-          <div className="dp-between">
+          <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
             {editingId ? (
-              <button
-                type="button"
-                className="dp-btn dp-btn-danger"
-                onClick={async () => {
-                  await softDeleteRecord(editingId);
-                  setEditorOpen(false);
-                  pushToast('Moved event to Trash', { canUndo: true });
-                }}
-              >
-                Move to Trash
-              </button>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-danger"
+                  onClick={async () => {
+                    await softDeleteRecord(editingId);
+                    setEditorOpen(false);
+                    pushToast('Moved event to Trash', { canUndo: true });
+                  }}
+                >
+                  Move to Trash
+                </button>
+                <button
+                  type="button"
+                  className="dp-btn"
+                  onClick={async () => {
+                    await createRecord<CalendarEventPayload>(
+                      'event',
+                      `${title.trim() || 'Event'} (Copy)`,
+                      {
+                        startDate,
+                        endDate: endDate >= startDate ? endDate : startDate,
+                        startTime: allDay ? undefined : startTime,
+                        endTime: allDay ? undefined : endTime,
+                        allDay,
+                        floating,
+                        timeZone,
+                        style,
+                        emoji,
+                        eventStatus,
+                        importance,
+                        location: location.trim() || undefined,
+                        url: url.trim() || undefined,
+                        notes: notes.trim() || undefined,
+                        remindersMin: reminderLeadMin >= 0 ? [reminderLeadMin] : [],
+                      },
+                      { color, category, sharedWithAll, sharedWithProfileIds, isImportant }
+                    );
+                    setEditorOpen(false);
+                    pushToast(`Duplicated "${title.trim()}"`, { canUndo: true });
+                  }}
+                >
+                  <Copy size={14} /> Duplicate
+                </button>
+              </div>
             ) : (
               <span />
             )}
