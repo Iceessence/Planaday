@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -64,7 +65,22 @@ export class SyncDatabase {
         value TEXT NOT NULL
       );
       INSERT OR IGNORE INTO sync_meta (key, value) VALUES ('seq', '0');
+      INSERT OR IGNORE INTO sync_meta (key, value) VALUES ('sync_epoch', '1');
     `);
+    if (!this.getMeta('server_id')) {
+      this.setMeta('server_id', `srv_${crypto.randomUUID()}`);
+    }
+  }
+
+  public getRawDb(): DatabaseSync {
+    return this.db;
+  }
+
+  public getServerIdentity(): { serverId: string; syncEpoch: number } {
+    return {
+      serverId: this.getMeta('server_id') ?? 'srv_unknown',
+      syncEpoch: Number(this.getMeta('sync_epoch') ?? '1') || 1,
+    };
   }
 
   public getCurrentSeq(): number {

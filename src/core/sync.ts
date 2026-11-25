@@ -1,18 +1,32 @@
-import { blobToArrayBuffer, createId, db, getOrInitSettings, updateSettings } from './db';
+import { blobToArrayBuffer, createId, db, getOrInitSettings, sha256Hex, updateSettings } from './db';
 import { detectRuntimePlatform } from './nativeAlarms';
 import { compactOutbox, subscribeRepository } from './repository';
 import type { LifeRecord, OutboxOp, SyncConflict } from './types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error' | 'standalone';
 
+export interface BlobTransferReceipt {
+  hash: string;
+  direction: 'upload' | 'download';
+  status: 'verified' | 'pending' | 'failed';
+  error?: string;
+  at: string;
+}
+
 export interface SyncStateSnapshot {
   status: SyncStatus;
   pendingCount: number;
+  pendingBlobUploads?: number;
+  pendingBlobDownloads?: number;
+  failedBlobTransfers?: number;
+  blobReceipts?: BlobTransferReceipt[];
   conflictCount: number;
   lastSyncAt: string | null;
   errorMessage?: string;
   serverReachable: boolean;
   activeServerUrl?: string;
+  serverId?: string;
+  syncEpoch?: number;
   lastSyncDurationMs?: number;
   lastSyncedOpsCount?: number;
   queueBytesEstimate?: number;
@@ -22,6 +36,10 @@ export interface SyncStateSnapshot {
 export interface ServerStorageInfo {
   ok: boolean;
   app: string;
+  version?: string;
+  serverId?: string;
+  syncEpoch?: number;
+  authEnabled?: boolean;
   dataDir: string;
   sqlitePath: string;
   sqliteSizeBytes: number;
@@ -42,6 +60,10 @@ const syncListeners = new Set<SyncListener>();
 let currentState: SyncStateSnapshot = {
   status: 'standalone',
   pendingCount: 0,
+  pendingBlobUploads: 0,
+  pendingBlobDownloads: 0,
+  failedBlobTransfers: 0,
+  blobReceipts: [],
   conflictCount: 0,
   lastSyncAt: null,
   serverReachable: false,
@@ -73,13 +95,50 @@ export function getSyncState(): SyncStateSnapshot {
   return currentState;
 }
 
+function buildAuthHeaders(token?: string | null, extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (token && token.trim()) {
+    headers.Authorization = `Bearer ${token.trim()}`;
+  }
+  return headers;
+}
+
 /**
- * Smartly normalizes user-entered LAN / Tailscale server URLs:
- * - "192.168.88.31:3000" -> "http://192.168.88.31:3000"
- * - "100.85.10.22:3000/" -> "http://100.85.10.22:3000"
- * - "planaday.tail1234.ts.net" -> "https://planaday.tail1234.ts.net"
- * - Strips accidental trailing "/api/..." or slashes.
+ * Recursively extracts every SHA-256 / content-addressed blob hash referenced by a LifeRecord (PD-002).
  */
+export function extractReferencedBlobHashes(record: LifeRecord): string[] {
+  const hashes = new Set<string>();
+  const isHash = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{16,128}$/i.test(v);
+
+  const visit = (obj: unknown, keyHint = ''): void => {
+    if (!obj) return;
+    if (typeof obj === 'string') {
+      if (/(blob|hash)/i.test(keyHint) && isHash(obj)) {
+        hashes.add(obj.toLowerCase());
+      }
+      return;
+    }
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        if (typeof item === 'string' && /(blob|hash)/i.test(keyHint) && isHash(item)) {
+          hashes.add(item.toLowerCase());
+        } else if (item && typeof item === 'object') {
+          visit(item, keyHint);
+        }
+      }
+      return;
+    }
+    if (typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+        visit(v, k);
+      }
+    }
+  };
+
+  visit(record.payload);
+  return Array.from(hashes);
+}
+
 export function normalizeServerUrl(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
@@ -95,6 +154,10 @@ export interface ServerTestResult {
   ok: boolean;
   normalizedUrl: string;
   latencyMs: number;
+  version?: string;
+  serverId?: string;
+  authEnabled?: boolean;
+  setupRequired?: boolean;
   recordCount?: number;
   error?: string;
 }
@@ -132,7 +195,16 @@ export async function testServerConnection(rawUrl: string, fetchImpl: typeof fet
         error: 'Target returned HTML instead of Planaday Sync API — check that you included port :3000 (not Dockge port 5001).',
       };
     }
-    const json = (await res.json()) as { ok?: boolean; app?: string; legacyApp?: string; recordCount?: number };
+    const json = (await res.json()) as {
+      ok?: boolean;
+      app?: string;
+      legacyApp?: string;
+      version?: string;
+      serverId?: string;
+      authEnabled?: boolean;
+      setupRequired?: boolean;
+      recordCount?: number;
+    };
     const isPlanaday = json.app === 'planaday' || json.app === 'dayplana' || json.legacyApp === 'dayplana';
     if (!json.ok || !isPlanaday) {
       return {
@@ -146,6 +218,10 @@ export async function testServerConnection(rawUrl: string, fetchImpl: typeof fet
       ok: true,
       normalizedUrl,
       latencyMs: Date.now() - started,
+      version: json.version,
+      serverId: json.serverId,
+      authEnabled: json.authEnabled,
+      setupRequired: json.setupRequired,
       recordCount: json.recordCount,
     };
   } catch (err) {
@@ -165,9 +241,10 @@ export async function testServerConnection(rawUrl: string, fetchImpl: typeof fet
 export async function fetchServerStorageInfo(fetchImpl: typeof fetch = fetch): Promise<ServerStorageInfo | null> {
   const settings = await getOrInitSettings();
   const candidates = getCandidateServerBases(settings.syncServerUrl, settings.syncFallbackUrl || '');
+  const headers = buildAuthHeaders(settings.syncAuthToken);
   for (const base of candidates) {
     try {
-      const res = await fetchImpl(`${base}/api/storage/info`);
+      const res = await fetchImpl(`${base}/api/storage/info`, { headers });
       if (res.ok) {
         const json = (await res.json()) as ServerStorageInfo;
         if (json.ok) return json;
@@ -184,9 +261,10 @@ export async function triggerServerSqliteBackup(
 ): Promise<{ ok: boolean; filePath?: string; sizeBytes?: number; error?: string }> {
   const settings = await getOrInitSettings();
   const candidates = getCandidateServerBases(settings.syncServerUrl, settings.syncFallbackUrl || '');
+  const headers = buildAuthHeaders(settings.syncAuthToken);
   for (const base of candidates) {
     try {
-      const res = await fetchImpl(`${base}/api/storage/backup`, { method: 'POST' });
+      const res = await fetchImpl(`${base}/api/storage/backup`, { method: 'POST', headers });
       const json = (await res.json()) as { ok?: boolean; filePath?: string; sizeBytes?: number; error?: string };
       if (res.ok && json.ok) {
         return { ok: true, filePath: json.filePath, sizeBytes: json.sizeBytes };
@@ -297,36 +375,159 @@ export function mergeRecordsSafely(
   return { merged, hasConflict: textConflict };
 }
 
-async function syncAgainstBase(
+interface SyncPassResult {
+  seq: number;
+  serverId?: string;
+  syncEpoch?: number;
+  pushedCount: number;
+  failedUploads: BlobTransferReceipt[];
+  failedDownloads: BlobTransferReceipt[];
+  verifiedReceipts: BlobTransferReceipt[];
+  reboundReplacementServer: boolean;
+}
+
+async function uploadUnsyncedBlobs(
+  base: string,
+  authToken: string | undefined,
+  fetchImpl: typeof fetch
+): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[] }> {
+  const verified: BlobTransferReceipt[] = [];
+  const failed: BlobTransferReceipt[] = [];
+  const unsyncedBlobs = await db.blobs.filter((b) => !b.synced).toArray();
+
+  for (const blobRec of unsyncedBlobs) {
+    const now = new Date().toISOString();
+    try {
+      const buf = blobRec.data
+        ? await blobToArrayBuffer(blobRec.data)
+        : blobRec.blob
+          ? await blobToArrayBuffer(blobRec.blob)
+          : new ArrayBuffer(0);
+      const res = await fetchImpl(`${base}/api/blobs/${blobRec.hash}`, {
+        method: 'PUT',
+        headers: buildAuthHeaders(authToken, {
+          'Content-Type': blobRec.mimeType || 'application/octet-stream',
+          'X-Blob-Name': encodeURIComponent(blobRec.name || 'attachment'),
+        }),
+        body: buf,
+      });
+      if (res.ok) {
+        // Use full put() rather than partial update() so cross-realm ArrayBuffer payloads are never stripped by deepClone
+        await db.blobs.put({ ...blobRec, data: buf, synced: true });
+        verified.push({ hash: blobRec.hash, direction: 'upload', status: 'verified', at: now });
+      } else {
+        failed.push({
+          hash: blobRec.hash,
+          direction: 'upload',
+          status: 'failed',
+          error: `Blob upload rejected (HTTP ${res.status})`,
+          at: now,
+        });
+      }
+    } catch (err) {
+      failed.push({
+        hash: blobRec.hash,
+        direction: 'upload',
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Blob upload network failure',
+        at: now,
+      });
+    }
+  }
+  return { verified, failed };
+}
+
+async function downloadMissingReferencedBlobs(
+  base: string,
+  authToken: string | undefined,
+  fetchImpl: typeof fetch
+): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[] }> {
+  const verified: BlobTransferReceipt[] = [];
+  const failed: BlobTransferReceipt[] = [];
+
+  // Inspect all non-deleted records for referenced attachment hashes not yet stored locally (PD-002)
+  const allRecs = await db.records.toArray();
+  const neededHashes = new Set<string>();
+  for (const rec of allRecs) {
+    if (rec.deletedAt) continue;
+    for (const h of extractReferencedBlobHashes(rec)) {
+      neededHashes.add(h);
+    }
+  }
+
+  for (const hash of neededHashes) {
+    const localExisting = await db.blobs.get(hash);
+    if (localExisting && (localExisting.data || localExisting.blob)) continue;
+
+    const now = new Date().toISOString();
+    try {
+      const res = await fetchImpl(`${base}/api/blobs/${hash}`, {
+        headers: buildAuthHeaders(authToken),
+      });
+      if (!res.ok) {
+        failed.push({
+          hash,
+          direction: 'download',
+          status: 'failed',
+          error: `Attachment download failed (HTTP ${res.status})`,
+          at: now,
+        });
+        continue;
+      }
+      const ab = await res.arrayBuffer();
+      if (hash.length === 64) {
+        const computed = await sha256Hex(ab);
+        if (computed !== hash.toLowerCase()) {
+          failed.push({
+            hash,
+            direction: 'download',
+            status: 'failed',
+            error: `Downloaded attachment SHA-256 mismatch (${computed.slice(0, 10)}… != ${hash.slice(0, 10)}…)`,
+            at: now,
+          });
+          continue;
+        }
+      }
+      const mimeType = (res.headers?.get?.('content-type') || 'application/octet-stream').split(';')[0].trim();
+      await db.blobs.put({
+        hash,
+        mimeType,
+        name: `attachment-${hash.slice(0, 8)}`,
+        size: ab.byteLength,
+        data: ab,
+        createdAt: now,
+        synced: true,
+      });
+      verified.push({ hash, direction: 'download', status: 'verified', at: now });
+    } catch (err) {
+      failed.push({
+        hash,
+        direction: 'download',
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Attachment download network error',
+        at: now,
+      });
+    }
+  }
+
+  return { verified, failed };
+}
+
+async function pushPendingOperations(
   base: string,
   settings: Awaited<ReturnType<typeof getOrInitSettings>>,
   pendingOps: OutboxOp[],
   fetchImpl: typeof fetch
-): Promise<{ seq: number; pushedCount: number }> {
-  // 1. Upload unsynced binary blobs first
-  const unsyncedBlobs = await db.blobs.filter((b) => !b.synced).toArray();
-  for (const blobRec of unsyncedBlobs) {
-    const buf = blobRec.data ?? (blobRec.blob ? await blobToArrayBuffer(blobRec.blob) : new ArrayBuffer(0));
-    const res = await fetchImpl(`${base}/api/blobs/${blobRec.hash}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': blobRec.mimeType || 'application/octet-stream',
-        'X-Blob-Name': encodeURIComponent(blobRec.name),
-      },
-      body: buf,
-    });
-    if (res.ok) {
-      await db.blobs.update(blobRec.hash, { synced: true });
-    }
-  }
-
-  // 2. Push pending local delta operations in safe chunks of PUSH_BATCH_SIZE (prevents giant POST OOMs!)
+): Promise<{ pushedCount: number; serverId?: string; syncEpoch?: number }> {
   let pushedCount = 0;
+  let serverId: string | undefined;
+  let syncEpoch: number | undefined;
+
   for (let offset = 0; offset < pendingOps.length; offset += PUSH_BATCH_SIZE) {
     const chunk = pendingOps.slice(offset, offset + PUSH_BATCH_SIZE);
     const pushRes = await fetchImpl(`${base}/api/sync/push`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders(settings.syncAuthToken, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         deviceId: settings.deviceId,
         operations: chunk,
@@ -343,7 +544,11 @@ async function syncAgainstBase(
       acceptedOpIds: string[];
       conflicts?: Array<{ recordId: string; serverRecord: LifeRecord }>;
       seq: number;
+      serverId?: string;
+      syncEpoch?: number;
     };
+    serverId = pushJson.serverId ?? serverId;
+    syncEpoch = pushJson.syncEpoch ?? syncEpoch;
 
     if (pushJson.acceptedOpIds?.length) {
       await db.outbox.bulkDelete(pushJson.acceptedOpIds);
@@ -372,9 +577,25 @@ async function syncAgainstBase(
       }
     }
   }
+  return { pushedCount, serverId, syncEpoch };
+}
+
+async function syncAgainstBase(
+  base: string,
+  settings: Awaited<ReturnType<typeof getOrInitSettings>>,
+  pendingOps: OutboxOp[],
+  fetchImpl: typeof fetch
+): Promise<SyncPassResult> {
+  // 1. Upload unsynced binary blobs first & collect receipts (CONT-004 / PF-51)
+  const up1 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl);
+
+  // 2. Push pending local delta operations in chunks
+  const push1 = await pushPendingOperations(base, settings, pendingOps, fetchImpl);
 
   // 3. Pull remote deltas since lastSyncSeq
-  const pullRes = await fetchImpl(`${base}/api/sync/pull?since=${settings.lastSyncSeq}`);
+  const pullRes = await fetchImpl(`${base}/api/sync/pull?since=${settings.lastSyncSeq}`, {
+    headers: buildAuthHeaders(settings.syncAuthToken),
+  });
   if (!pullRes.ok) {
     throw new Error(`Sync pull failed (HTTP ${pullRes.status})`);
   }
@@ -382,11 +603,91 @@ async function syncAgainstBase(
   if (pullCt && !pullCt.includes('json')) {
     throw new Error('Server returned HTML instead of Sync API JSON — enter your Docker URL (e.g. http://192.168.88.31:3000)');
   }
-  const pullJson = (await pullRes.json()) as {
+  let pullJson = (await pullRes.json()) as {
     seq: number;
     records: LifeRecord[];
+    recordCount?: number;
+    serverId?: string;
+    syncEpoch?: number;
   };
 
+  let pushedCount = push1.pushedCount;
+  const failedUploads = [...up1.failed];
+  const verifiedReceipts = [...up1.verified];
+  let reboundReplacementServer = false;
+
+  // 4. PD-003: Server Identity / Replacement Server Reconciliation!
+  // Detect when connected to a replacement or empty server (different serverId, reset seq < lastSyncSeq,
+  // or freshly restored from a ZIP backup) so local restored records & blobs are never silently orphaned!
+  const serverChanged =
+    Boolean(settings.lastSyncServerId && pullJson.serverId && pullJson.serverId !== settings.lastSyncServerId) ||
+    Boolean(settings.lastSyncEpoch && pullJson.syncEpoch && pullJson.syncEpoch !== settings.lastSyncEpoch) ||
+    pullJson.seq < settings.lastSyncSeq ||
+    Boolean(settings.restoredFromBackupAt);
+
+  if (serverChanged) {
+    reboundReplacementServer = true;
+    // Pull full remote state from seq 0 so we don't miss anything on the replacement server
+    const fullPullRes = await fetchImpl(`${base}/api/sync/pull?since=0`, {
+      headers: buildAuthHeaders(settings.syncAuthToken),
+    });
+    if (!fullPullRes.ok) {
+      throw new Error(`Replacement server reconciliation pull failed (HTTP ${fullPullRes.status})`);
+    }
+    pullJson = (await fullPullRes.json()) as typeof pullJson;
+
+    const remoteById = new Map((pullJson.records ?? []).map((r) => [r.id, r]));
+    const localRecords = await db.records.toArray();
+    const now = new Date().toISOString();
+    const reconcileOps: OutboxOp[] = [];
+
+    for (const loc of localRecords) {
+      const rem = remoteById.get(loc.id);
+      if (!rem || loc.rev > rem.rev) {
+        reconcileOps.push({
+          opId: createId('rebind'),
+          recordId: loc.id,
+          operation: 'upsert',
+          record: loc,
+          baseRev: rem?.rev ?? 0,
+          createdAt: now,
+          attempts: 0,
+        });
+      }
+    }
+
+    if (reconcileOps.length > 0) {
+      // Also ensure every locally stored blob not already uploaded in step 1 is pushed to the replacement server
+      const uploadedInPass1 = new Set(up1.verified.map((r) => r.hash));
+      const localBlobs = await db.blobs.toArray();
+      for (const b of localBlobs) {
+        if (b.synced && !uploadedInPass1.has(b.hash)) {
+          const buf = b.data
+            ? await blobToArrayBuffer(b.data)
+            : b.blob
+              ? await blobToArrayBuffer(b.blob)
+              : new ArrayBuffer(0);
+          await db.blobs.put({ ...b, data: buf, synced: false });
+        }
+      }
+      const up2 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl);
+      verifiedReceipts.push(...up2.verified);
+      failedUploads.push(...up2.failed);
+
+      await db.outbox.bulkPut(reconcileOps);
+      const push2 = await pushPendingOperations(base, settings, reconcileOps, fetchImpl);
+      pushedCount += push2.pushedCount;
+      // Refresh seq after reconciliation push
+      const afterPull = await fetchImpl(`${base}/api/sync/pull?since=0`, {
+        headers: buildAuthHeaders(settings.syncAuthToken),
+      });
+      if (afterPull.ok) {
+        pullJson = (await afterPull.json()) as typeof pullJson;
+      }
+    }
+  }
+
+  // 5. Apply pulled remote records safely
   for (const remoteRec of pullJson.records ?? []) {
     if (remoteRec.deviceId === settings.deviceId) continue;
     const localRec = await db.records.get(remoteRec.id);
@@ -414,7 +715,20 @@ async function syncAgainstBase(
     }
   }
 
-  return { seq: pullJson.seq ?? settings.lastSyncSeq, pushedCount };
+  // 6. PD-002: Download & SHA-256 verify every attachment referenced by pulled/local records!
+  const dl = await downloadMissingReferencedBlobs(base, settings.syncAuthToken, fetchImpl);
+  verifiedReceipts.push(...dl.verified);
+
+  return {
+    seq: pullJson.seq ?? 0,
+    serverId: pullJson.serverId ?? push1.serverId,
+    syncEpoch: pullJson.syncEpoch ?? push1.syncEpoch,
+    pushedCount,
+    failedUploads,
+    failedDownloads: dl.failed,
+    verifiedReceipts,
+    reboundReplacementServer,
+  };
 }
 
 function estimateOpsBytes(ops: OutboxOp[]): number {
@@ -432,7 +746,6 @@ function estimateOpsBytes(ops: OutboxOp[]): number {
 async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnapshot> {
   const started = Date.now();
 
-  // Always compact redundant ops for the same recordId first!
   const comp = await compactOutbox();
   if (comp.removed > 0) {
     totalCompactedOps += comp.removed;
@@ -440,13 +753,17 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
 
   const settings = await getOrInitSettings();
   const pendingOps = await db.outbox.orderBy('createdAt').toArray();
+  const unsyncedBlobCount = await db.blobs.filter((b) => !b.synced).count();
   const openConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   const queueBytesEstimate = estimateOpsBytes(pendingOps);
 
   if (settings.operatingMode !== 'docker-sync') {
     emitSyncState({
       status: 'standalone',
-      pendingCount: pendingOps.length,
+      pendingCount: pendingOps.length + unsyncedBlobCount,
+      pendingBlobUploads: unsyncedBlobCount,
+      pendingBlobDownloads: 0,
+      failedBlobTransfers: 0,
       conflictCount: openConflicts,
       lastSyncAt: settings.lastSyncAt,
       serverReachable: false,
@@ -461,7 +778,8 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     emitSyncState({
       status: 'offline',
-      pendingCount: pendingOps.length,
+      pendingCount: pendingOps.length + unsyncedBlobCount,
+      pendingBlobUploads: unsyncedBlobCount,
       conflictCount: openConflicts,
       lastSyncAt: settings.lastSyncAt,
       serverReachable: false,
@@ -476,7 +794,8 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   if (candidates.length === 0) {
     emitSyncState({
       status: 'error',
-      pendingCount: pendingOps.length,
+      pendingCount: pendingOps.length + unsyncedBlobCount,
+      pendingBlobUploads: unsyncedBlobCount,
       conflictCount: openConflicts,
       lastSyncAt: settings.lastSyncAt,
       serverReachable: false,
@@ -489,7 +808,8 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
 
   emitSyncState({
     status: 'syncing',
-    pendingCount: pendingOps.length,
+    pendingCount: pendingOps.length + unsyncedBlobCount,
+    pendingBlobUploads: unsyncedBlobCount,
     conflictCount: openConflicts,
     queueBytesEstimate,
     compactedOpsTotal: totalCompactedOps,
@@ -498,26 +818,66 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   let lastErr: unknown = null;
   for (const base of candidates) {
     try {
-      const { seq, pushedCount } = await syncAgainstBase(base, settings, pendingOps, fetchImpl);
+      const res = await syncAgainstBase(base, settings, pendingOps, fetchImpl);
       const now = new Date().toISOString();
+      const remPendingOps = await db.outbox.toArray();
+      const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced).count();
+      const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
+
+      const totalBlobFailures = res.failedUploads.length + res.failedDownloads.length;
+      const totalPending = remPendingOps.length + remUnsyncedBlobs + res.failedDownloads.length;
+      const allReceipts = [...res.failedUploads, ...res.failedDownloads, ...res.verifiedReceipts].slice(0, 30);
+
+      // Update bound server identity & seq (use exact server seq when rebound to a replacement server!)
       await updateSettings({
-        lastSyncSeq: Math.max(settings.lastSyncSeq, seq),
-        lastSyncAt: now,
+        lastSyncSeq: res.reboundReplacementServer ? res.seq : Math.max(settings.lastSyncSeq, res.seq),
+        lastSyncServerId: res.serverId ?? settings.lastSyncServerId,
+        lastSyncEpoch: res.syncEpoch ?? settings.lastSyncEpoch,
+        restoredFromBackupAt: totalBlobFailures === 0 && remPendingOps.length === 0 ? null : settings.restoredFromBackupAt,
+        lastSyncAt: totalBlobFailures === 0 ? now : settings.lastSyncAt,
       });
 
-      const remPendingOps = await db.outbox.toArray();
-      const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
+      // CONT-004 / PF-51: NEVER report "synced" if ANY attachment upload or download failed!
+      if (totalBlobFailures > 0 || remUnsyncedBlobs > 0) {
+        const firstErr = res.failedUploads[0]?.error || res.failedDownloads[0]?.error || 'Attachment transfer incomplete';
+        emitSyncState({
+          status: 'error',
+          pendingCount: Math.max(totalPending, totalBlobFailures),
+          pendingBlobUploads: remUnsyncedBlobs,
+          pendingBlobDownloads: res.failedDownloads.length,
+          failedBlobTransfers: totalBlobFailures,
+          blobReceipts: allReceipts,
+          conflictCount: remConflicts,
+          lastSyncAt: settings.lastSyncAt,
+          serverReachable: true,
+          activeServerUrl: base || 'Same-Origin Docker',
+          serverId: res.serverId,
+          syncEpoch: res.syncEpoch,
+          errorMessage: `Attachment transfer incomplete (${res.failedUploads.length} upload failed, ${res.failedDownloads.length} download failed): ${firstErr}`,
+          lastSyncDurationMs: Date.now() - started,
+          lastSyncedOpsCount: res.pushedCount,
+          queueBytesEstimate: estimateOpsBytes(remPendingOps),
+          compactedOpsTotal: totalCompactedOps,
+        });
+        return currentState;
+      }
 
       emitSyncState({
         status: 'synced',
         pendingCount: remPendingOps.length,
+        pendingBlobUploads: 0,
+        pendingBlobDownloads: 0,
+        failedBlobTransfers: 0,
+        blobReceipts: allReceipts,
         conflictCount: remConflicts,
         lastSyncAt: now,
         serverReachable: true,
         activeServerUrl: base || 'Same-Origin Docker',
+        serverId: res.serverId,
+        syncEpoch: res.syncEpoch,
         errorMessage: undefined,
         lastSyncDurationMs: Date.now() - started,
-        lastSyncedOpsCount: pushedCount,
+        lastSyncedOpsCount: res.pushedCount,
         queueBytesEstimate: estimateOpsBytes(remPendingOps),
         compactedOpsTotal: totalCompactedOps,
       });
@@ -528,11 +888,13 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   }
 
   const remPendingOps = await db.outbox.toArray();
+  const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced).count();
   const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   const isOfflineErr = lastErr instanceof TypeError;
   emitSyncState({
     status: isOfflineErr ? 'offline' : 'error',
-    pendingCount: remPendingOps.length,
+    pendingCount: remPendingOps.length + remUnsyncedBlobs,
+    pendingBlobUploads: remUnsyncedBlobs,
     conflictCount: remConflicts,
     lastSyncAt: settings.lastSyncAt,
     serverReachable: false,
@@ -548,9 +910,6 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   return currentState;
 }
 
-/**
- * Serialized sync runner — guarantees at most ONE sync cycle runs at a time (zero overlapping HTTP floods).
- */
 export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<SyncStateSnapshot> {
   if (syncInFlight) return syncInFlight;
   syncInFlight = executeSyncCycle(fetchImpl).finally(() => {
@@ -559,9 +918,6 @@ export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<Syn
   return syncInFlight;
 }
 
-/**
- * Debounced sync trigger called after local edits so rapid edits coalesce into ONE fast push.
- */
 export function scheduleDebouncedSync(delayMs = 1500): void {
   if (typeof window === 'undefined') return;
   if (debouncedSyncTimer !== null) {
@@ -573,9 +929,6 @@ export function scheduleDebouncedSync(delayMs = 1500): void {
   }, delayMs);
 }
 
-/**
- * Best-effort keepalive push when the mobile app or browser tab transitions into background.
- */
 async function flushKeepaliveOnBackground(): Promise<void> {
   try {
     const settings = await getOrInitSettings();
@@ -590,21 +943,18 @@ async function flushKeepaliveOnBackground(): Promise<void> {
         : candidates[0];
     if (base === undefined) return;
     const body = JSON.stringify({ deviceId: settings.deviceId, operations: ops });
-    // keepalive fetch limit is ~64KB in Chromium; fall back to normal runSyncCycle if larger
     if (body.length < 60_000) {
       void fetch(`${base}/api/sync/push`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthHeaders(settings.syncAuthToken, { 'Content-Type': 'application/json' }),
         body,
         keepalive: true,
-      }).catch(() => {
-        // Safely preserved in IndexedDB outbox for next resume!
-      });
+      }).catch(() => undefined);
     } else {
       void runSyncCycle();
     }
   } catch {
-    // Non-fatal: outbox remains safely in IndexedDB
+    // Outbox remains safely persisted in IndexedDB
   }
 }
 
@@ -692,7 +1042,6 @@ export async function startSyncDaemon(): Promise<void> {
     return;
   }
 
-  // Subscribe to repository changes to push cleanly 1.5s after local saves
   unsubRepo = subscribeRepository(() => {
     void db.outbox.count().then((cnt) => {
       if (cnt !== currentState.pendingCount) {
@@ -711,7 +1060,10 @@ export async function startSyncDaemon(): Promise<void> {
         : normalizeServerUrl(settings.syncServerUrl);
     if (result.serverReachable && typeof EventSource !== 'undefined') {
       try {
-        eventSource = new EventSource(`${activeBase}/api/sync/events?deviceId=${encodeURIComponent(settings.deviceId)}`);
+        const tokenParam = settings.syncAuthToken ? `&token=${encodeURIComponent(settings.syncAuthToken)}` : '';
+        eventSource = new EventSource(
+          `${activeBase}/api/sync/events?deviceId=${encodeURIComponent(settings.deviceId)}${tokenParam}`
+        );
         eventSource.addEventListener('sync-update', () => {
           scheduleDebouncedSync(300);
         });
@@ -720,7 +1072,6 @@ export async function startSyncDaemon(): Promise<void> {
       }
     }
 
-    // Background / foreground lifecycle flush
     visibilityHandler = () => {
       if (document.visibilityState === 'hidden') {
         void flushKeepaliveOnBackground();
@@ -730,7 +1081,6 @@ export async function startSyncDaemon(): Promise<void> {
     };
     document.addEventListener('visibilitychange', visibilityHandler);
 
-    // Gentle 20s periodic safety poll (serialized via syncInFlight mutex)
     syncTimer = window.setInterval(() => {
       if (document.visibilityState !== 'hidden') {
         void runSyncCycle();
