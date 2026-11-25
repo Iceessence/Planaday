@@ -186,24 +186,24 @@ export function extractRecipeFromHtml(html: string, sourceUrl: string): ParsedRe
   };
 }
 
-export async function fetchAndParseRecipeUrl(urlStr: string): Promise<ParsedRecipeDraft> {
-  const parsedUrl = new URL(urlStr);
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    throw new Error('Only HTTP/HTTPS recipe URLs are supported.');
-  }
+import { safeOutboundFetch } from './outboundPolicy.js';
 
-  const res = await fetch(parsedUrl.toString(), {
-    headers: {
-      'User-Agent': 'DayplanaRecipeClipper/2.0 (+self-hosted)',
-      Accept: 'text/html,application/xhtml+xml',
+export async function fetchAndParseRecipeUrl(urlStr: string): Promise<ParsedRecipeDraft> {
+  const res = await safeOutboundFetch(
+    urlStr,
+    {
+      headers: {
+        'User-Agent': 'PlanadayRecipeClipper/4.1 (+self-hosted)',
+        Accept: 'text/html,application/xhtml+xml',
+      },
     },
-    signal: AbortSignal.timeout(12000),
-  });
+    { purpose: 'recipe', maxResponseBytes: 2 * 1024 * 1024, timeoutMs: 12_000 }
+  );
 
   if (!res.ok) {
     throw new Error(`Failed to fetch recipe page (${res.status})`);
   }
 
-  const html = await res.text();
-  return extractRecipeFromHtml(html, parsedUrl.toString());
+  const html = res.body.toString('utf8');
+  return extractRecipeFromHtml(html, res.finalUrl);
 }

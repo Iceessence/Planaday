@@ -919,8 +919,12 @@ export interface AppSettings {
   operatingMode: OperatingMode;
   syncServerUrl: string; // Primary URL: empty in same-origin Docker browser, or e.g. http://192.168.88.31:3000
   syncFallbackUrl: string; // Optional Tailscale / Remote fallback URL: e.g. http://100.x.y.z:3000 or https://host.ts.net
+  syncAuthToken?: string; // Paired device Bearer token stored in IndexedDB (never localStorage) (PD-004 / PF-04)
   lastSyncSeq: number;
   lastSyncAt: string | null;
+  lastSyncServerId?: string; // Bound sync server identity (PD-003)
+  lastSyncEpoch?: number; // Bound sync epoch (PD-003)
+  restoredFromBackupAt?: string | null; // Marks freshly restored client requiring replacement-server reconciliation (PD-003)
   // Weather (live Open-Meteo when online + cached offline fallback)
   weatherEnabled: boolean;
   weatherLocationName: string;

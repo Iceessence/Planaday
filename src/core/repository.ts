@@ -15,6 +15,27 @@ const MAX_NOTE_REVISIONS = 25;
 type ChangeListener = () => void;
 const listeners = new Set<ChangeListener>();
 
+// Per-record async mutex ensuring overlapping concurrent edits to the same record
+// execute sequentially against the latest committed state inside an atomic Dexie transaction (PD-001 / PF-01).
+const recordLocks = new Map<string, Promise<unknown>>();
+
+function withRecordLock<T>(recordId: string, fn: () => Promise<T>): Promise<T> {
+  const previous = recordLocks.get(recordId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(fn);
+  const tracked = next
+    .then(
+      () => undefined,
+      () => undefined
+    )
+    .finally(() => {
+      if (recordLocks.get(recordId) === tracked) {
+        recordLocks.delete(recordId);
+      }
+    });
+  recordLocks.set(recordId, tracked);
+  return next;
+}
+
 export function subscribeRepository(fn: ChangeListener): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
@@ -145,20 +166,26 @@ export async function createRecord<P = Record<string, unknown>>(
     fieldUpdatedAt: { title: now, status: now, payload: now },
   };
 
-  await db.records.put(record as LifeRecord);
-  if (!options.skipOutbox) await enqueueOutbox(record as LifeRecord, 0);
-  if (!options.skipUndo) {
-    await pushUndoEntry({
-      id: createId('undo'),
-      label: options.undoLabel ?? `Created ${title || type}`,
-      timestamp: now,
-      changes: [{ recordId: record.id, before: null, after: record as LifeRecord }],
-    });
-  }
+  await db.transaction(
+    'rw',
+    [db.records, db.outbox, db.undoStack, db.redoStack, db.revisions],
+    async () => {
+      await db.records.put(record as LifeRecord);
+      if (!options.skipOutbox) await enqueueOutbox(record as LifeRecord, 0);
+      if (!options.skipUndo) {
+        await pushUndoEntry({
+          id: createId('undo'),
+          label: options.undoLabel ?? `Created ${title || type}`,
+          timestamp: now,
+          changes: [{ recordId: record.id, before: null, after: record as LifeRecord }],
+        });
+      }
 
-  if (type === 'note') {
-    await saveNoteRevision(record as unknown as LifeRecord<NotePayload>);
-  }
+      if (type === 'note') {
+        await saveNoteRevision(record as unknown as LifeRecord<NotePayload>);
+      }
+    }
+  );
 
   notify();
   return record;
@@ -169,51 +196,66 @@ export async function updateRecord<P = Record<string, unknown>>(
   patch: Partial<LifeRecord<P>> | ((current: LifeRecord<P>) => LifeRecord<P>),
   options: SaveOptions = {}
 ): Promise<LifeRecord<P> | null> {
-  const existing = (await db.records.get(id)) as LifeRecord<P> | undefined;
-  if (!existing) return null;
+  return withRecordLock(id, async () => {
+    const settings = await getOrInitSettings();
+    let updatedResult: LifeRecord<P> | null = null;
 
-  const settings = await getOrInitSettings();
-  const now = new Date().toISOString();
-  const nextRaw = typeof patch === 'function' ? patch(structuredClone(existing)) : { ...existing, ...patch };
+    await db.transaction(
+      'rw',
+      [db.records, db.outbox, db.undoStack, db.redoStack, db.revisions],
+      async () => {
+        const existing = (await db.records.get(id)) as LifeRecord<P> | undefined;
+        if (!existing) {
+          updatedResult = null;
+          return;
+        }
 
-  const fieldUpdatedAt = { ...(existing.fieldUpdatedAt ?? {}) };
-  for (const key of Object.keys(nextRaw) as Array<keyof LifeRecord<P>>) {
-    if (key === 'rev' || key === 'updatedAt' || key === 'fieldUpdatedAt') continue;
-    if (JSON.stringify(existing[key]) !== JSON.stringify(nextRaw[key])) {
-      fieldUpdatedAt[String(key)] = now;
-    }
-  }
+        const now = new Date().toISOString();
+        const nextRaw = typeof patch === 'function' ? patch(structuredClone(existing)) : { ...existing, ...patch };
 
-  const updated: LifeRecord<P> = {
-    ...nextRaw,
-    id: existing.id,
-    updatedAt: now,
-    rev: existing.rev + 1,
-    deviceId: settings.deviceId,
-    fieldUpdatedAt,
-  };
+        const fieldUpdatedAt = { ...(existing.fieldUpdatedAt ?? {}) };
+        for (const key of Object.keys(nextRaw) as Array<keyof LifeRecord<P>>) {
+          if (key === 'rev' || key === 'updatedAt' || key === 'fieldUpdatedAt') continue;
+          if (JSON.stringify(existing[key]) !== JSON.stringify(nextRaw[key])) {
+            fieldUpdatedAt[String(key)] = now;
+          }
+        }
 
-  await db.records.put(updated as LifeRecord);
-  if (!options.skipOutbox) await enqueueOutbox(updated as LifeRecord, existing.rev);
-  if (!options.skipUndo) {
-    await pushUndoEntry({
-      id: createId('undo'),
-      label: options.undoLabel ?? `Updated ${updated.title || updated.type}`,
-      timestamp: now,
-      changes: [{ recordId: existing.id, before: existing as LifeRecord, after: updated as LifeRecord }],
-    });
-  }
+        const updated: LifeRecord<P> = {
+          ...nextRaw,
+          id: existing.id,
+          updatedAt: now,
+          rev: existing.rev + 1,
+          deviceId: settings.deviceId,
+          fieldUpdatedAt,
+        };
 
-  if (updated.type === 'note' && !options.skipRevision) {
-    const oldContent = (existing.payload as unknown as NotePayload)?.content ?? '';
-    const newContent = (updated.payload as unknown as NotePayload)?.content ?? '';
-    if (oldContent !== newContent || options.revisionLabel) {
-      await saveNoteRevision(updated as unknown as LifeRecord<NotePayload>, options.revisionLabel);
-    }
-  }
+        await db.records.put(updated as LifeRecord);
+        if (!options.skipOutbox) await enqueueOutbox(updated as LifeRecord, existing.rev);
+        if (!options.skipUndo) {
+          await pushUndoEntry({
+            id: createId('undo'),
+            label: options.undoLabel ?? `Updated ${updated.title || updated.type}`,
+            timestamp: now,
+            changes: [{ recordId: existing.id, before: existing as LifeRecord, after: updated as LifeRecord }],
+          });
+        }
 
-  notify();
-  return updated;
+        if (updated.type === 'note' && !options.skipRevision) {
+          const oldContent = (existing.payload as unknown as NotePayload)?.content ?? '';
+          const newContent = (updated.payload as unknown as NotePayload)?.content ?? '';
+          if (oldContent !== newContent || options.revisionLabel) {
+            await saveNoteRevision(updated as unknown as LifeRecord<NotePayload>, options.revisionLabel);
+          }
+        }
+
+        updatedResult = updated;
+      }
+    );
+
+    if (updatedResult) notify();
+    return updatedResult;
+  });
 }
 
 export async function batchApplyChanges(

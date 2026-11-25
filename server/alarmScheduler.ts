@@ -1,4 +1,5 @@
 import type { SyncDatabase } from './db.js';
+import { safeOutboundFetch } from './outboundPolicy.js';
 
 export interface PushConfig {
   ntfyPushUrl: string;
@@ -84,18 +85,21 @@ export class ServerAlarmScheduler {
     const { ntfyPushUrl } = this.getConfig();
     if (!ntfyPushUrl) return;
     try {
-      await fetch(ntfyPushUrl, {
-        method: 'POST',
-        headers: {
-          Title: title,
-          Priority: priority,
-          Tags: 'alarm_clock,calendar',
+      await safeOutboundFetch(
+        ntfyPushUrl,
+        {
+          method: 'POST',
+          headers: {
+            Title: title,
+            Priority: priority,
+            Tags: 'alarm_clock,calendar',
+          },
+          body: message,
         },
-        body: message,
-        signal: AbortSignal.timeout(8000),
-      });
+        { purpose: 'ntfy-push', timeoutMs: 8000, maxResponseBytes: 64 * 1024 }
+      );
     } catch {
-      // Non-fatal network error
+      // Non-fatal network or egress policy rejection
     }
   }
 

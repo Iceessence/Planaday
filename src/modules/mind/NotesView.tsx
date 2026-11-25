@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ArrowLeft,
   BookmarkPlus,
@@ -22,7 +23,7 @@ import {
   softDeleteRecord,
   updateRecord,
 } from '../../core/repository';
-import { getBlobObjectUrl, storeBlob } from '../../core/db';
+import { db, getBlobObjectUrl, storeBlob } from '../../core/db';
 import { DEFAULT_NOTEBOOKS } from '../../data/sampleData';
 import { extractInlineEntities } from '../../core/mindActions';
 import { ModalDialog } from '../../components/Common/ModalDialog';
@@ -196,52 +197,73 @@ export const NotesView: React.FC = () => {
     };
   }, [activeNote?.id, activeNote?.payload.attachmentBlobIds?.length, activeNote?.payload.voiceMemoBlobIds?.length, activeNote?.payload.sketchBlobId]);
 
-  // IME-safe, cursor-preserving buffered title & body (fixes mobile cursor jump, autocorrect duplication & per-keystroke DB storm!)
+  // IME-safe, cursor-preserving, RECORD-BOUND title & body commits (eliminates PD-016 cross-note overwrite!)
+  const activeNoteId = activeNote?.id ?? null;
+
   const commitTitle = useCallback(
-    async (nextTitle: string) => {
-      if (!activeNote) return;
-      await updateRecord(activeNote.id, { title: nextTitle }, { skipUndo: true, skipRevision: true });
+    async (nextTitle: string, meta?: { manual: boolean; recordKey?: string }) => {
+      const targetId = meta?.recordKey ? meta.recordKey.split(':')[0] : activeNoteId;
+      if (!targetId || targetId === 'none') return;
+      await updateRecord(targetId, { title: nextTitle }, { skipUndo: true, skipRevision: true });
     },
-    [activeNote]
+    [activeNoteId]
   );
 
   const commitContent = useCallback(
-    async (nextContent: string, meta: { manual: boolean }) => {
-      if (!activeNote) return;
-      const entities = extractInlineEntities(nextContent);
-      const touched = Array.from(new Set([...(activeNote.payload.touchedDates ?? []), logicalToday]));
+    async (nextContent: string, meta: { manual: boolean; recordKey?: string }) => {
+      const targetId = meta?.recordKey ? meta.recordKey.split(':')[0] : activeNoteId;
+      if (!targetId || targetId === 'none') return;
+      // PD-010: Skip expensive regex scan on huge 50k+ char buffers during background debounce; run on manual save or normal notes
+      const entities =
+        meta.manual || nextContent.length <= 40_000 ? extractInlineEntities(nextContent) : null;
       const nowMs = Date.now();
-      const lastRevMs = lastRevisionAtRef.current[activeNote.id] ?? 0;
+      const lastRevMs = lastRevisionAtRef.current[targetId] ?? 0;
       const shouldSnapshotRevision = meta.manual || nowMs - lastRevMs >= 60_000;
       if (shouldSnapshotRevision) {
-        lastRevisionAtRef.current[activeNote.id] = nowMs;
+        lastRevisionAtRef.current[targetId] = nowMs;
       }
       await updateRecord<NotePayload>(
-        activeNote.id,
+        targetId,
         (cur) => ({
           ...cur,
-          tags: entities.tags,
-          payload: { ...cur.payload, content: nextContent, touchedDates: touched },
+          tags: entities ? entities.tags : cur.tags,
+          payload: {
+            ...cur.payload,
+            content: nextContent,
+            touchedDates: Array.from(new Set([...(cur.payload.touchedDates ?? []), logicalToday])),
+          },
         }),
         { skipUndo: true, skipRevision: !shouldSnapshotRevision }
       );
     },
-    [activeNote, logicalToday]
+    [activeNoteId, logicalToday]
   );
 
   const titleBuffer = useBufferedText({
-    recordKey: `${activeNote?.id ?? 'none'}:title`,
+    recordKey: `${activeNoteId ?? 'none'}:title`,
     externalValue: activeNote?.title ?? '',
+    titleHint: activeNote?.title ?? 'Untitled Note',
     debounceMs: 550,
     onCommit: commitTitle,
   });
 
   const bodyBuffer = useBufferedText({
-    recordKey: `${activeNote?.id ?? 'none'}:body`,
+    recordKey: `${activeNoteId ?? 'none'}:body`,
     externalValue: activeNote?.payload.content ?? '',
+    titleHint: activeNote?.title ?? 'Untitled Note',
     debounceMs: 650,
     onCommit: commitContent,
   });
+
+  // PF-55: Draft Recovery Inbox — surfaces any interrupted/failed local drafts bound to their original note ID
+  const recoveredDrafts = useLiveQuery(
+    async () => {
+      const all = await db.drafts.toArray();
+      return all.filter((d) => d.reason === 'interrupted' || d.reason === 'error');
+    },
+    [],
+    []
+  );
 
   const handleManualSave = useCallback(async () => {
     await Promise.all([titleBuffer.flushNow(true), bodyBuffer.flushNow(true)]);
@@ -421,11 +443,45 @@ export const NotesView: React.FC = () => {
     pushToast('Saved stylus sketch block');
   };
 
-  const liveText = bodyBuffer.value;
-  const wordCount = activeNote ? liveText.trim().split(/\s+/).filter(Boolean).length : 0;
-  const charCount = activeNote ? liveText.length : 0;
-  const paragraphCount = activeNote ? liveText.split(/\n\s*\n/).filter((p) => p.trim().length > 0).length : 0;
-  const readTimeMin = Math.max(1, Math.ceil(wordCount / 220));
+  // PD-010: Defer word/char/paragraph counting so huge 25k–100k word pastes never block interactive input
+  const deferredLiveText = useDeferredValue(bodyBuffer.value);
+  const { wordCount, charCount, paragraphCount, readTimeMin } = useMemo(() => {
+    if (!activeNote) return { wordCount: 0, charCount: 0, paragraphCount: 0, readTimeMin: 1 };
+    const text = deferredLiveText;
+    const len = text.length;
+    if (len === 0) return { wordCount: 0, charCount: 0, paragraphCount: 0, readTimeMin: 1 };
+    // Fast single-pass linear scan (avoids allocating giant regex split arrays on 100k-word notes!)
+    let words = 0;
+    let inWord = false;
+    let paragraphs = 0;
+    let lineHasText = false;
+    let prevBlank = true;
+    for (let i = 0; i < len; i++) {
+      const code = text.charCodeAt(i);
+      const isSpace = code === 32 || code === 9 || code === 10 || code === 13;
+      if (isSpace) {
+        inWord = false;
+        if (code === 10) {
+          if (lineHasText && prevBlank) paragraphs++;
+          prevBlank = !lineHasText;
+          lineHasText = false;
+        }
+      } else {
+        if (!inWord) {
+          words++;
+          inWord = true;
+        }
+        lineHasText = true;
+      }
+    }
+    if (lineHasText && prevBlank) paragraphs++;
+    return {
+      wordCount: words,
+      charCount: len,
+      paragraphCount: Math.max(paragraphs, words > 0 ? 1 : 0),
+      readTimeMin: Math.max(1, Math.ceil(words / 220)),
+    };
+  }, [activeNote, deferredLiveText]);
 
   const combinedLocalSave =
     titleBuffer.saveState === 'saving' || bodyBuffer.saveState === 'saving'
@@ -469,6 +525,66 @@ export const NotesView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* PF-55: Draft Recovery Inbox — surfaces interrupted or failed note drafts without cross-note overwrite */}
+      {recoveredDrafts && recoveredDrafts.length > 0 && (
+        <div
+          className="dp-card"
+          role="region"
+          aria-label="Draft Recovery Inbox"
+          style={{ borderColor: 'var(--dp-warn)', background: 'var(--dp-paper-alt)', padding: '10px 12px' }}
+        >
+          <div className="dp-between" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: '0.86rem' }}>
+              Draft Recovery Inbox ({recoveredDrafts.length} recoverable draft{recoveredDrafts.length === 1 ? '' : 's'})
+            </strong>
+            <span className="dp-muted" style={{ fontSize: '0.76rem' }}>
+              Bound strictly to original note IDs — restore or discard safely.
+            </span>
+          </div>
+          <div className="dp-stack" style={{ gap: 6, marginTop: 8 }}>
+            {recoveredDrafts.map((d) => (
+              <div key={d.key} className="dp-between" style={{ gap: 8, flexWrap: 'wrap', fontSize: '0.8rem' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <strong>{d.titleHint}</strong> ({d.field} · {d.reason}) —{' '}
+                  <span className="dp-muted">{d.content.slice(0, 72)}{d.content.length > 72 ? '…' : ''}</span>
+                </div>
+                <div className="dp-row" style={{ gap: 4 }}>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-primary dp-btn-sm"
+                    onClick={async () => {
+                      if (d.field === 'title') {
+                        await updateRecord(d.recordId, { title: d.content });
+                      } else {
+                        await updateRecord<NotePayload>(d.recordId, (cur) => ({
+                          ...cur,
+                          payload: { ...cur.payload, content: d.content },
+                        }));
+                      }
+                      await db.drafts.delete(d.key);
+                      setSelectedNoteId(d.recordId);
+                      pushToast(`Restored draft into "${d.titleHint}"`, { tone: 'ok' });
+                    }}
+                  >
+                    Restore to Original Note
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={async () => {
+                      await db.drafts.delete(d.key);
+                      pushToast('Discarded recovered draft', { tone: 'info' });
+                    }}
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* In-Tab Notes Typography & Paper Settings Drawer */}
       <TabSettingsDrawer title="Notes Editor Settings" subtitle="Adjust reading font, text size, line spacing & paper surface right here.">

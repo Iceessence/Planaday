@@ -16,6 +16,17 @@ import type {
 import { THEME_PRESETS } from '../data/themes';
 import { getSystemTimeZone } from './temporal';
 
+export interface DraftRecoveryEntry {
+  key: string; // `${recordId}:${field}`
+  recordId: string;
+  field: string;
+  titleHint: string;
+  content: string;
+  baseRev?: number;
+  updatedAt: string;
+  reason?: 'unsaved' | 'interrupted' | 'error' | 'conflict';
+}
+
 export class DayplanaDB extends Dexie {
   records!: Table<LifeRecord, string>;
   blobs!: Table<BlobRecord, string>;
@@ -26,6 +37,7 @@ export class DayplanaDB extends Dexie {
   timeLedger!: Table<TimeLedgerEntry, string>;
   settings!: Table<AppSettings, string>;
   syncConflicts!: Table<SyncConflict, string>;
+  drafts!: Table<DraftRecoveryEntry, string>;
 
   constructor(name = 'dayplana-v2') {
     super(name);
@@ -39,6 +51,19 @@ export class DayplanaDB extends Dexie {
       timeLedger: 'id, workspaceId, date, linkedRecordId, startedAt',
       settings: 'id',
       syncConflicts: 'id, recordId, resolved',
+    });
+    // Non-destructive additive v2 upgrade: adds durable record-bound drafts table (PD-016 / PF-55)
+    this.version(2).stores({
+      records: 'id, workspaceId, type, status, updatedAt, deletedAt, dueDate, doDate, *tags, [workspaceId+type]',
+      blobs: 'hash, mimeType, createdAt, synced',
+      outbox: 'opId, recordId, createdAt',
+      undoStack: 'id, timestamp',
+      redoStack: 'id, timestamp',
+      revisions: 'id, recordId, timestamp',
+      timeLedger: 'id, workspaceId, date, linkedRecordId, startedAt',
+      settings: 'id',
+      syncConflicts: 'id, recordId, resolved',
+      drafts: 'key, recordId, updatedAt',
     });
   }
 }
@@ -386,11 +411,45 @@ export async function getOrInitSettings(): Promise<AppSettings> {
   return defaults;
 }
 
+let settingsWriteChain: Promise<unknown> = Promise.resolve();
+
+export function mergeSettingsObject(base: AppSettings, patch: Partial<AppSettings>): AppSettings {
+  return {
+    ...base,
+    ...patch,
+    id: 'app-settings',
+    calendarPrefs:
+      patch.calendarPrefs && base.calendarPrefs
+        ? { ...base.calendarPrefs, ...patch.calendarPrefs }
+        : patch.calendarPrefs ?? base.calendarPrefs,
+    notificationPrefs:
+      patch.notificationPrefs && base.notificationPrefs
+        ? { ...base.notificationPrefs, ...patch.notificationPrefs }
+        : patch.notificationPrefs ?? base.notificationPrefs,
+    enabledModules:
+      patch.enabledModules && base.enabledModules
+        ? { ...base.enabledModules, ...patch.enabledModules }
+        : patch.enabledModules ?? base.enabledModules,
+    customTokens:
+      patch.customTokens && base.customTokens
+        ? { ...base.customTokens, ...patch.customTokens }
+        : patch.customTokens ?? base.customTokens,
+    clockConfig:
+      patch.clockConfig && base.clockConfig
+        ? { ...base.clockConfig, ...patch.clockConfig }
+        : patch.clockConfig ?? base.clockConfig,
+  };
+}
+
 export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-  const current = await getOrInitSettings();
-  const merged: AppSettings = { ...current, ...patch, id: 'app-settings' };
-  await db.settings.put(merged);
-  return merged;
+  const op = settingsWriteChain.then(async () => {
+    const current = await getOrInitSettings();
+    const merged = mergeSettingsObject(current, patch);
+    await db.settings.put(merged);
+    return merged;
+  });
+  settingsWriteChain = op.catch(() => undefined);
+  return op;
 }
 
 // --- Storage Persistence & Quota Monitoring (Section 15.01) ---
@@ -404,10 +463,14 @@ export interface StorageHealth {
   error?: string;
 }
 
-export async function requestPersistentStorage(): Promise<boolean> {
+export async function requestPersistentStorage(timeoutMs = 2500): Promise<boolean> {
   try {
     if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-      return await navigator.storage.persist();
+      // CONT-008: Guard against browsers (e.g. Firefox) where navigator.storage.persist() prompts and stays pending indefinitely
+      return await Promise.race([
+        navigator.storage.persist(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+      ]);
     }
   } catch {
     // non-fatal
@@ -489,18 +552,26 @@ async function generateImageThumbnail(blob: Blob, maxSize = 360): Promise<Blob |
 }
 
 export async function blobToArrayBuffer(input: Blob | ArrayBuffer | Uint8Array): Promise<ArrayBuffer> {
-  if (input instanceof ArrayBuffer) return input;
-  if (ArrayBuffer.isView(input)) {
-    return input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) as ArrayBuffer;
+  if (input instanceof ArrayBuffer || Object.prototype.toString.call(input) === '[object ArrayBuffer]') {
+    const ab = input as ArrayBuffer;
+    const copy = new Uint8Array(ab.byteLength);
+    copy.set(new Uint8Array(ab));
+    return copy.buffer;
   }
-  if (typeof input.arrayBuffer === 'function') {
-    return input.arrayBuffer();
+  if (ArrayBuffer.isView(input)) {
+    const view = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(view);
+    return copy.buffer;
+  }
+  if (typeof (input as Blob).arrayBuffer === 'function') {
+    return (input as Blob).arrayBuffer();
   }
   return new Promise<ArrayBuffer>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'));
-    reader.readAsArrayBuffer(input);
+    reader.readAsArrayBuffer(input as Blob);
   });
 }
 

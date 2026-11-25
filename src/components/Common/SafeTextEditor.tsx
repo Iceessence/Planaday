@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { db } from '../../core/db';
 
 export type LocalSaveState = 'clean' | 'unsaved' | 'saving' | 'saved';
 
@@ -6,7 +7,8 @@ export interface UseBufferedTextOptions {
   recordKey: string; // e.g., `${recordId}:content` so switching records cleanly resets draft
   externalValue: string;
   debounceMs?: number;
-  onCommit: (nextValue: string, meta: { manual: boolean }) => Promise<void> | void;
+  titleHint?: string;
+  onCommit: (nextValue: string, meta: { manual: boolean; recordKey?: string }) => Promise<void> | void;
 }
 
 export interface UseBufferedTextResult {
@@ -35,6 +37,7 @@ export function useBufferedText({
   recordKey,
   externalValue,
   debounceMs = 650,
+  titleHint,
   onCommit,
 }: UseBufferedTextOptions): UseBufferedTextResult {
   const [value, setValue] = useState(externalValue);
@@ -46,10 +49,20 @@ export function useBufferedText({
   const dirtyRef = useRef(false);
   const composingRef = useRef(false);
   const timerRef = useRef<number | null>(null);
-  const onCommitRef = useRef(onCommit);
-  const recordKeyRef = useRef(recordKey);
+  const draftTimerRef = useRef<number | null>(null);
 
-  onCommitRef.current = onCommit;
+  // CRITICAL PD-016 INVARIANT:
+  // boundKeyRef & boundCommitRef ALWAYS point to the SAME originating recordKey!
+  // Never overwrite boundCommitRef during a render where recordKey has already switched
+  // to the next record (e.g. blurless Alpha -> Beta click), so pending Alpha drafts
+  // ALWAYS flush into Alpha's captured commit sink!
+  const recordKeyRef = useRef(recordKey);
+  const boundCommitRef = useRef(onCommit);
+  const boundTitleHintRef = useRef(titleHint);
+  if (recordKeyRef.current === recordKey) {
+    boundCommitRef.current = onCommit;
+    boundTitleHintRef.current = titleHint;
+  }
 
   const clearTimer = () => {
     if (timerRef.current !== null) {
@@ -58,38 +71,107 @@ export function useBufferedText({
     }
   };
 
-  const flushNow = useCallback(async (manual = false) => {
-    clearTimer();
-    if (composingRef.current && !manual) return;
-    const current = valueRef.current;
-    if (!dirtyRef.current && !manual) return;
-    if (current === lastCommittedRef.current && !manual) {
-      dirtyRef.current = false;
-      setSaveState('saved');
-      return;
+  const clearDraftTimer = () => {
+    if (draftTimerRef.current !== null) {
+      window.clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
     }
-    setSaveState('saving');
-    try {
-      await onCommitRef.current(current, { manual });
-      lastCommittedRef.current = current;
-      // Only mark clean/saved if user didn't type more while the async commit was running!
-      if (valueRef.current === current) {
-        dirtyRef.current = false;
-        setSaveState('saved');
-      }
-    } catch {
-      setSaveState('unsaved');
-    }
+  };
+
+  const persistDurableDraft = useCallback(
+    (key: string, content: string, reason: 'unsaved' | 'interrupted' | 'error' = 'unsaved', hint = '') => {
+      if (!key || key.startsWith('none:')) return;
+      const [recordId, field = 'body'] = key.split(':');
+      if (!recordId || recordId === 'none') return;
+      void db.drafts
+        .put({
+          key,
+          recordId,
+          field,
+          titleHint: hint || recordId,
+          content,
+          updatedAt: new Date().toISOString(),
+          reason,
+        })
+        .catch(() => undefined);
+    },
+    []
+  );
+
+  const clearDurableDraft = useCallback((key: string) => {
+    if (!key || key.startsWith('none:')) return;
+    void db.drafts.delete(key).catch(() => undefined);
   }, []);
 
-  // When switching to a different record, flush the old record first, then hydrate the new one
+  const commitCapturedSession = useCallback(
+    async (
+      targetKey: string,
+      targetCommit: UseBufferedTextOptions['onCommit'],
+      targetContent: string,
+      manual: boolean,
+      hint: string
+    ) => {
+      try {
+        await targetCommit(targetContent, { manual, recordKey: targetKey });
+        clearDurableDraft(targetKey);
+        if (recordKeyRef.current === targetKey) {
+          lastCommittedRef.current = targetContent;
+          if (valueRef.current === targetContent) {
+            dirtyRef.current = false;
+            setSaveState('saved');
+          }
+        }
+      } catch {
+        // Keep recoverable draft in PF-55 Draft Recovery Inbox on failure
+        persistDurableDraft(targetKey, targetContent, 'error', hint);
+        if (recordKeyRef.current === targetKey) {
+          setSaveState('unsaved');
+        }
+      }
+    },
+    [clearDurableDraft, persistDurableDraft]
+  );
+
+  const flushNow = useCallback(
+    async (manual = false) => {
+      clearTimer();
+      clearDraftTimer();
+      if (composingRef.current && !manual) return;
+      const targetKey = recordKeyRef.current;
+      const targetCommit = boundCommitRef.current;
+      const targetHint = boundTitleHintRef.current ?? '';
+      const current = valueRef.current;
+      if (!dirtyRef.current && !manual) return;
+      if (current === lastCommittedRef.current && !manual) {
+        dirtyRef.current = false;
+        clearDurableDraft(targetKey);
+        setSaveState('saved');
+        return;
+      }
+      setSaveState('saving');
+      await commitCapturedSession(targetKey, targetCommit, current, manual, targetHint);
+    },
+    [clearDurableDraft, commitCapturedSession]
+  );
+
+  // When switching to a different record, flush the OLD record strictly via its OWN
+  // bound commit sink BEFORE rebinding to the new record (eliminates PD-016 cross-note overwrite!).
   useEffect(() => {
     if (recordKeyRef.current !== recordKey) {
-      if (dirtyRef.current && valueRef.current !== lastCommittedRef.current) {
-        void onCommitRef.current(valueRef.current, { manual: false });
-      }
+      const oldKey = recordKeyRef.current;
+      const oldCommit = boundCommitRef.current;
+      const oldHint = boundTitleHintRef.current ?? '';
+      const oldVal = valueRef.current;
+      const oldDirty = dirtyRef.current;
+      const oldLastCommitted = lastCommittedRef.current;
+
       clearTimer();
+      clearDraftTimer();
+
+      // Rebind immediately to the newly selected record so subsequent events belong to the new record
       recordKeyRef.current = recordKey;
+      boundCommitRef.current = onCommit;
+      boundTitleHintRef.current = titleHint;
       valueRef.current = externalValue;
       lastCommittedRef.current = externalValue;
       dirtyRef.current = false;
@@ -97,8 +179,14 @@ export function useBufferedText({
       setIsComposing(false);
       setValue(externalValue);
       setSaveState('clean');
+
+      // Flush the previous record's pending edits strictly to the OLD record's commit callback!
+      if (oldDirty && oldVal !== oldLastCommitted) {
+        persistDurableDraft(oldKey, oldVal, 'interrupted', oldHint);
+        void commitCapturedSession(oldKey, oldCommit, oldVal, false, oldHint);
+      }
     }
-  }, [recordKey, externalValue]);
+  }, [recordKey, externalValue, onCommit, titleHint, commitCapturedSession, persistDurableDraft]);
 
   // Accept remote/external updates ONLY when local editor is NOT dirty and NOT mid-composition!
   useEffect(() => {
@@ -119,6 +207,7 @@ export function useBufferedText({
     };
     const onPageHide = () => {
       if (dirtyRef.current) {
+        persistDurableDraft(recordKeyRef.current, valueRef.current, 'interrupted', boundTitleHintRef.current ?? '');
         void flushNow(false);
       }
     };
@@ -128,19 +217,34 @@ export function useBufferedText({
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
       clearTimer();
+      clearDraftTimer();
       if (dirtyRef.current && valueRef.current !== lastCommittedRef.current) {
-        void onCommitRef.current(valueRef.current, { manual: false });
+        const k = recordKeyRef.current;
+        const c = boundCommitRef.current;
+        const v = valueRef.current;
+        const h = boundTitleHintRef.current ?? '';
+        persistDurableDraft(k, v, 'interrupted', h);
+        void commitCapturedSession(k, c, v, false, h);
       }
     };
-  }, [flushNow]);
+  }, [flushNow, commitCapturedSession, persistDurableDraft]);
 
   const scheduleCommit = useCallback(() => {
     clearTimer();
+    clearDraftTimer();
+    const k = recordKeyRef.current;
+    const h = boundTitleHintRef.current ?? '';
+    draftTimerRef.current = window.setTimeout(() => {
+      draftTimerRef.current = null;
+      if (dirtyRef.current && recordKeyRef.current === k) {
+        persistDurableDraft(k, valueRef.current, 'unsaved', h);
+      }
+    }, 220);
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
       void flushNow(false);
     }, debounceMs);
-  }, [debounceMs, flushNow]);
+  }, [debounceMs, flushNow, persistDurableDraft]);
 
   const handleChange = useCallback(
     (next: string) => {
@@ -203,8 +307,9 @@ export function useBufferedText({
 interface SafeTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> {
   recordKey: string;
   externalValue: string;
-  onCommit: (nextValue: string, meta: { manual: boolean }) => Promise<void> | void;
+  onCommit: (nextValue: string, meta: { manual: boolean; recordKey?: string }) => Promise<void> | void;
   debounceMs?: number;
+  titleHint?: string;
   autoGrow?: boolean;
   onSaveStateChange?: (state: LocalSaveState) => void;
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
@@ -218,6 +323,7 @@ export const SafeTextarea: React.FC<SafeTextareaProps> = ({
   externalValue,
   onCommit,
   debounceMs = 650,
+  titleHint,
   autoGrow = true,
   onSaveStateChange,
   textareaRef,
@@ -231,6 +337,7 @@ export const SafeTextarea: React.FC<SafeTextareaProps> = ({
     recordKey,
     externalValue,
     debounceMs,
+    titleHint,
     onCommit,
   });
 
@@ -242,6 +349,12 @@ export const SafeTextarea: React.FC<SafeTextareaProps> = ({
     if (!autoGrow) return;
     const el = refToUse.current;
     if (!el) return;
+    // PD-010: Skip expensive full scrollHeight forced layout reflow on huge 12k+ char pastes
+    if (buf.value.length > 12_000) {
+      el.style.height = '420px';
+      el.style.overflowY = 'auto';
+      return;
+    }
     const prevScroll = window.scrollY;
     el.style.height = 'auto';
     el.style.height = `${Math.max(el.scrollHeight + 4, 88)}px`;

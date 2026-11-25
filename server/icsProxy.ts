@@ -1,14 +1,15 @@
+import { safeOutboundFetch } from './outboundPolicy.js';
+
 export async function fetchRemoteIcs(urlStr: string): Promise<string> {
-  const parsed = new URL(urlStr);
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('Only HTTP/HTTPS ICS URLs are supported.');
-  }
-  const res = await fetch(parsed.toString(), {
-    headers: { 'User-Agent': 'DayplanaCalendar/2.0', Accept: 'text/calendar,text/plain' },
-    signal: AbortSignal.timeout(12000),
-  });
+  const res = await safeOutboundFetch(
+    urlStr,
+    {
+      headers: { 'User-Agent': 'PlanadayCalendar/4.1', Accept: 'text/calendar,text/plain' },
+    },
+    { purpose: 'ics', maxResponseBytes: 2 * 1024 * 1024, timeoutMs: 12_000 }
+  );
   if (!res.ok) throw new Error(`ICS feed fetch failed (${res.status})`);
-  return res.text();
+  return res.body.toString('utf8');
 }
 
 export async function lookupBarcodeOpenFoodFacts(code: string): Promise<{
@@ -20,12 +21,13 @@ export async function lookupBarcodeOpenFoodFacts(code: string): Promise<{
   const clean = code.replace(/[^0-9A-Za-z-]/g, '');
   if (!clean) return { found: false };
   try {
-    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(clean)}.json`, {
-      headers: { 'User-Agent': 'DayplanaPantry/2.0' },
-      signal: AbortSignal.timeout(8000),
-    });
+    const res = await safeOutboundFetch(
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(clean)}.json`,
+      { headers: { 'User-Agent': 'PlanadayPantry/4.1' } },
+      { purpose: 'barcode', maxResponseBytes: 512 * 1024, timeoutMs: 8000 }
+    );
     if (!res.ok) return { found: false };
-    const data = (await res.json()) as {
+    const data = JSON.parse(res.body.toString('utf8')) as {
       status?: number;
       product?: { product_name?: string; brands?: string; quantity?: string };
     };
