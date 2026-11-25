@@ -327,26 +327,69 @@ export function numericalIntegral(expr: string, a: number, b: number, ctx: EvalC
   return (h / 3) * sum;
 }
 
-export function findNumericalRoots(expr: string, xMin: number, xMax: number, ctx: EvalContext = {}, samples = 240): number[] {
-  const roots: number[] = [];
+/**
+ * PD-007: Continuity-validated numerical root finder that:
+ * 1. Rejects poles / vertical asymptotes (e.g. 1/(x - 0.123)) by validating finite residual & neighborhood continuity.
+ * 2. Detects even-multiplicity / tangent roots (e.g. (x - 0.123)^2) via golden-section minimization on local |f(x)| minima.
+ */
+export function findNumericalRoots(
+  expr: string,
+  xMin: number,
+  xMax: number,
+  ctx: EvalContext = {},
+  samples = 400
+): number[] {
+  if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || xMax <= xMin) return [];
   const f = (x: number) => evaluateMathExpression(expr, { ...ctx, vars: { ...(ctx.vars ?? {}), x } });
+
+  const isValidContinuousRoot = (x: number): boolean => {
+    const y = f(x);
+    if (!Number.isFinite(y) || Math.abs(y) > 1e-4) return false;
+    // Reject poles / jump discontinuities by probing immediate left & right neighborhoods
+    const eps = Math.min(1e-5, (xMax - xMin) * 1e-5);
+    const yl = f(x - eps);
+    const yr = f(x + eps);
+    if (!Number.isFinite(yl) || !Number.isFinite(yr)) return false;
+    // If |f(x ± eps)| explodes far above residual, this is a singularity/asymptote, not a root
+    if (Math.max(Math.abs(yl), Math.abs(yr)) > 10) return false;
+    return true;
+  };
+
+  const candidates: number[] = [];
+  const xs: number[] = [];
+  const ys: number[] = [];
   const dx = (xMax - xMin) / samples;
-  let prevX = xMin;
-  let prevY = f(prevX);
-  for (let i = 1; i <= samples; i++) {
-    const curX = xMin + i * dx;
-    const curY = f(curX);
-    if (Number.isFinite(prevY) && Number.isFinite(curY)) {
-      if (Math.abs(curY) < 1e-9) {
-        roots.push(Number(curX.toFixed(5)));
-      } else if (prevY * curY < 0) {
-        // Bisection refinement
+  for (let i = 0; i <= samples; i++) {
+    const x = xMin + i * dx;
+    xs.push(x);
+    ys.push(f(x));
+  }
+
+  for (let i = 0; i <= samples; i++) {
+    const curX = xs[i];
+    const curY = ys[i];
+
+    // 1. Direct sample hit
+    if (Number.isFinite(curY) && Math.abs(curY) < 1e-9 && isValidContinuousRoot(curX)) {
+      candidates.push(curX);
+    }
+
+    // 2. Sign-change bisection + continuity/residual validation
+    if (i > 0) {
+      const prevX = xs[i - 1];
+      const prevY = ys[i - 1];
+      if (Number.isFinite(prevY) && Number.isFinite(curY) && prevY * curY < 0) {
         let lo = prevX;
         let hi = curX;
         let flo = prevY;
-        for (let k = 0; k < 28; k++) {
+        for (let k = 0; k < 44; k++) {
           const mid = (lo + hi) / 2;
           const fmid = f(mid);
+          if (!Number.isFinite(fmid)) break;
+          if (Math.abs(fmid) < 1e-12) {
+            lo = hi = mid;
+            break;
+          }
           if (flo * fmid <= 0) {
             hi = mid;
           } else {
@@ -354,14 +397,58 @@ export function findNumericalRoots(expr: string, xMin: number, xMax: number, ctx
             flo = fmid;
           }
         }
-        const root = Number(((lo + hi) / 2).toFixed(5));
-        if (roots.length === 0 || Math.abs(roots[roots.length - 1] - root) > 1e-3) {
-          roots.push(root);
+        const root = (lo + hi) / 2;
+        if (isValidContinuousRoot(root)) {
+          candidates.push(root);
         }
       }
     }
-    prevX = curX;
-    prevY = curY;
+
+    // 3. Tangent / even-multiplicity root detection via golden-section search on local |f(x)| minima
+    if (i > 0 && i < samples) {
+      const yPrev = Math.abs(ys[i - 1]);
+      const yCur = Math.abs(curY);
+      const yNext = Math.abs(ys[i + 1]);
+      if (Number.isFinite(yPrev) && Number.isFinite(yCur) && Number.isFinite(yNext) && yCur <= yPrev && yCur <= yNext) {
+        const phi = (Math.sqrt(5) - 1) / 2;
+        let a = xs[i - 1];
+        let b = xs[i + 1];
+        let c = b - phi * (b - a);
+        let d = a + phi * (b - a);
+        let fc = Math.abs(f(c));
+        let fd = Math.abs(f(d));
+        for (let iter = 0; iter < 48; iter++) {
+          if (!Number.isFinite(fc) || !Number.isFinite(fd)) break;
+          if (fc < fd) {
+            b = d;
+            d = c;
+            fd = fc;
+            c = b - phi * (b - a);
+            fc = Math.abs(f(c));
+          } else {
+            a = c;
+            c = d;
+            fc = fd;
+            d = a + phi * (b - a);
+            fd = Math.abs(f(d));
+          }
+        }
+        const bestX = (a + b) / 2;
+        if (Math.abs(f(bestX)) < 1e-5 && isValidContinuousRoot(bestX)) {
+          candidates.push(bestX);
+        }
+      }
+    }
+  }
+
+  // Sort & deduplicate within tolerance
+  candidates.sort((a, b) => a - b);
+  const roots: number[] = [];
+  for (const r of candidates) {
+    const rounded = Object.is(Number(r.toFixed(6)), -0) ? 0 : Number(r.toFixed(6));
+    if (roots.length === 0 || Math.abs(roots[roots.length - 1] - rounded) > 1e-3) {
+      roots.push(rounded);
+    }
   }
   return roots;
 }

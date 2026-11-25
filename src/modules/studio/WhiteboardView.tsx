@@ -22,7 +22,7 @@ import {
 import { useApp } from '../../core/AppContext';
 import { createId } from '../../core/db';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { triggerBrowserDownload } from '../../core/backup';
+import { downloadFile } from '../../core/backup';
 import type { LifeRecord } from '../../core/types';
 
 interface WbNode {
@@ -157,7 +157,7 @@ export const WhiteboardView: React.FC = () => {
   const exportSvg = () => {
     if (!svgRef.current || !activeBoard) return;
     const xml = new XMLSerializer().serializeToString(svgRef.current);
-    triggerBrowserDownload(`${activeBoard.title}.svg`, xml, 'image/svg+xml');
+    downloadFile({ filename: `${activeBoard.title}.svg`, content: xml, mimeType: 'image/svg+xml;charset=utf-8' });
     pushToast('Exported whiteboard as SVG', { tone: 'ok' });
   };
 

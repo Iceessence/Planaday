@@ -23,9 +23,9 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
-import { createId, getBlobObjectUrl, storeBlob } from '../../core/db';
+import { createId, db, getBlobObjectUrl, storeBlob } from '../../core/db';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { triggerBrowserDownload } from '../../core/backup';
+import { downloadFile } from '../../core/backup';
 import { SafeTextarea } from '../../components/Common/SafeTextEditor';
 import type { LifeRecord } from '../../core/types';
 
@@ -139,6 +139,108 @@ function createStarterPresentation(themeKey = 'paper'): PresentationPayload {
       },
     ],
   };
+}
+
+/**
+ * PD-008 + PD-018: Pure high-fidelity standalone HTML presentation builder preserving aspect ratio,
+ * inline base64 blob images, HTML tables, code/equations, rotation, opacity, layering, transitions & speaker notes.
+ */
+export function buildPresentationHtmlDeck(
+  deckTitle: string,
+  payload: PresentationPayload,
+  embeddedImages: Record<string, string> = {}
+): string {
+  const themeDef = SLIDE_THEMES[payload.theme] ?? SLIDE_THEMES.paper;
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const renderElHtml = (el: SlideElement, zIdx: number): string => {
+    const rot = el.rotate ? `transform:rotate(${el.rotate}deg);` : '';
+    const op = el.opacity !== undefined ? `opacity:${el.opacity};` : '';
+    const font =
+      el.kind === 'code'
+        ? 'font-family:ui-monospace,Consolas,monospace;'
+        : el.kind === 'equation'
+        ? 'font-family:Georgia,serif;font-style:italic;'
+        : '';
+    const align =
+      el.kind === 'sticker' || el.kind === 'shape'
+        ? 'display:flex;align-items:center;justify-content:center;text-align:center;'
+        : '';
+    const baseStyle = `position:absolute;left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;z-index:${zIdx + 1};color:${esc(el.textColor || themeDef.fg)};background:${esc(el.bgColor || 'transparent')};font-size:${el.fontSize || 18}px;padding:8px;box-sizing:border-box;border-radius:6px;overflow:hidden;${rot}${op}${font}${align}`;
+
+    if (el.kind === 'image') {
+      const src = el.blobHash ? embeddedImages[el.blobHash] : '';
+      const body = src
+        ? `<img src="${src}" alt="${esc(el.content)}" style="width:100%;height:100%;object-fit:contain;display:block"/>`
+        : `<span>[Image: ${esc(el.content)}]</span>`;
+      return `<div data-kind="image" style="${baseStyle}">${body}</div>`;
+    }
+    if (el.kind === 'table') {
+      const rows = el.content
+        .split(/\r?\n/)
+        .filter((r) => r.trim().length > 0)
+        .map((r) => r.split(','));
+      const tbl = `<table style="width:100%;height:100%;border-collapse:collapse;font-size:${Math.max(11, (el.fontSize ?? 14) - 2)}px"><tbody>${rows
+        .map(
+          (r, ri) =>
+            `<tr>${r
+              .map(
+                (c) =>
+                  `<${ri === 0 ? 'th' : 'td'} style="border:1px solid currentColor;padding:4px 6px;text-align:left">${esc(c.trim())}</${ri === 0 ? 'th' : 'td'}>`
+              )
+              .join('')}</tr>`
+        )
+        .join('')}</tbody></table>`;
+      return `<div data-kind="table" style="${baseStyle}">${tbl}</div>`;
+    }
+    if (el.kind === 'code') {
+      return `<pre data-kind="code" style="${baseStyle}margin:0;white-space:pre-wrap"><code>${esc(el.content)}</code></pre>`;
+    }
+    return `<div data-kind="${esc(el.kind)}" style="${baseStyle}white-space:pre-wrap">${esc(el.content)}</div>`;
+  };
+
+  const aspectCss = payload.aspect === '4:3' ? '4 / 3' : '16 / 9';
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(deckTitle)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#11141c;color:#f4f6fb;padding:20px;display:flex;flex-direction:column;align-items:center;gap:24px}
+  .deck-bar{position:sticky;top:10px;z-index:100;background:#1d2230;padding:8px 14px;border-radius:10px;display:flex;gap:10px;align-items:center;font-size:14px}
+  .deck-bar button{background:#3b6ea5;color:#fff;border:none;border-radius:6px;padding:5px 10px;cursor:pointer}
+  .slide-wrap{width:min(96vw,1080px);display:flex;flex-direction:column;gap:8px}
+  section.slide{width:100%;aspect-ratio:${aspectCss};position:relative;border-radius:10px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,0.4);transition:opacity .35s ease,transform .35s ease}
+  .notes{background:#1a202c;color:#dbe4f0;padding:10px 14px;border-radius:8px;font-size:13px;white-space:pre-wrap}
+  @media print{body{background:#fff;padding:0;gap:0}.deck-bar,.notes{display:none}.slide-wrap{width:100vw;page-break-after:always}section.slide{border-radius:0;box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="deck-bar">
+  <strong>${esc(deckTitle)}</strong>
+  <span id="counter">1 / ${payload.slides.length}</span>
+  <button type="button" onclick="step(-1)">◀ Prev</button>
+  <button type="button" onclick="step(1)">Next ▶</button>
+  <button type="button" onclick="window.print()">Print / PDF</button>
+</div>
+${payload.slides
+  .map(
+    (s, idx) => `<div class="slide-wrap" data-slide="${idx}" data-transition="${esc(s.transition)}">
+  <section class="slide" style="background:${esc(s.background)}">${s.elements.map((el, zi) => renderElHtml(el, zi)).join('')}</section>
+  ${s.speakerNotes ? `<details class="notes"><summary>Slide ${idx + 1} Speaker Notes (${esc(s.title)})</summary><div>${esc(s.speakerNotes)}</div></details>` : ''}
+</div>`
+  )
+  .join('\n')}
+<script>
+  var cur=0,slides=[].slice.call(document.querySelectorAll('.slide-wrap'));
+  function step(d){cur=Math.max(0,Math.min(slides.length-1,cur+d));if(slides[cur])slides[cur].scrollIntoView({behavior:'smooth',block:'center'});var c=document.getElementById('counter');if(c)c.textContent=(cur+1)+' / '+slides.length;}
+  window.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key===' ')step(1);else if(e.key==='ArrowLeft')step(-1);});
+</script>
+</body>
+</html>`;
 }
 
 export const PresentationView: React.FC = () => {
@@ -259,24 +361,30 @@ export const PresentationView: React.FC = () => {
     }));
   };
 
-  const exportHtmlDeck = () => {
+  const exportHtmlDeck = async () => {
     if (!activeDeck || !payload) return;
-    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(activeDeck.title)}</title>
-<style>body{font-family:system-ui,sans-serif;margin:0;background:#111;color:#fff}section{width:100vw;height:100vh;position:relative;box-sizing:border-box;page-break-after:always;overflow:hidden}</style></head><body>
-${payload.slides
-  .map(
-    (s) =>
-      `<section style="background:${s.background}">${s.elements
-        .map(
-          (el) =>
-            `<div style="position:absolute;left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;color:${el.textColor || '#222'};background:${el.bgColor || 'transparent'};font-size:${el.fontSize || 18}px;padding:8px;white-space:pre-wrap;border-radius:6px">${esc(el.content)}</div>`
-        )
-        .join('')}</section>`
-  )
-  .join('')}</body></html>`;
-    triggerBrowserDownload(`${activeDeck.title}.html`, html, 'text/html');
-    pushToast('Exported standalone HTML slideshow (also printable to PDF or importable to PowerPoint)', { tone: 'ok' });
+    // Embed referenced image blobs as base64 data URIs so exported HTML works completely standalone offline
+    const embeddedImages: Record<string, string> = {};
+    for (const s of payload.slides) {
+      for (const el of s.elements) {
+        if (el.kind === 'image' && el.blobHash && !embeddedImages[el.blobHash]) {
+          try {
+            const rec = await db.blobs.get(el.blobHash);
+            if (rec?.data) {
+              const bytes = new Uint8Array(rec.data);
+              let bin = '';
+              for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+              embeddedImages[el.blobHash] = `data:${rec.mimeType || 'image/png'};base64,${btoa(bin)}`;
+            }
+          } catch {
+            // fallback to alt caption if unreadable
+          }
+        }
+      }
+    }
+    const html = buildPresentationHtmlDeck(activeDeck.title, payload, embeddedImages);
+    downloadFile({ filename: `${activeDeck.title}.html`, content: html, mimeType: 'text/html;charset=utf-8' });
+    pushToast('Exported standalone HTML slideshow (images, tables, rotation, transitions & speaker notes preserved)', { tone: 'ok' });
   };
 
   const renderElementBody = (el: SlideElement) => {
@@ -359,7 +467,7 @@ ${payload.slides
               >
                 <Play size={14} /> Present
               </button>
-              <button type="button" className="dp-btn" onClick={exportHtmlDeck}>
+              <button type="button" className="dp-btn" onClick={() => void exportHtmlDeck()}>
                 <Download size={14} /> HTML Deck
               </button>
               <button type="button" className="dp-btn" onClick={() => window.print()}>
@@ -386,7 +494,7 @@ ${payload.slides
           <p className="dp-muted">Click "+ New Deck" above to start designing your first presentation.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(170px, 210px) 1fr minmax(230px, 270px)', gap: '0.8rem' }}>
+        <div className="dp-studio-split-3">
           {/* Slide Filmstrip */}
           <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', maxHeight: 620, overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

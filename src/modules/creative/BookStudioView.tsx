@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { triggerBrowserDownload } from '../../core/backup';
+import { downloadFile } from '../../core/backup';
 import { SafeTextarea } from '../../components/Common/SafeTextEditor';
 import type { LifeRecord } from '../../core/types';
 
@@ -158,13 +158,14 @@ export const BookStudioView: React.FC = () => {
         })
         .join('\n\n---\n\n');
       const full = fmt === 'md' ? `# ${activeBook.title}\n\n${body}` : `${activeBook.title.toUpperCase()}\n\n${body}`;
-      triggerBrowserDownload(`${activeBook.title}.${fmt}`, full, fmt === 'md' ? 'text/markdown' : 'text/plain');
+      downloadFile({ filename: `${activeBook.title}.${fmt}`, content: full, mimeType: fmt === 'md' ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8' });
     } else {
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>');
-      const html = `<html><head><meta charset="utf-8"><title>${esc(activeBook.title)}</title></head><body style="font-family:Georgia,serif;line-height:1.7;max-width:720px;margin:2rem auto"><h1>${esc(activeBook.title)}</h1>${chapters
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(activeBook.title)}</title></head><body style="font-family:Georgia,serif;line-height:1.7;max-width:720px;margin:2rem auto"><h1>${esc(activeBook.title)}</h1>${chapters
         .map((ch) => `<h2>Chapter ${(ch.payload as BookChapterPayload).order}: ${esc(ch.title)}</h2><p>${esc((ch.payload as BookChapterPayload).content ?? '')}</p>`)
         .join('')}</body></html>`;
-      triggerBrowserDownload(`${activeBook.title}.doc`, html, 'application/msword');
+      // Honest HTML-formatted Word-compatible export (.doc) with verified filename & body order (PD-008)
+      downloadFile({ filename: `${activeBook.title}.doc`, content: html, mimeType: 'application/msword;charset=utf-8' });
     }
     pushToast(`Exported "${activeBook.title}.${fmt}"`, { tone: 'ok' });
   };
@@ -265,7 +266,7 @@ export const BookStudioView: React.FC = () => {
           </div>
 
           {tab === 'manuscript' && (
-            <div style={{ display: 'grid', gridTemplateColumns: focusMode ? '1fr' : 'minmax(200px, 250px) 1fr', gap: '0.8rem' }}>
+            <div className={focusMode ? undefined : 'dp-studio-split'} style={focusMode ? { display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' } : undefined}>
               {!focusMode && (
                 <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -15,7 +15,7 @@ import {
 import { useApp } from '../../core/AppContext';
 import { createId } from '../../core/db';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { triggerBrowserDownload } from '../../core/backup';
+import { downloadFile } from '../../core/backup';
 import {
   SPREADSHEET_FORMULA_DOCS,
   cellKey,
@@ -530,7 +530,7 @@ export const SpreadsheetView: React.FC = () => {
                 className="dp-btn"
                 onClick={() => {
                   const csv = exportSheetToDelimited(activeSheet, evaluated[activeSheet.id] ?? {}, ',');
-                  triggerBrowserDownload(`${activeRec.title}-${activeSheet.name}.csv`, csv, 'text/csv');
+                  downloadFile({ filename: `${activeRec.title}-${activeSheet.name}.csv`, content: csv, mimeType: 'text/csv;charset=utf-8' });
                 }}
               >
                 <Download size={13} /> CSV
@@ -541,7 +541,7 @@ export const SpreadsheetView: React.FC = () => {
                 title="Exports Excel-compatible SpreadsheetML 2003 XML (.xls)"
                 onClick={() => {
                   const xml = exportWorkbookSpreadsheetMl(activeRec.title, payload.sheets, evaluated);
-                  triggerBrowserDownload(`${activeRec.title}.xls`, xml, 'application/vnd.ms-excel');
+                  downloadFile({ filename: `${activeRec.title}.xls`, content: xml, mimeType: 'application/vnd.ms-excel' });
                   pushToast('Exported SpreadsheetML (.xls) compatible with Excel & LibreOffice', { tone: 'ok' });
                 }}
               >

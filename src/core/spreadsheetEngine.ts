@@ -1,5 +1,6 @@
-// Planaday Integrated Spreadsheet Formula Engine & Import/Export (§27)
-// Supports multi-sheet references (Sheet2!A1), ranges (A1:B10), 35+ formulas, circular-ref guard, CSV/TSV & SpreadsheetML.
+// Planaday Integrated Spreadsheet Formula Engine & RFC 4180 Import/Export (§27, PD-006, CONT-006, CONT-007)
+// Supports multi-sheet references with explicit #REF! errors, composite formulas (=SUM(A1:A3)+1),
+// zero-length LEFT/RIGHT semantics, circular-ref guard, and RFC 4180 quoted/multiline CSV/TSV round-trip.
 
 import { evaluateMathExpression } from './mathEngine';
 
@@ -28,7 +29,7 @@ export interface WorkbookPayload {
   sheets: WorksheetDef[];
   activeSheetId: string;
   description?: string;
-  linkedSource?: string | null; // e.g., 'lab_inventory' | 'tasks' | 'diary' | 'game_entities'
+  linkedSource?: string | null;
   lastSyncedAt?: string | null;
   charts?: Array<{
     id: string;
@@ -40,6 +41,15 @@ export interface WorkbookPayload {
     color?: string;
   }>;
   revisions?: Array<{ timestamp: string; summary: string; sheets: WorksheetDef[] }>;
+}
+
+class SheetFormulaError extends Error {
+  constructor(
+    public readonly code: '#REF!' | '#DIV/0!' | '#VALUE!' | '#CIRC!' | '#N/A' | '#ERR!',
+    message: string
+  ) {
+    super(message);
+  }
 }
 
 export function colIndexToLetter(colIdx: number): string {
@@ -126,7 +136,7 @@ function matchCriteria(val: string | number, criteria: string): boolean {
       if (op === '<=') return numVal <= rhsNum;
       if (op === '>') return numVal > rhsNum;
       if (op === '<') return numVal < rhsNum;
-      if (op === '=' ) return numVal === rhsNum;
+      if (op === '=') return numVal === rhsNum;
       return numVal !== rhsNum;
     }
     const sA = String(val).toLowerCase();
@@ -136,19 +146,83 @@ function matchCriteria(val: string | number, criteria: string): boolean {
   return String(val).toLowerCase() === c.toLowerCase();
 }
 
+const SHEET_FN_NAMES = new Set([
+  'SUM',
+  'AVERAGE',
+  'AVG',
+  'COUNT',
+  'COUNTA',
+  'MIN',
+  'MAX',
+  'MEDIAN',
+  'STDEV',
+  'STDEV_S',
+  'COUNTIF',
+  'SUMIF',
+  'IF',
+  'AND',
+  'OR',
+  'XLOOKUP',
+  'CONCAT',
+  'CONCATENATE',
+  'UPPER',
+  'LOWER',
+  'LEN',
+  'LEFT',
+  'RIGHT',
+  'TODAY',
+  'PMT',
+  'NPV',
+]);
+
+function matchExactSingleTopLevelCall(expr: string): { fn: string; argsStr: string } | null {
+  const m = expr.match(/^([A-Za-z0-9_]+)\(/);
+  if (!m) return null;
+  let depth = 0;
+  let inQuote = false;
+  for (let i = m[1].length; i < expr.length; i++) {
+    const ch = expr[i];
+    if (ch === '"') inQuote = !inQuote;
+    if (!inQuote) {
+      if (ch === '(') depth++;
+      else if (ch === ')') {
+        depth--;
+        if (depth === 0) {
+          if (i === expr.length - 1) {
+            return { fn: m[1].toUpperCase(), argsStr: expr.slice(m[1].length + 1, i) };
+          }
+          return null; // More expression follows after closing ')' (e.g. SUM(A1:A3)+1)
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export interface EvaluatedCellResult {
   value: string | number;
   error?: string;
 }
 
 /**
- * Evaluates all cells in a multi-sheet workbook cleanly with memoization & circular-reference detection.
+ * Evaluates all cells in a multi-sheet workbook cleanly with memoization,
+ * explicit #REF! missing-sheet errors (CONT-006), composite expressions (CONT-007), & circular-ref detection.
  */
 export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<string, EvaluatedCellResult>> {
   const byName = new Map(sheets.map((s) => [s.name.toLowerCase(), s]));
   const byId = new Map(sheets.map((s) => [s.id, s]));
   const cache: Record<string, Record<string, EvaluatedCellResult>> = {};
   for (const s of sheets) cache[s.id] = {};
+
+  // CONT-006: Never silently fall back to active sheet when an explicit worksheet name does not exist!
+  const resolveExplicitSheetId = (rawSheetName: string): string => {
+    const clean = rawSheetName.replace(/^'|'$/g, '').trim().toLowerCase();
+    const target = byName.get(clean);
+    if (!target) {
+      throw new SheetFormulaError('#REF!', `Unknown worksheet "${rawSheetName.replace(/^'|'$/g, '')}"`);
+    }
+    return target.id;
+  };
 
   const evalCell = (sheetId: string, key: string, visiting: Set<string>): EvaluatedCellResult => {
     const upKey = key.toUpperCase();
@@ -181,6 +255,11 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
       cache[sheetId][upKey] = res;
       return res;
     } catch (err) {
+      if (err instanceof SheetFormulaError) {
+        const res: EvaluatedCellResult = { value: err.code, error: err.message };
+        cache[sheetId][upKey] = res;
+        return res;
+      }
       const res: EvaluatedCellResult = {
         value: '#ERR!',
         error: err instanceof Error ? err.message : 'Formula error',
@@ -192,18 +271,23 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     }
   };
 
-  const resolveSheetAndRange = (expr: string, curSheetId: string): Array<string | number> => {
+  const resolveSheetAndRange = (expr: string, curSheetId: string, visiting: Set<string>): Array<string | number> => {
     const trimmed = expr.trim();
     let targetSheetId = curSheetId;
     let rangePart = trimmed;
     const bangIdx = trimmed.indexOf('!');
     if (bangIdx > 0) {
-      const sName = trimmed.slice(0, bangIdx).replace(/^'|'$/g, '').toLowerCase();
-      targetSheetId = byName.get(sName)?.id ?? curSheetId;
+      targetSheetId = resolveExplicitSheetId(trimmed.slice(0, bangIdx));
       rangePart = trimmed.slice(bangIdx + 1);
     }
     const keys = rangePart.includes(':') ? expandCellRange(rangePart) : [rangePart.toUpperCase()];
-    return keys.map((k) => evalCell(targetSheetId, k, new Set()).value);
+    return keys.map((k) => {
+      const ev = evalCell(targetSheetId, k, visiting);
+      if (ev.error && typeof ev.value === 'string' && ev.value.startsWith('#')) {
+        throw new SheetFormulaError(ev.value as '#REF!', ev.error);
+      }
+      return ev.value;
+    });
   };
 
   const evalArgAsValue = (sheetId: string, arg: string, visiting: Set<string>): string | number => {
@@ -215,14 +299,19 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     if (t !== '' && Number.isFinite(num)) return num;
     if (/^([A-Za-z0-9_' ]+!)?[A-Za-z]+[0-9]+$/.test(t)) {
       const bang = t.indexOf('!');
-      if (bang > 0) {
-        const sName = t.slice(0, bang).replace(/^'|'$/g, '').toLowerCase();
-        const sid = byName.get(sName)?.id ?? sheetId;
-        return evalCell(sid, t.slice(bang + 1), visiting).value;
+      const sid = bang > 0 ? resolveExplicitSheetId(t.slice(0, bang)) : sheetId;
+      const cellId = bang > 0 ? t.slice(bang + 1) : t;
+      const ev = evalCell(sid, cellId, visiting);
+      if (ev.error && typeof ev.value === 'string' && ev.value.startsWith('#')) {
+        throw new SheetFormulaError(ev.value as '#REF!', ev.error);
       }
-      return evalCell(sheetId, t, visiting).value;
+      return ev.value;
     }
-    return evalFormula(sheetId, t, visiting).value;
+    const res = evalFormula(sheetId, t, visiting);
+    if (res.error && typeof res.value === 'string' && res.value.startsWith('#')) {
+      throw new SheetFormulaError(res.value as '#REF!', res.error);
+    }
+    return res.value;
   };
 
   const extractNumbers = (sheetId: string, args: string[], visiting: Set<string>): number[] => {
@@ -230,7 +319,7 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     for (const a of args) {
       const t = a.trim();
       if (t.includes(':')) {
-        for (const v of resolveSheetAndRange(t, sheetId)) {
+        for (const v of resolveSheetAndRange(t, sheetId, visiting)) {
           const n = Number(v);
           if (v !== '' && Number.isFinite(n)) nums.push(n);
         }
@@ -264,133 +353,210 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     return op === '=' ? ls === rs : ls !== rs;
   };
 
+  const evalSheetFunction = (sheetId: string, fn: string, argsStr: string, visiting: Set<string>): EvaluatedCellResult | null => {
+    if (!SHEET_FN_NAMES.has(fn)) return null;
+    const args = splitTopLevelArgs(argsStr);
+
+    if (fn === 'SUM') return { value: extractNumbers(sheetId, args, visiting).reduce((s, v) => s + v, 0) };
+    if (fn === 'AVERAGE' || fn === 'AVG') {
+      const ns = extractNumbers(sheetId, args, visiting);
+      return ns.length ? { value: ns.reduce((s, v) => s + v, 0) / ns.length } : { value: '#DIV/0!', error: 'No numeric values' };
+    }
+    if (fn === 'COUNT') return { value: extractNumbers(sheetId, args, visiting).length };
+    if (fn === 'COUNTA') {
+      let cnt = 0;
+      for (const a of args) {
+        const vals = a.includes(':') ? resolveSheetAndRange(a, sheetId, visiting) : [evalArgAsValue(sheetId, a, visiting)];
+        cnt += vals.filter((v) => String(v).trim() !== '').length;
+      }
+      return { value: cnt };
+    }
+    if (fn === 'MIN') {
+      const ns = extractNumbers(sheetId, args, visiting);
+      return { value: ns.length ? Math.min(...ns) : 0 };
+    }
+    if (fn === 'MAX') {
+      const ns = extractNumbers(sheetId, args, visiting);
+      return { value: ns.length ? Math.max(...ns) : 0 };
+    }
+    if (fn === 'MEDIAN') {
+      const ns = extractNumbers(sheetId, args, visiting).sort((a, b) => a - b);
+      if (!ns.length) return { value: 0 };
+      const mid = Math.floor(ns.length / 2);
+      return { value: ns.length % 2 === 0 ? (ns[mid - 1] + ns[mid]) / 2 : ns[mid] };
+    }
+    if (fn === 'STDEV' || fn === 'STDEV_S') {
+      const ns = extractNumbers(sheetId, args, visiting);
+      if (ns.length < 2) return { value: '#DIV/0!', error: 'Need at least 2 values for STDEV' };
+      const mean = ns.reduce((s, v) => s + v, 0) / ns.length;
+      return { value: Math.sqrt(ns.reduce((s, v) => s + (v - mean) ** 2, 0) / (ns.length - 1)) };
+    }
+    if (fn === 'COUNTIF' && args.length >= 2) {
+      const vals = resolveSheetAndRange(args[0], sheetId, visiting);
+      return { value: vals.filter((v) => matchCriteria(v, args[1])).length };
+    }
+    if (fn === 'SUMIF' && args.length >= 2) {
+      const critVals = resolveSheetAndRange(args[0], sheetId, visiting);
+      const sumVals = args[2] ? resolveSheetAndRange(args[2], sheetId, visiting) : critVals;
+      let total = 0;
+      for (let i = 0; i < critVals.length; i++) {
+        if (matchCriteria(critVals[i], args[1])) {
+          const n = Number(sumVals[i]);
+          if (Number.isFinite(n)) total += n;
+        }
+      }
+      return { value: total };
+    }
+    if (fn === 'IF' && args.length >= 2) {
+      const ok = evalCondition(sheetId, args[0], visiting);
+      return { value: ok ? evalArgAsValue(sheetId, args[1], visiting) : args[2] ? evalArgAsValue(sheetId, args[2], visiting) : '' };
+    }
+    if (fn === 'AND') return { value: args.every((a) => evalCondition(sheetId, a, visiting)) ? 'TRUE' : 'FALSE' };
+    if (fn === 'OR') return { value: args.some((a) => evalCondition(sheetId, a, visiting)) ? 'TRUE' : 'FALSE' };
+    if (fn === 'XLOOKUP' && args.length >= 3) {
+      const needle = String(evalArgAsValue(sheetId, args[0], visiting)).toLowerCase();
+      const lookupVals = resolveSheetAndRange(args[1], sheetId, visiting);
+      const returnVals = resolveSheetAndRange(args[2], sheetId, visiting);
+      const idx = lookupVals.findIndex((v) => String(v).toLowerCase() === needle);
+      if (idx >= 0 && idx < returnVals.length) return { value: returnVals[idx] };
+      return { value: args[3] ? evalArgAsValue(sheetId, args[3], visiting) : '#N/A', error: idx < 0 ? 'Lookup value not found' : undefined };
+    }
+    if (fn === 'CONCAT' || fn === 'CONCATENATE') {
+      return { value: args.map((a) => String(evalArgAsValue(sheetId, a, visiting))).join('') };
+    }
+    if (fn === 'UPPER') return { value: String(evalArgAsValue(sheetId, args[0], visiting)).toUpperCase() };
+    if (fn === 'LOWER') return { value: String(evalArgAsValue(sheetId, args[0], visiting)).toLowerCase() };
+    if (fn === 'LEN') return { value: String(evalArgAsValue(sheetId, args[0], visiting)).length };
+    // CONT-007: Properly preserve zero-length semantics for LEFT(str, 0) & RIGHT(str, 0)!
+    if (fn === 'LEFT') {
+      const s = String(evalArgAsValue(sheetId, args[0], visiting));
+      const rawN = args[1] !== undefined ? Number(evalArgAsValue(sheetId, args[1], visiting)) : 1;
+      if (!Number.isFinite(rawN) || rawN < 0) return { value: '#VALUE!', error: 'Invalid LEFT length' };
+      const n = Math.floor(rawN);
+      return { value: n === 0 ? '' : s.slice(0, n) };
+    }
+    if (fn === 'RIGHT') {
+      const s = String(evalArgAsValue(sheetId, args[0], visiting));
+      const rawN = args[1] !== undefined ? Number(evalArgAsValue(sheetId, args[1], visiting)) : 1;
+      if (!Number.isFinite(rawN) || rawN < 0) return { value: '#VALUE!', error: 'Invalid RIGHT length' };
+      const n = Math.floor(rawN);
+      return { value: n === 0 ? '' : s.slice(-n) };
+    }
+    if (fn === 'TODAY') return { value: new Date().toISOString().slice(0, 10) };
+    if (fn === 'PMT' && args.length >= 3) {
+      const rate = Number(evalArgAsValue(sheetId, args[0], visiting));
+      const nper = Number(evalArgAsValue(sheetId, args[1], visiting));
+      const pv = Number(evalArgAsValue(sheetId, args[2], visiting));
+      if (rate === 0) return { value: -pv / nper };
+      return { value: -(pv * rate) / (1 - Math.pow(1 + rate, -nper)) };
+    }
+    if (fn === 'NPV' && args.length >= 2) {
+      const rate = Number(evalArgAsValue(sheetId, args[0], visiting));
+      const flows = extractNumbers(sheetId, args.slice(1), visiting);
+      const npv = flows.reduce((acc, cf, idx) => acc + cf / Math.pow(1 + rate, idx + 1), 0);
+      return { value: npv };
+    }
+    return null;
+  };
+
+  // CONT-007: Replace embedded sheet functions inside composite expressions like =SUM(A1:A3)+1 or =MAX(A1:A3)-MIN(A1:A3)
+  const reduceEmbeddedSheetCalls = (sheetId: string, expr: string, visiting: Set<string>): string => {
+    let out = expr;
+    for (let guard = 0; guard < 32; guard++) {
+      let replaced = false;
+      let inQuote = false;
+      for (let i = 0; i < out.length; i++) {
+        const ch = out[i];
+        if (ch === '"') {
+          inQuote = !inQuote;
+          continue;
+        }
+        if (inQuote) continue;
+        if (/[A-Za-z_]/.test(ch)) {
+          const prev = i > 0 ? out[i - 1] : '';
+          if (/[A-Za-z0-9_!]/.test(prev)) continue;
+          let endName = i;
+          while (endName < out.length && /[A-Za-z0-9_]/.test(out[endName])) endName++;
+          const fnName = out.slice(i, endName).toUpperCase();
+          if (out[endName] === '(' && SHEET_FN_NAMES.has(fnName)) {
+            let depth = 0;
+            let q = false;
+            let closeIdx = -1;
+            for (let j = endName; j < out.length; j++) {
+              if (out[j] === '"') q = !q;
+              if (!q) {
+                if (out[j] === '(') depth++;
+                else if (out[j] === ')') {
+                  depth--;
+                  if (depth === 0) {
+                    closeIdx = j;
+                    break;
+                  }
+                }
+              }
+            }
+            if (closeIdx > endName) {
+              const argsStr = out.slice(endName + 1, closeIdx);
+              const fnRes = evalSheetFunction(sheetId, fnName, argsStr, visiting);
+              if (fnRes) {
+                if (fnRes.error && typeof fnRes.value === 'string' && fnRes.value.startsWith('#')) {
+                  throw new SheetFormulaError(fnRes.value as '#REF!', fnRes.error);
+                }
+                const replacement = typeof fnRes.value === 'number' ? `(${fnRes.value})` : JSON.stringify(String(fnRes.value));
+                out = out.slice(0, i) + replacement + out.slice(closeIdx + 1);
+                replaced = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (!replaced) break;
+    }
+    return out;
+  };
+
   const evalFormula = (sheetId: string, expr: string, visiting: Set<string>): EvaluatedCellResult => {
-    // Expand named ranges first
     const curSheet = byId.get(sheetId);
-    let expanded = expr;
+    let expanded = expr.trim();
     if (curSheet?.namedRanges) {
       for (const [nrName, nrRef] of Object.entries(curSheet.namedRanges)) {
         expanded = expanded.replace(new RegExp(`\\b${nrName}\\b`, 'gi'), nrRef);
       }
     }
 
-    // Handle top-level Excel functions e.g. SUM(...), IF(...), XLOOKUP(...), COUNTIF(...), SUMIF(...), CONCAT(...)
-    const fnMatch = expanded.match(/^([A-Za-z0-9_]+)\(([\s\S]*)\)$/);
-    if (fnMatch) {
-      const fn = fnMatch[1].toUpperCase();
-      const args = splitTopLevelArgs(fnMatch[2]);
-
-      if (fn === 'SUM') return { value: extractNumbers(sheetId, args, visiting).reduce((s, v) => s + v, 0) };
-      if (fn === 'AVERAGE' || fn === 'AVG') {
-        const ns = extractNumbers(sheetId, args, visiting);
-        return ns.length ? { value: ns.reduce((s, v) => s + v, 0) / ns.length } : { value: '#DIV/0!', error: 'No numeric values' };
-      }
-      if (fn === 'COUNT') return { value: extractNumbers(sheetId, args, visiting).length };
-      if (fn === 'COUNTA') {
-        let cnt = 0;
-        for (const a of args) {
-          const vals = a.includes(':') ? resolveSheetAndRange(a, sheetId) : [evalArgAsValue(sheetId, a, visiting)];
-          cnt += vals.filter((v) => String(v).trim() !== '').length;
-        }
-        return { value: cnt };
-      }
-      if (fn === 'MIN') {
-        const ns = extractNumbers(sheetId, args, visiting);
-        return { value: ns.length ? Math.min(...ns) : 0 };
-      }
-      if (fn === 'MAX') {
-        const ns = extractNumbers(sheetId, args, visiting);
-        return { value: ns.length ? Math.max(...ns) : 0 };
-      }
-      if (fn === 'MEDIAN') {
-        const ns = extractNumbers(sheetId, args, visiting).sort((a, b) => a - b);
-        if (!ns.length) return { value: 0 };
-        const mid = Math.floor(ns.length / 2);
-        return { value: ns.length % 2 === 0 ? (ns[mid - 1] + ns[mid]) / 2 : ns[mid] };
-      }
-      if (fn === 'STDEV' || fn === 'STDEV_S') {
-        const ns = extractNumbers(sheetId, args, visiting);
-        if (ns.length < 2) return { value: '#DIV/0!', error: 'Need at least 2 values for STDEV' };
-        const mean = ns.reduce((s, v) => s + v, 0) / ns.length;
-        return { value: Math.sqrt(ns.reduce((s, v) => s + (v - mean) ** 2, 0) / (ns.length - 1)) };
-      }
-      if (fn === 'COUNTIF' && args.length >= 2) {
-        const vals = resolveSheetAndRange(args[0], sheetId);
-        return { value: vals.filter((v) => matchCriteria(v, args[1])).length };
-      }
-      if (fn === 'SUMIF' && args.length >= 2) {
-        const critVals = resolveSheetAndRange(args[0], sheetId);
-        const sumVals = args[2] ? resolveSheetAndRange(args[2], sheetId) : critVals;
-        let total = 0;
-        for (let i = 0; i < critVals.length; i++) {
-          if (matchCriteria(critVals[i], args[1])) {
-            const n = Number(sumVals[i]);
-            if (Number.isFinite(n)) total += n;
-          }
-        }
-        return { value: total };
-      }
-      if (fn === 'IF' && args.length >= 2) {
-        const ok = evalCondition(sheetId, args[0], visiting);
-        return { value: ok ? evalArgAsValue(sheetId, args[1], visiting) : args[2] ? evalArgAsValue(sheetId, args[2], visiting) : '' };
-      }
-      if (fn === 'AND') return { value: args.every((a) => evalCondition(sheetId, a, visiting)) ? 'TRUE' : 'FALSE' };
-      if (fn === 'OR') return { value: args.some((a) => evalCondition(sheetId, a, visiting)) ? 'TRUE' : 'FALSE' };
-      if (fn === 'XLOOKUP' && args.length >= 3) {
-        const needle = String(evalArgAsValue(sheetId, args[0], visiting)).toLowerCase();
-        const lookupVals = resolveSheetAndRange(args[1], sheetId);
-        const returnVals = resolveSheetAndRange(args[2], sheetId);
-        const idx = lookupVals.findIndex((v) => String(v).toLowerCase() === needle);
-        if (idx >= 0 && idx < returnVals.length) return { value: returnVals[idx] };
-        return { value: args[3] ? evalArgAsValue(sheetId, args[3], visiting) : '#N/A', error: idx < 0 ? 'Lookup value not found' : undefined };
-      }
-      if (fn === 'CONCAT' || fn === 'CONCATENATE') {
-        return { value: args.map((a) => String(evalArgAsValue(sheetId, a, visiting))).join('') };
-      }
-      if (fn === 'UPPER') return { value: String(evalArgAsValue(sheetId, args[0], visiting)).toUpperCase() };
-      if (fn === 'LOWER') return { value: String(evalArgAsValue(sheetId, args[0], visiting)).toLowerCase() };
-      if (fn === 'LEN') return { value: String(evalArgAsValue(sheetId, args[0], visiting)).length };
-      if (fn === 'LEFT') {
-        const s = String(evalArgAsValue(sheetId, args[0], visiting));
-        const n = Number(evalArgAsValue(sheetId, args[1] ?? '1', visiting)) || 1;
-        return { value: s.slice(0, n) };
-      }
-      if (fn === 'RIGHT') {
-        const s = String(evalArgAsValue(sheetId, args[0], visiting));
-        const n = Number(evalArgAsValue(sheetId, args[1] ?? '1', visiting)) || 1;
-        return { value: s.slice(-n) };
-      }
-      if (fn === 'TODAY') return { value: new Date().toISOString().slice(0, 10) };
-      if (fn === 'PMT' && args.length >= 3) {
-        const rate = Number(evalArgAsValue(sheetId, args[0], visiting));
-        const nper = Number(evalArgAsValue(sheetId, args[1], visiting));
-        const pv = Number(evalArgAsValue(sheetId, args[2], visiting));
-        if (rate === 0) return { value: -pv / nper };
-        return { value: -(pv * rate) / (1 - Math.pow(1 + rate, -nper)) };
-      }
-      if (fn === 'NPV' && args.length >= 2) {
-        const rate = Number(evalArgAsValue(sheetId, args[0], visiting));
-        const flows = extractNumbers(sheetId, args.slice(1), visiting);
-        const npv = flows.reduce((acc, cf, idx) => acc + cf / Math.pow(1 + rate, idx + 1), 0);
-        return { value: npv };
-      }
+    // 1. Exact single top-level Excel function call (preserves string/boolean return values cleanly)
+    const exactCall = matchExactSingleTopLevelCall(expanded);
+    if (exactCall && SHEET_FN_NAMES.has(exactCall.fn)) {
+      const fnRes = evalSheetFunction(sheetId, exactCall.fn, exactCall.argsStr, visiting);
+      if (fnRes) return fnRes;
     }
 
-    // Substitute cross-sheet & local cell references, then evaluate with safe math parser!
-    const substituted = expanded.replace(/([A-Za-z0-9_]+!)?\b([A-Za-z]{1,3}[0-9]{1,5})\b/g, (full, sheetPrefix, ref) => {
+    // 2. Reduce any embedded sheet functions inside composite arithmetic expressions (=SUM(A1:A3)+1)
+    expanded = reduceEmbeddedSheetCalls(sheetId, expanded, visiting);
+
+    // 3. Substitute explicit cross-sheet ('My Sheet'!A1 or Sheet2!A1) & local cell references
+    const substituted = expanded.replace(/((?:'[^']+'|[A-Za-z0-9_]+)!)?\b([A-Za-z]{1,3}[0-9]{1,5})\b/g, (full, sheetPrefix, ref) => {
       let sid = sheetId;
       if (sheetPrefix) {
-        const sName = String(sheetPrefix).slice(0, -1).toLowerCase();
-        sid = byName.get(sName)?.id ?? sheetId;
+        const sName = String(sheetPrefix).slice(0, -1);
+        sid = resolveExplicitSheetId(sName);
       }
       const ev = evalCell(sid, ref, visiting);
-      if (ev.error) throw new Error(ev.error);
+      if (ev.error) {
+        if (typeof ev.value === 'string' && ev.value.startsWith('#')) {
+          throw new SheetFormulaError(ev.value as '#REF!', ev.error);
+        }
+        throw new Error(ev.error);
+      }
       const n = Number(ev.value);
-      return ev.value === '' ? '0' : Number.isFinite(n) ? String(n) : full;
+      return ev.value === '' ? '0' : Number.isFinite(n) ? `(${n})` : full;
     });
 
     const numVal = evaluateMathExpression(substituted);
-    if (!Number.isFinite(numVal)) return { value: '#VALUE!', error: 'Non-finite result' };
+    if (!Number.isFinite(numVal)) {
+      return { value: '#DIV/0!', error: 'Division by zero or non-finite result' };
+    }
     return { value: Math.round(numVal * 1e10) / 1e10 };
   };
 
@@ -402,35 +568,134 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
   return cache;
 }
 
-export function exportSheetToDelimited(sheet: WorksheetDef, evaluated: Record<string, EvaluatedCellResult>, sep = ','): string {
+/**
+ * PD-006: Full RFC 4180 CSV/TSV serializer with optional spreadsheet formula-injection guard.
+ */
+export function exportSheetToDelimited(
+  sheet: WorksheetDef,
+  evaluated: Record<string, EvaluatedCellResult>,
+  sep = ',',
+  opts: { neutralizeFormulas?: boolean } = {}
+): string {
+  // Determine actual used bounding box cleanly while keeping at least populated rows/cols
+  let maxUsedRow = -1;
+  let maxUsedCol = -1;
+  for (const k of Object.keys(sheet.cells)) {
+    const parsed = parseCellRef(k);
+    if (!parsed) continue;
+    const val = evaluated[k]?.value ?? sheet.cells[k]?.raw ?? '';
+    if (String(val) !== '') {
+      if (parsed.row > maxUsedRow) maxUsedRow = parsed.row;
+      if (parsed.col > maxUsedCol) maxUsedCol = parsed.col;
+    }
+  }
+  const rowLimit = maxUsedRow >= 0 ? maxUsedRow + 1 : Math.min(sheet.rows, 5);
+  const colLimit = maxUsedCol >= 0 ? maxUsedCol + 1 : sheet.cols;
+
   const lines: string[] = [];
-  for (let r = 0; r < sheet.rows; r++) {
+  for (let r = 0; r < rowLimit; r++) {
     const cols: string[] = [];
-    let hasAny = false;
-    for (let c = 0; c < sheet.cols; c++) {
+    for (let c = 0; c < colLimit; c++) {
       const k = cellKey(c, r);
       const val = evaluated[k]?.value ?? sheet.cells[k]?.raw ?? '';
-      const str = String(val);
-      if (str !== '') hasAny = true;
-      cols.push(str.includes(sep) || str.includes('"') || str.includes('\n') ? `"${str.replace(/"/g, '""')}"` : str);
+      let str = String(val);
+      if (opts.neutralizeFormulas && /^[=+\-@\t\r]/.test(str)) {
+        str = `'${str}`;
+      }
+      const needsQuote = str.includes(sep) || str.includes('"') || str.includes('\n') || str.includes('\r');
+      cols.push(needsQuote ? `"${str.replace(/"/g, '""')}"` : str);
     }
-    if (hasAny || r < 5) lines.push(cols.join(sep));
+    lines.push(cols.join(sep));
   }
-  return lines.join('\n');
+  return lines.join('\r\n');
 }
 
-export function importDelimitedToSheet(text: string, name = 'Imported'): WorksheetDef {
-  const sep = text.includes('\t') && !text.includes(',') ? '\t' : ',';
-  const rows = text.split(/\r?\n/).filter((l, i, arr) => l.length > 0 || i < arr.length - 1);
+/**
+ * PD-006: Complete RFC 4180 state-machine CSV/TSV parser supporting quoted commas,
+ * escaped double quotes (""), embedded multiline cells, empty cells, UTF-8 BOM & CRLF/LF.
+ */
+export function parseDelimitedRecords(rawText: string, explicitDelimiter?: string): string[][] {
+  const text = rawText.replace(/^\uFEFF/, '');
+  if (!text) return [];
+
+  // Detect delimiter outside quotes if not explicitly specified
+  let sep = explicitDelimiter;
+  if (!sep) {
+    let inQ = false;
+    let commas = 0;
+    let tabs = 0;
+    for (let i = 0; i < Math.min(text.length, 4096); i++) {
+      const ch = text[i];
+      if (ch === '"') inQ = !inQ;
+      else if (!inQ) {
+        if (ch === ',') commas++;
+        else if (ch === '\t') tabs++;
+        else if (ch === '\n' && (commas > 0 || tabs > 0)) break;
+      }
+    }
+    sep = tabs > commas ? '\t' : ',';
+  }
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"' && field.length === 0) {
+        inQuotes = true;
+      } else if (ch === sep) {
+        row.push(field);
+        field = '';
+      } else if (ch === '\r') {
+        if (text[i + 1] === '\n') i++;
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = '';
+      } else if (ch === '\n') {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = '';
+      } else {
+        field += ch;
+      }
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  // Drop trailing completely empty line from final newline
+  while (rows.length > 0 && rows[rows.length - 1].every((c) => c === '')) {
+    rows.pop();
+  }
+  return rows;
+}
+
+export function importDelimitedToSheet(text: string, name = 'Imported', delimiter?: string): WorksheetDef {
+  const rows = parseDelimitedRecords(text, delimiter);
   const cells: Record<string, SheetCell> = {};
   let maxCols = 8;
-  rows.forEach((line, rIdx) => {
-    const parts = line.split(sep);
+  rows.forEach((parts, rIdx) => {
     maxCols = Math.max(maxCols, parts.length);
     parts.forEach((val, cIdx) => {
-      const clean = val.trim().replace(/^"|"$/g, '').replace(/""/g, '"');
-      if (clean !== '') {
-        cells[cellKey(cIdx, rIdx)] = { raw: clean };
+      if (val !== '') {
+        cells[cellKey(cIdx, rIdx)] = { raw: val };
       }
     });
   });

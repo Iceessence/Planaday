@@ -15,7 +15,7 @@ import {
 import { useApp } from '../../core/AppContext';
 import { createId } from '../../core/db';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { triggerBrowserDownload } from '../../core/backup';
+import { downloadFile } from '../../core/backup';
 import {
   runSandboxedJs,
   type CodeTestCase,
@@ -185,12 +185,12 @@ export const CodeStudioView: React.FC = () => {
             <Code2 size={20} /> Sandboxed Code & Testing Studio
           </h2>
           <p className="dp-muted" style={{ margin: '0.2rem 0 0', fontSize: '0.82rem' }}>
-            Multi-file code projects, snippet library, unit test runner & isolated browser Web Worker sandbox (2s timeout, zero access to Planaday DB/network).
+            Multi-file code projects, snippet library, unit test runner & null-origin sandboxed iframe runner (no same-origin access, CSP network-blocked, 2s hard timeout).
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span className="dp-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <ShieldCheck size={12} /> Strict Client Sandbox (§35.8)
+            <ShieldCheck size={12} /> Null-Origin Sandbox (PD-005)
           </span>
           <select className="dp-select" value={activeProj?.id ?? ''} onChange={(e) => setSelectedProjId(e.target.value)}>
             {projects.length === 0 && <option value="">No code projects</option>}
@@ -220,7 +220,7 @@ export const CodeStudioView: React.FC = () => {
           <p className="dp-muted">Click "+ New Project" above to write, run, and unit-test code inside Planaday's isolated Web Worker sandbox.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 230px) 1fr', gap: '0.8rem' }}>
+        <div className="dp-studio-split">
           {/* File Explorer & Snippet Library */}
           <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <strong style={{ fontSize: '0.84rem' }}>Project Files ({files.length})</strong>
@@ -326,7 +326,7 @@ export const CodeStudioView: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn"
-                onClick={() => triggerBrowserDownload(activeFile.name, activeFile.content, 'text/plain')}
+                onClick={() => downloadFile({ filename: activeFile.name, content: activeFile.content, mimeType: 'text/plain;charset=utf-8' })}
               >
                 <Download size={13} /> Download
               </button>
