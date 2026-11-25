@@ -173,6 +173,9 @@ export const FlowCalendarView: React.FC = () => {
     patch: Partial<CalendarEventPayload> & { title?: string };
   } | null>(null);
 
+  // Live drag-to-resize state for timed events (R-0007)
+  const [resizingPreview, setResizingPreview] = useState<{ eventId: string; occDate: string; endMin: number } | null>(null);
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const icsInputRef = useRef<HTMLInputElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -659,6 +662,8 @@ export const FlowCalendarView: React.FC = () => {
             <button
               type="button"
               className="dp-btn dp-btn-sm"
+              aria-label="Previous calendar period"
+              title="Previous period"
               onClick={() => setActiveDate(addDaysIso(activeDate, calendarMode === 'month' ? -30 : -rangeDays))}
             >
               ←
@@ -669,6 +674,8 @@ export const FlowCalendarView: React.FC = () => {
             <button
               type="button"
               className="dp-btn dp-btn-sm"
+              aria-label="Next calendar period"
+              title="Next period"
               onClick={() => setActiveDate(addDaysIso(activeDate, calendarMode === 'month' ? 30 : rangeDays))}
             >
               →
@@ -1120,7 +1127,7 @@ export const FlowCalendarView: React.FC = () => {
           </select>
 
           <div className="dp-row" style={{ gap: 4 }}>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => changeZoom(1)} title="Zoom out (up to 4h)">
+            <button type="button" className="dp-btn dp-btn-sm" aria-label="Zoom out (up to 4h)" onClick={() => changeZoom(1)} title="Zoom out (up to 4h)">
               <ZoomOut size={13} />
             </button>
             <select
@@ -1137,7 +1144,7 @@ export const FlowCalendarView: React.FC = () => {
                 <option value="">{gridStepMin}m custom</option>
               )}
             </select>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => changeZoom(-1)} title="Zoom in (down to 1m)">
+            <button type="button" className="dp-btn dp-btn-sm" aria-label="Zoom in (down to 1m)" onClick={() => changeZoom(-1)} title="Zoom in (down to 1m)">
               <ZoomIn size={13} />
             </button>
           </div>
@@ -1225,7 +1232,7 @@ export const FlowCalendarView: React.FC = () => {
                     <button
                       type="button"
                       className="dp-icon-btn"
-                      style={{ width: 18, height: 18, border: 'none' }}
+                      style={{ width: 24, height: 24, border: 'none' }}
                       aria-label={`Add on ${cell.iso}`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1380,7 +1387,7 @@ export const FlowCalendarView: React.FC = () => {
                     <button
                       type="button"
                       className="dp-icon-btn"
-                      style={{ width: 22, height: 22 }}
+                      style={{ width: 26, height: 26 }}
                       aria-label={`Add event on ${d}`}
                       onClick={() => openNewEvent(d)}
                     >
@@ -1508,11 +1515,15 @@ export const FlowCalendarView: React.FC = () => {
                   })()}
 
                   {positioned.map((pos) => {
-                    if (pos.endMin <= visibleStartMin || pos.startMin >= visibleStartMin + visibleTotalMin) return null;
+                    const effectiveEndMin =
+                      resizingPreview && resizingPreview.eventId === pos.event.id && resizingPreview.occDate === pos.occurrenceDate
+                        ? resizingPreview.endMin
+                        : pos.endMin;
+                    if (effectiveEndMin <= visibleStartMin || pos.startMin >= visibleStartMin + visibleTotalMin) return null;
                     const topPx = ((pos.startMin - visibleStartMin) / visibleTotalMin) * totalGridHeight + pos.topOffsetPx;
                     const heightPx = Math.max(
                       gridStepMin >= 120 ? 22 : 34,
-                      ((pos.endMin - pos.startMin) / visibleTotalMin) * totalGridHeight
+                      ((effectiveEndMin - pos.startMin) / visibleTotalMin) * totalGridHeight
                     );
                     const evColor = pos.event.color || 'var(--dp-accent)';
                     const isFilled = pos.event.payload.style === 'filled';
@@ -1633,26 +1644,70 @@ export const FlowCalendarView: React.FC = () => {
                           <div style={{ fontSize: '0.7rem', opacity: 0.9 }}>
                             {pos.labelShifted ? '↪ ' : ''}
                             {formatTimeDisplay(pos.event.payload.startTime || '09:00', settings.timeFormat)} –{' '}
-                            {formatTimeDisplay(pos.event.payload.endTime || '10:00', settings.timeFormat)}
+                            {formatTimeDisplay(minutesToTime(effectiveEndMin), settings.timeFormat)}
                           </div>
                           <div
                             className="dp-flow-resize-handle"
-                            title="Click to extend +15m"
-                            onClick={(e) => {
+                            role="separator"
+                            aria-orientation="horizontal"
+                            aria-label={`Resize duration of ${pos.event.title}`}
+                            title={`Drag vertically to resize duration, or click to extend +${gridStepMin}m`}
+                            onPointerDown={(e) => {
                               e.stopPropagation();
-                              const nextEnd = minutesToTime(pos.endMin + gridStepMin);
-                              if (pos.event.recurrence) {
-                                setPendingScopeEdit({
-                                  masterId: pos.event.id,
-                                  occDate: pos.occurrenceDate,
-                                  patch: { endTime: nextEnd },
-                                });
-                              } else {
-                                void updateRecord<CalendarEventPayload>(pos.event.id, (c) => ({
-                                  ...c,
-                                  payload: { ...c.payload, endTime: nextEnd },
-                                }));
-                              }
+                              e.preventDefault();
+                              const startY = e.clientY;
+                              const origEndMin = pos.endMin;
+                              const minDur = Math.max(5, Math.min(15, gridStepMin));
+                              let dragged = false;
+                              let latestEndMin = origEndMin;
+
+                              const commitEnd = (targetEndMin: number) => {
+                                const clamped = Math.max(pos.startMin + minDur, Math.min(24 * 60, targetEndMin));
+                                const nextEnd = minutesToTime(clamped);
+                                if (pos.event.recurrence) {
+                                  setPendingScopeEdit({
+                                    masterId: pos.event.id,
+                                    occDate: pos.occurrenceDate,
+                                    patch: { endTime: nextEnd },
+                                  });
+                                } else {
+                                  void updateRecord<CalendarEventPayload>(
+                                    pos.event.id,
+                                    (c) => ({
+                                      ...c,
+                                      payload: { ...c.payload, endTime: nextEnd },
+                                    }),
+                                    { undoLabel: `Resized "${pos.event.title}"` }
+                                  );
+                                }
+                              };
+
+                              const onMove = (evMove: PointerEvent) => {
+                                const dy = evMove.clientY - startY;
+                                if (Math.abs(dy) >= 4) dragged = true;
+                                if (!dragged) return;
+                                const deltaMin = Math.round(((dy / Math.max(1, totalGridHeight)) * visibleTotalMin) / gridStepMin) * gridStepMin;
+                                latestEndMin = Math.max(pos.startMin + minDur, Math.min(24 * 60, origEndMin + deltaMin));
+                                setResizingPreview({ eventId: pos.event.id, occDate: pos.occurrenceDate, endMin: latestEndMin });
+                              };
+
+                              const onUp = () => {
+                                window.removeEventListener('pointermove', onMove);
+                                window.removeEventListener('pointerup', onUp);
+                                setResizingPreview(null);
+                                if (dragged) {
+                                  if (latestEndMin !== origEndMin) commitEnd(latestEndMin);
+                                } else {
+                                  commitEnd(origEndMin + gridStepMin);
+                                }
+                              };
+
+                              window.addEventListener('pointermove', onMove);
+                              window.addEventListener('pointerup', onUp);
+                            }}
+                            onClick={(e) => {
+                              // Click extension is handled cleanly on pointerUp when not dragged
+                              e.stopPropagation();
                             }}
                           />
                         </div>

@@ -35,6 +35,7 @@ import {
   requestAlarmNotificationPermission,
   syncPushConfigToServer,
 } from '../../core/nativeAlarms';
+import { PLANADAY_RELEASE } from '../../core/releaseInfo';
 import type { ChimeStyle, FamilyProfile, ModuleId, NavView, OperatingMode } from '../../core/types';
 
 const PAPER_OPTIONS: Array<{ id: PaperMaterial; label: string }> = [
@@ -130,16 +131,57 @@ export const SettingsView: React.FC = () => {
   const [serverStorage, setServerStorage] = useState<ServerStorageInfo | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
 
+  // Server Security & Device Pairing state (PD-004 / PF-04)
+  const [authStatus, setAuthStatus] = useState<{
+    authEnabled: boolean;
+    ownerInitialized: boolean;
+    authenticated: boolean;
+    principal?: { tokenId: string; deviceId: string; label: string; role: string } | null;
+  } | null>(null);
+  const [authPassphrase, setAuthPassphrase] = useState('');
+  const [authDeviceLabel, setAuthDeviceLabel] = useState('My Device');
+  const [pairCodeInput, setPairCodeInput] = useState('');
+  const [generatedPairCode, setGeneratedPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [pairedDevices, setPairedDevices] = useState<
+    Array<{ tokenId: string; deviceId: string; label: string; role: string; createdAt: string; lastUsedAt?: string | null; revokedAt?: string | null }>
+  >([]);
+  const [authBusy, setAuthBusy] = useState(false);
+
+  const activeSyncBase = () => normalizeServerUrl(settings.syncServerUrl || syncPrimaryDraft || '');
+
+  const refreshAuthStatus = async () => {
+    const base = activeSyncBase();
+    const headers: Record<string, string> = {};
+    if (settings.syncAuthToken) headers.Authorization = `Bearer ${settings.syncAuthToken}`;
+    try {
+      const res = await fetch(`${base}/api/auth/status`, { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAuthStatus(data);
+      if (data.authenticated && data.principal?.role === 'owner') {
+        const dRes = await fetch(`${base}/api/auth/devices`, { headers });
+        if (dRes.ok) {
+          const dJson = await dRes.json();
+          if (Array.isArray(dJson.devices)) setPairedDevices(dJson.devices);
+        }
+      }
+    } catch {
+      setAuthStatus(null);
+    }
+  };
+
   useEffect(() => {
     if (tab !== 'sync') return;
     let cancelled = false;
     void fetchServerStorageInfo().then((info) => {
       if (!cancelled) setServerStorage(info);
     });
+    void refreshAuthStatus();
     return () => {
       cancelled = true;
     };
-  }, [tab, syncState.lastSyncAt, settings.syncServerUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, syncState.lastSyncAt, settings.syncServerUrl, settings.syncAuthToken]);
 
   const importBackupRef = useRef<HTMLInputElement | null>(null);
   const importThemeRef = useRef<HTMLInputElement | null>(null);
@@ -1310,18 +1352,262 @@ export const SettingsView: React.FC = () => {
               )}
             </div>
             <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap', fontSize: '0.78rem' }}>
+              <span className="dp-pill">Release: v{PLANADAY_RELEASE.version} (Sync Proto v{PLANADAY_RELEASE.syncProtocolVersion})</span>
               <span className="dp-pill">Queue Size: {syncState.pendingCount} ops ({((syncState.queueBytesEstimate ?? 0) / 1024).toFixed(1)} KB)</span>
+              {syncState.serverId && (
+                <span className="dp-pill">Server ID: {syncState.serverId.slice(0, 12)} (Epoch {syncState.syncEpoch ?? 1})</span>
+              )}
               {typeof syncState.lastSyncedOpsCount === 'number' && (
                 <span className="dp-pill">Last Push: {syncState.lastSyncedOpsCount} op(s)</span>
+              )}
+              {(syncState.pendingBlobUploads ?? 0) > 0 && (
+                <span className="dp-pill">Pending Blob Uploads: {syncState.pendingBlobUploads}</span>
+              )}
+              {(syncState.pendingBlobDownloads ?? 0) > 0 && (
+                <span className="dp-pill">Pending Blob Downloads: {syncState.pendingBlobDownloads}</span>
+              )}
+              {(syncState.failedBlobTransfers ?? 0) > 0 && (
+                <span className="dp-pill" style={{ borderColor: 'var(--dp-danger)', color: 'var(--dp-danger)' }}>
+                  Failed Blob Transfers: {syncState.failedBlobTransfers}
+                </span>
               )}
               {(syncState.compactedOpsTotal ?? 0) > 0 && (
                 <span className="dp-pill highlight">Coalesced {syncState.compactedOpsTotal} duplicate ops</span>
               )}
             </div>
+            {(syncState.blobReceipts?.length ?? 0) > 0 && (
+              <details className="dp-details">
+                <summary>Attachment Transfer Receipts ({syncState.blobReceipts?.length ?? 0} recent)</summary>
+                <div className="dp-stack" style={{ marginTop: 8, gap: 4, fontSize: '0.76rem' }}>
+                  {(syncState.blobReceipts ?? []).slice(0, 10).map((rc, idx) => (
+                    <div key={`${rc.hash}-${idx}`} className="dp-between">
+                      <code>{rc.direction.toUpperCase()} {rc.hash.slice(0, 14)}…</code>
+                      <span style={{ color: rc.status === 'failed' ? 'var(--dp-danger)' : 'var(--dp-ok)' }}>
+                        {rc.status}{rc.error ? ` — ${rc.error}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
             {syncTestOutput && (
               <pre className="dp-card" style={{ margin: 0, padding: 10, whiteSpace: 'pre-wrap', fontSize: '0.8rem', background: 'var(--dp-surface-2)' }}>
                 {syncTestOutput}
               </pre>
+            )}
+          </div>
+
+          {/* Server Authentication, Device Pairing & Token Revocation (PD-004 / PF-04) */}
+          <div className="dp-card dp-stack" style={{ padding: 14 }}>
+            <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <h4>🔐 Server Authentication &amp; Device Pairing</h4>
+                <p className="dp-muted" style={{ margin: '2px 0 0', fontSize: '0.8rem' }}>
+                  Protect your self-hosted sync server with an owner passphrase, short-lived pairing codes, and per-device revocable tokens.
+                </p>
+              </div>
+              <div className="dp-row" style={{ gap: 6 }}>
+                <span className="dp-pill">
+                  {authStatus
+                    ? authStatus.authEnabled
+                      ? authStatus.authenticated
+                        ? `Authenticated (${authStatus.principal?.role ?? 'device'}) ✓`
+                        : 'Auth Required — Sign In or Pair'
+                      : 'Setup Mode (Unprotected LAN)'
+                    : 'Server Offline / Standalone'}
+                </span>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => void refreshAuthStatus()}>
+                  Refresh Auth
+                </button>
+              </div>
+            </div>
+
+            <div className="dp-grid-2" style={{ gap: 10, fontSize: '0.82rem' }}>
+              <div className="dp-card dp-stack" style={{ padding: 10, gap: 6, background: 'var(--dp-surface-2)' }}>
+                <strong>{authStatus?.ownerInitialized ? 'Owner Sign-In' : 'Enable Owner Protection'}</strong>
+                <input
+                  className="dp-input"
+                  placeholder="This device name (e.g., Pixel Phone, Home PC)"
+                  value={authDeviceLabel}
+                  onChange={(e) => setAuthDeviceLabel(e.target.value)}
+                />
+                <input
+                  type="password"
+                  className="dp-input"
+                  placeholder="Owner passphrase (min 8 characters)"
+                  value={authPassphrase}
+                  onChange={(e) => setAuthPassphrase(e.target.value)}
+                />
+                <div className="dp-row" style={{ gap: 6 }}>
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-primary dp-btn-sm"
+                    disabled={authBusy || authPassphrase.length < 8}
+                    onClick={async () => {
+                      setAuthBusy(true);
+                      try {
+                        const endpoint = authStatus?.ownerInitialized ? '/api/auth/signin' : '/api/auth/setup';
+                        const res = await fetch(`${activeSyncBase()}${endpoint}`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            passphrase: authPassphrase,
+                            deviceId: settings.deviceId,
+                            deviceLabel: authDeviceLabel.trim() || 'Primary Device',
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.token) {
+                          pushToast(data.error || 'Authentication failed', { tone: 'danger' });
+                        } else {
+                          await patchSettings({ syncAuthToken: data.token });
+                          setAuthPassphrase('');
+                          pushToast(authStatus?.ownerInitialized ? 'Signed in and saved device token!' : 'Server protection enabled & device paired!', { tone: 'ok' });
+                          await refreshAuthStatus();
+                          await triggerSyncNow();
+                        }
+                      } catch {
+                        pushToast('Could not reach sync server for authentication.', { tone: 'warn' });
+                      } finally {
+                        setAuthBusy(false);
+                      }
+                    }}
+                  >
+                    {authStatus?.ownerInitialized ? 'Sign In This Device' : 'Enable Auth & Pair Owner'}
+                  </button>
+                  {settings.syncAuthToken && (
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-sm"
+                      onClick={async () => {
+                        await patchSettings({ syncAuthToken: '' });
+                        setPairedDevices([]);
+                        pushToast('Cleared saved device token locally.');
+                        await refreshAuthStatus();
+                      }}
+                    >
+                      Clear Local Token
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="dp-card dp-stack" style={{ padding: 10, gap: 6, background: 'var(--dp-surface-2)' }}>
+                <strong>Pair Additional Devices (10-Min Code)</strong>
+                <div className="dp-row" style={{ gap: 6 }}>
+                  <input
+                    className="dp-input"
+                    style={{ flex: 1, minWidth: 0 }}
+                    placeholder="Enter pairing code from owner device…"
+                    value={pairCodeInput}
+                    onChange={(e) => setPairCodeInput(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    disabled={authBusy || !pairCodeInput.trim()}
+                    onClick={async () => {
+                      setAuthBusy(true);
+                      try {
+                        const res = await fetch(`${activeSyncBase()}/api/auth/pair`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            code: pairCodeInput.trim(),
+                            deviceId: settings.deviceId,
+                            deviceLabel: authDeviceLabel.trim() || 'Paired Device',
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.token) {
+                          pushToast(data.error || 'Invalid or expired pairing code', { tone: 'danger' });
+                        } else {
+                          await patchSettings({ syncAuthToken: data.token });
+                          setPairCodeInput('');
+                          pushToast('Device paired successfully!', { tone: 'ok' });
+                          await refreshAuthStatus();
+                          await triggerSyncNow();
+                        }
+                      } catch {
+                        pushToast('Failed to reach server for pairing.', { tone: 'warn' });
+                      } finally {
+                        setAuthBusy(false);
+                      }
+                    }}
+                  >
+                    Redeem Code
+                  </button>
+                </div>
+                {authStatus?.authenticated && authStatus.principal?.role === 'owner' && (
+                  <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-sm"
+                      onClick={async () => {
+                        const res = await fetch(`${activeSyncBase()}/api/auth/pair-code`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            ...(settings.syncAuthToken ? { Authorization: `Bearer ${settings.syncAuthToken}` } : {}),
+                          },
+                          body: JSON.stringify({ label: 'Paired Device', role: 'owner', ttlMinutes: 10 }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.code) {
+                          setGeneratedPairCode({ code: data.code, expiresAt: data.expiresAt });
+                          pushToast(`Pairing code generated: ${data.code}`);
+                        } else {
+                          pushToast(data.error || 'Could not generate pairing code', { tone: 'warn' });
+                        }
+                      }}
+                    >
+                      Generate Pairing Code
+                    </button>
+                    {generatedPairCode && (
+                      <span className="dp-pill highlight">
+                        Code: <strong>{generatedPairCode.code}</strong> (expires {new Date(generatedPairCode.expiresAt).toLocaleTimeString()})
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {pairedDevices.length > 0 && (
+              <div className="dp-stack" style={{ gap: 4, fontSize: '0.8rem' }}>
+                <strong>Authorized Devices ({pairedDevices.filter((d) => !d.revokedAt).length} active)</strong>
+                {pairedDevices.map((dev) => (
+                  <div key={dev.tokenId} className="dp-between" style={{ padding: '6px 8px', border: '1px solid var(--dp-border)', borderRadius: 6 }}>
+                    <div>
+                      <strong>{dev.label}</strong> <span className="dp-pill">{dev.role}</span>{' '}
+                      <span className="dp-muted">({dev.deviceId.slice(0, 12)})</span>
+                      {dev.revokedAt && <span className="dp-muted"> · Revoked</span>}
+                    </div>
+                    {!dev.revokedAt && (
+                      <button
+                        type="button"
+                        className="dp-btn dp-btn-danger dp-btn-sm"
+                        onClick={async () => {
+                          const res = await fetch(`${activeSyncBase()}/api/auth/revoke`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              ...(settings.syncAuthToken ? { Authorization: `Bearer ${settings.syncAuthToken}` } : {}),
+                            },
+                            body: JSON.stringify({ tokenId: dev.tokenId }),
+                          });
+                          if (res.ok) {
+                            pushToast(`Revoked access for "${dev.label}"`);
+                            await refreshAuthStatus();
+                          }
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

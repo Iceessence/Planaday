@@ -1,9 +1,9 @@
 {
   "name": "dayplana",
-  "version": "2.0.0",
+  "version": "4.1.0",
   "private": true,
   "type": "module",
-  "description": "Dayplana Edition 2 — Tactile All-in-One Customizable Life Planner with Unlimited Offline Storage & Self-Hosted Docker Sync",
+  "description": "Planaday — Tactile All-in-One Customizable Life Planner, Laboratory & Creative Suite with Offline Storage & Self-Hosted Docker Sync",
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch server/index.ts",

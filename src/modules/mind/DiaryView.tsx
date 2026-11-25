@@ -212,9 +212,9 @@ export const DiaryView: React.FC = () => {
           </p>
         </div>
         <div className="dp-row">
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(addDaysIso(activeDate, -1))}>←</button>
+          <button type="button" className="dp-btn dp-btn-sm" aria-label="Previous day" title="Previous day" onClick={() => setActiveDate(addDaysIso(activeDate, -1))}>←</button>
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(logicalToday)}>Today</button>
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveDate(addDaysIso(activeDate, 1))}>→</button>
+          <button type="button" className="dp-btn dp-btn-sm" aria-label="Next day" title="Next day" onClick={() => setActiveDate(addDaysIso(activeDate, 1))}>→</button>
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => void saveDiary({ blankMode: !entry.blankMode })}>
             {entry.blankMode ? 'Structured Mode' : 'Blank Narrative Mode'}
           </button>
@@ -293,7 +293,8 @@ export const DiaryView: React.FC = () => {
                 Mood: {cm}
                 <button
                   type="button"
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', paddingInlineStart: 4, color: 'inherit' }}
+                  aria-label={`Remove custom mood ${cm}`}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', paddingInlineStart: 4, minWidth: 24, minHeight: 24, color: 'inherit' }}
                   onClick={() => void patchSettings({ customMoods: (settings.customMoods ?? []).filter((x) => x !== cm) })}
                 >
                   ×
@@ -305,7 +306,8 @@ export const DiaryView: React.FC = () => {
                 Prompt: {cp.slice(0, 28)}…
                 <button
                   type="button"
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', paddingInlineStart: 4, color: 'inherit' }}
+                  aria-label="Remove custom diary prompt"
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', paddingInlineStart: 4, minWidth: 24, minHeight: 24, color: 'inherit' }}
                   onClick={() => void patchSettings({ customDiaryPrompts: (settings.customDiaryPrompts ?? []).filter((_, idx) => idx !== i) })}
                 >
                   ×

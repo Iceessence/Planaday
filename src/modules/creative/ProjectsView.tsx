@@ -175,7 +175,7 @@ export const ProjectsView: React.FC = () => {
       </div>
 
       {tab === 'projects' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 280px) 1fr', gap: '0.85rem' }}>
+        <div className="dp-studio-split">
           <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <input className="dp-input" placeholder="New project title..." value={newProjName} onChange={(e) => setNewProjName(e.target.value)} />
             <select className="dp-select" value={newProjTpl} onChange={(e) => setNewProjTpl(e.target.value)}>
@@ -219,7 +219,7 @@ export const ProjectsView: React.FC = () => {
                   className="dp-input"
                   value={activeProj.title}
                   onChange={(e) => void updateRecord(activeProj.id, { title: e.target.value })}
-                  style={{ fontSize: '1.15rem', fontWeight: 700, flex: 1, minWidth: 200 }}
+                  style={{ fontSize: '1.15rem', fontWeight: 700, flex: '1 1 140px', minWidth: 0 }}
                 />
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                   <select
@@ -367,7 +367,7 @@ export const ProjectsView: React.FC = () => {
 
       {/* === CUSTOM RECORD TYPE BUILDER (§38.2) === */}
       {tab === 'custom_types' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 270px) 1fr', gap: '0.85rem' }}>
+        <div className="dp-studio-split">
           <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
             <h4 style={{ margin: 0 }}>Custom Record Types</h4>
             <div style={{ display: 'flex', gap: '0.35rem' }}>

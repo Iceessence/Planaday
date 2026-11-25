@@ -1,6 +1,6 @@
 {
   "name": "planaday-desktop",
-  "version": "2.1.0",
+  "version": "4.1.0",
   "description": "Planaday Native Desktop App — Standalone Offline Life Planner with Background Alarms & Docker Sync",
   "main": "main.cjs",
   "scripts": {
@@ -30,7 +30,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^35.0.0",
-    "electron-builder": "^25.1.8"
+    "electron": "39.2.7",
+    "electron-builder": "^26.0.12"
   }
 }

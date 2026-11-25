@@ -265,7 +265,7 @@ export const PhotoStudioView: React.FC = () => {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(210px, 270px) 1fr', gap: '0.85rem' }}>
+      <div className="dp-studio-split">
         {/* Photo Library Grid */}
         <div className="dp-card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', alignContent: 'start', maxHeight: 580, overflowY: 'auto' }}>
           {filteredPhotos.length === 0 ? (
@@ -310,7 +310,7 @@ export const PhotoStudioView: React.FC = () => {
                 className="dp-input"
                 value={activePhoto.title}
                 onChange={(e) => void updateRecord(activePhoto.id, { title: e.target.value })}
-                style={{ fontWeight: 700, flex: 1, minWidth: 160 }}
+                style={{ fontWeight: 700, flex: '1 1 130px', minWidth: 0 }}
               />
               <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                 <button

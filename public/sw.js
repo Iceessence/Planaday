@@ -1,6 +1,8 @@
-// Planaday Offline-First Service Worker
-// Precaches core shell & dynamically caches built JS/CSS/font assets for 100% offline Phone & Computer modes.
-const CACHE_NAME = 'planaday-shell-v4-0';
+// Planaday Offline-First Service Worker (PD-009 / PF-05)
+// Precaches core shell AND every build-versioned JS/CSS lazy studio chunk listed in /offline-manifest.json
+// so previously unvisited workspaces open reliably when offline.
+const CACHE_PREFIX = 'planaday-build-';
+const FALLBACK_CACHE = 'planaday-build-4.1.0';
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -8,18 +10,53 @@ const CORE_ASSETS = [
   '/icons/icon.svg',
 ];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).then(() => self.skipWaiting())
+async function precacheBuildAssets() {
+  let cacheName = FALLBACK_CACHE;
+  let assets = [...CORE_ASSETS];
+  try {
+    const res = await fetch('/offline-manifest.json', { cache: 'no-store' });
+    if (res.ok) {
+      const manifest = await res.json();
+      if (manifest && typeof manifest.buildId === 'string') {
+        cacheName = `${CACHE_PREFIX}${manifest.buildId}`;
+      }
+      if (manifest && Array.isArray(manifest.assets)) {
+        assets = Array.from(new Set([...CORE_ASSETS, ...manifest.assets]));
+      }
+    }
+  } catch {
+    // Fallback to CORE_ASSETS if manifest is unavailable (e.g. dev mode)
+  }
+
+  const cache = await caches.open(cacheName);
+  // Precache every chunk atomically (tolerating individual optional asset 404s without aborting shell install)
+  await Promise.all(
+    assets.map(async (url) => {
+      try {
+        const resp = await fetch(url, { cache: 'reload' });
+        if (resp && resp.ok) {
+          await cache.put(url, resp);
+        }
+      } catch {
+        // ignore single missing dev asset
+      }
+    })
   );
+  // Clean up older build caches only after the new build cache is populated
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter((k) => k !== cacheName && (k.startsWith(CACHE_PREFIX) || k.startsWith('planaday-shell-')))
+      .map((k) => caches.delete(k))
+  );
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(precacheBuildAssets().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
@@ -31,31 +68,25 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) return;
   if (url.origin !== self.location.origin) return;
 
-  // Navigation requests: network-first with instant offline cache fallback
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', clone));
-          return res;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
-  // Static assets: cache-first, populate on miss
   event.respondWith(
     caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res.ok && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-        }
-        return res;
-      });
+      const networkFetch = fetch(req)
+        .then(async (res) => {
+          if (res && res.ok && res.type === 'basic') {
+            const keys = await caches.keys();
+            const targetCache = keys.find((k) => k.startsWith(CACHE_PREFIX)) || FALLBACK_CACHE;
+            const cache = await caches.open(targetCache);
+            await cache.put(req, res.clone());
+          }
+          return res;
+        })
+        .catch(() => {
+          if (cached) return cached;
+          if (req.mode === 'navigate') return caches.match('/index.html');
+          return new Response('Offline — asset not yet cached', { status: 503 });
+        });
+
+      return cached || networkFetch;
     })
   );
 });

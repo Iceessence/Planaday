@@ -14,6 +14,49 @@ export interface ChangelogRelease {
 
 export const PLANADAY_CHANGELOG: ChangelogRelease[] = [
   {
+    version: '4.1.0',
+    date: '2026-11-24',
+    title: 'Comprehensive Integrity, Sync, Security, Mobile Layout, Calculation & Recovery Overhaul',
+    highlights: [
+      'Atomic Local Writes & Draft Recovery Inbox (PD-001, PD-016, PF-01, PF-55): Serialized per-record mutations inside atomic Dexie read-write transactions, fixed blurless cross-note overwrite by locking buffered editor commits to the originating record key, and added durable `db.drafts` persistence with a 1-click Draft Recovery Inbox banner in Notes.',
+      'Bidirectional Verified Attachment Sync & Server Identity Recovery (PD-002, PD-003, CONT-003, CONT-004, PD-015, PF-03, PF-42, PF-51): Fixed Fastify v5 wildcard MIME upload parser (eliminating HTTP 415 on PNG/JPEG/WAV), added server & client SHA-256 verification with atomic temp-file staging, automatic missing attachment downloads on clean devices, honest failure receipts (a failed blob transfer never shows "Synced"), and automatic server identity/epoch reconciliation so ZIP restores push cleanly onto replacement servers.',
+      'Server Authentication, Device Pairing & Outbound SSRF Hardening (PD-004, PD-005, PD-014, PF-04): Added optional passphrase-protected owner auth, revocable hashed device tokens, 10-minute pairing codes, workspace-scoped authorization, centralized private/loopback/metadata IP SSRF blocking for ICS/Recipe/Push relays, and migrated Code Studio execution from same-origin Web Worker to a null-origin CSP-locked sandboxed iframe (`sandbox="allow-scripts"`).',
+      'Math, Spreadsheet, CSV & Export Fidelity Repairs (PD-006, PD-007, PD-008, PD-018, CONT-006, CONT-007): Upgraded CSV import to a full RFC 4180 parser (quoted commas, escaped quotes, multiline fields), fixed missing-sheet `#REF!` errors, zero-length `LEFT`/`RIGHT`, and composite formulas (`=SUM(A1:A3)+1`), upgraded root-finder to reject poles and detect tangent roots, fixed all 7 swapped studio export downloads via typed `downloadFile()`, and upgraded HTML Presentation export to embed inline base64 images, HTML tables, transforms, opacity, transitions, and speaker notes.',
+      'Cross-Engine Startup, Offline Precaching, Mobile Layout & Accessibility (CONT-005, CONT-008, PD-009, PD-010, PD-011, PD-012, PD-013, PD-017, PD-019, PD-020, R-0005, R-0007): Fixed Firefox startup hang by making persistent storage non-blocking with timeout, lowered Vite target to Chrome 74 / ES2019 for Android 10 WebView compatibility, added build-generated `offline-manifest.json` precaching in `sw.js`, eliminated 320px overflow in Files/Projects/Photos/Books/Code/Presentations, added accessible labels & ≥28px targets, fixed synchronous checkbox state & added drag-to-resize on Flow Calendar events, upgraded Electron to v39 with `sandbox: true` & navigation guards, and added automated CI typecheck/test gates.',
+    ],
+    bugFixes: [
+      'PD-001: Fixed concurrent record mutations losing disjoint fields or emitting non-monotonic revisions via per-record lock + atomic Dexie transactions.',
+      'PD-016 / CONT-002: Fixed blurless cross-note switch overwriting Note Beta with Note Alpha’s buffered draft.',
+      'CONT-003: Fixed HTTP 415 on PNG, JPEG, WebP, WAV, MP3, PDF, and SVG blob uploads on Fastify v5.',
+      'PD-002 & CONT-004: Fixed second-device attachment byte sync and prevented `status: "synced"` when blob transfers fail.',
+      'PD-003: Fixed replacement-server sync stranding ZIP-restored records/blobs when server `seq` resets.',
+      'PD-006, CONT-006, CONT-007: Fixed CSV quoting/newlines, missing-sheet `#REF!`, `LEFT`/`RIGHT` length 0, and composite spreadsheet formulas.',
+      'PD-007: Fixed numerical root finder pole false positive (`1/(x-0.123)`) and missed tangent root (`(x-0.123)^2`).',
+      'PD-008 & PD-018: Fixed swapped filename/content across 7 studio export buttons and upgraded HTML Presentation fidelity.',
+      'CONT-005 & CONT-008: Fixed Android 10 WebView syntax error and Firefox persistent-storage startup hang.',
+      'PD-010, PD-011, PD-012, PD-013, PD-019: Improved large-note paste responsiveness, eliminated 320px horizontal overflow, and labeled icon buttons.',
+      'R-0005 & R-0007: Fixed synchronous optimistic settings updates for Flow Calendar Adaptive Text toggle and added pointer drag-to-resize on timed calendar events.',
+    ],
+    performanceAndSync: [
+      'Added build-time `offline-manifest.json` precaching in Service Worker so lazy studio chunks load offline on first visit after installation.',
+      'Deferred large-note word/paragraph counting and skipped forced textarea `scrollHeight` reflows above 12,000 characters.',
+      'Added `serverId`, `syncEpoch`, per-blob transfer receipts, and manifest SHA-256 verification on ZIP and SQLite backups.',
+    ],
+    mobileAndUx: [
+      'Added responsive `.dp-studio-split` and `.dp-studio-split-3` layouts stacking cleanly to 1 column at phone widths down to 320px.',
+      'Added Server Security & Device Pairing UI, Release/Platform Readiness diagnostics, and Attachment Transfer Receipts in Settings.',
+    ],
+    storageAndData: [
+      'Non-destructive additive Dexie v2 schema adding `drafts` table (`key, recordId, updatedAt`) while preserving `dayplana-v2`, `/data/dayplana.sqlite`, `dayplana_db`, and `com.dayplana.app`.',
+      'Upgraded ZIP backup format to v3 with SHA-256 manifest verification (100% backward-compatible with v2 backups).',
+    ],
+    knownLimitations: [
+      'Server authentication remains opt-in (setup mode) on existing uninitialized deployments until the owner enables a passphrase in Settings → 3-Mode Sync so existing LAN setups do not break on upgrade.',
+      'Physical-device testing on Android Gboard/Samsung Keyboard, Android 10 hardware, iOS Safari, and Doze lock-screen notifications requires testing on your physical devices after deploying a new build.',
+      'Independent third-party audit re-verification is still pending after these v4.1.0 developer repairs.',
+    ],
+  },
+  {
     version: '4.0.0',
     date: '2026-11-24',
     title: 'Productivity, Mathematics, Creative Studios, Visual Workspace & Universal File Hub (Sections 26–39)',

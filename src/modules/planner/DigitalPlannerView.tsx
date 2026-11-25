@@ -300,7 +300,7 @@ export const DigitalPlannerView: React.FC = () => {
         <button
           type="button"
           className="dp-btn dp-btn-ghost dp-btn-sm"
-          style={{ padding: '1px 5px', fontSize: '0.72rem' }}
+          style={{ padding: '4px 8px', fontSize: '0.74rem', minHeight: 28 }}
           onClick={() => {
             void saveBook((b) => ({
               ...b,
@@ -309,19 +309,21 @@ export const DigitalPlannerView: React.FC = () => {
             pushToast('Duplicated planner page!');
           }}
         >
-          <Copy size={11} /> Duplicate
+          <Copy size={12} /> Duplicate
         </button>
         {pages.length > 1 && (
           <button
             type="button"
             className="dp-btn dp-btn-ghost dp-btn-sm"
-            style={{ padding: '1px 5px', fontSize: '0.72rem', color: 'var(--dp-danger)' }}
+            aria-label={`Delete page ${pg.title}`}
+            title={`Delete page ${pg.title}`}
+            style={{ padding: '4px 8px', fontSize: '0.74rem', minHeight: 28, minWidth: 28, color: 'var(--dp-danger)' }}
             onClick={() => {
               void saveBook((b) => ({ ...b, pages: b.pages.filter((x) => x.id !== pg.id) }));
               setPageIdx((i) => Math.max(0, i - 1));
             }}
           >
-            <Trash2 size={11} />
+            <Trash2 size={12} />
           </button>
         )}
       </div>
@@ -423,9 +425,9 @@ export const DigitalPlannerView: React.FC = () => {
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setSpreadMode((m) => (m === 'spread' ? 'single' : 'spread'))}>
             <Layers size={13} /> {spreadMode === 'spread' ? '2-Page Spread' : 'Single Page'}
           </button>
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setZoomPct((z) => Math.max(60, z - 15))}><ZoomOut size={13} /></button>
+          <button type="button" className="dp-btn dp-btn-sm" aria-label="Zoom out planner" title="Zoom out planner" onClick={() => setZoomPct((z) => Math.max(60, z - 15))}><ZoomOut size={13} /></button>
           <span className="dp-pill">{zoomPct}%</span>
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setZoomPct((z) => Math.min(180, z + 15))}><ZoomIn size={13} /></button>
+          <button type="button" className="dp-btn dp-btn-sm" aria-label="Zoom in planner" title="Zoom in planner" onClick={() => setZoomPct((z) => Math.min(180, z + 15))}><ZoomIn size={13} /></button>
           <button type="button" className={`dp-btn dp-btn-sm ${designerOpen ? 'dp-btn-primary' : ''}`} onClick={() => setDesignerOpen((v) => !v)}>
             <Settings2 size={13} /> Customize Book, Tabs &amp; Pages
           </button>
@@ -520,7 +522,7 @@ export const DigitalPlannerView: React.FC = () => {
             <select className="dp-select" style={{ width: 'auto' }} value={newTabTarget} onChange={(e) => setNewTabTarget(Number(e.target.value))}>
               {pages.map((p, idx) => <option key={p.id} value={idx}>Page {idx + 1}: {p.title.slice(0, 22)}</option>)}
             </select>
-            <input type="color" value={newTabColor} onChange={(e) => setNewTabColor(e.target.value)} />
+            <input type="color" aria-label="New tab color" value={newTabColor} onChange={(e) => setNewTabColor(e.target.value)} />
             <button
               type="button"
               className="dp-btn dp-btn-primary dp-btn-sm"

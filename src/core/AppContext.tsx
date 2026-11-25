@@ -6,6 +6,7 @@ import {
   db,
   getOrInitSettings,
   getStorageHealth,
+  mergeSettingsObject,
   requestPersistentStorage,
   updateSettings,
   type StorageHealth,
@@ -236,44 +237,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const liveSettings = useLiveQuery(() => db.settings.get('app-settings'), []);
+  const [inFlightSettingsPatches, setInFlightSettingsPatches] = useState<Array<{ id: number; patch: Partial<AppSettings> }>>([]);
+  const settingsPatchSeqRef = React.useRef(0);
+  const completedSettingsSeqRef = React.useRef(0);
+
+  useEffect(() => {
+    // Once Dexie emits a fresh liveSettings snapshot after completed writes, prune those optimistic patches cleanly.
+    const committed = completedSettingsSeqRef.current;
+    if (committed > 0) {
+      setInFlightSettingsPatches((prev) => {
+        const next = prev.filter((item) => item.id > committed);
+        return next.length === prev.length ? prev : next;
+      });
+    }
+  }, [liveSettings]);
+
   const settings = useMemo<AppSettings>(() => {
     const defaults = createDefaultSettings();
-    if (!liveSettings) return defaults;
-    return {
-      ...defaults,
-      ...liveSettings,
-      familyProfiles: liveSettings.familyProfiles?.length ? liveSettings.familyProfiles : defaults.familyProfiles,
-      activeProfileId: liveSettings.activeProfileId || 'all',
-      eventCategories: liveSettings.eventCategories?.length ? liveSettings.eventCategories : defaults.eventCategories,
-      customTabs: Array.isArray(liveSettings.customTabs) ? liveSettings.customTabs : [],
-      plannerTitle:
-        !liveSettings.plannerTitle || liveSettings.plannerTitle === 'Dayplana' ? 'Planaday' : liveSettings.plannerTitle,
-      cardRadius: liveSettings.cardRadius || 'soft',
-      mobileLayoutMode: liveSettings.mobileLayoutMode || 'adaptive',
-      uiScalePct: typeof liveSettings.uiScalePct === 'number' ? liveSettings.uiScalePct : 100,
-      hiddenSidebarViews: Array.isArray(liveSettings.hiddenSidebarViews) ? liveSettings.hiddenSidebarViews : [],
-      syncFallbackUrl: liveSettings.syncFallbackUrl ?? '',
-      weatherEnabled: liveSettings.weatherEnabled ?? true,
-      weatherLocationName: liveSettings.weatherLocationName ?? '',
-      weatherLat: liveSettings.weatherLat ?? null,
-      weatherLon: liveSettings.weatherLon ?? null,
-      weatherUnit: liveSettings.weatherUnit ?? 'F',
-      cachedWeather: liveSettings.cachedWeather ?? null,
-      factTopicFilter: liveSettings.factTopicFilter ?? 'All',
-      customTimerPresets: Array.isArray(liveSettings.customTimerPresets) ? liveSettings.customTimerPresets : [],
-      customMoods: Array.isArray(liveSettings.customMoods) ? liveSettings.customMoods : [],
-      customDiaryPrompts: Array.isArray(liveSettings.customDiaryPrompts) ? liveSettings.customDiaryPrompts : [],
-      customThoughtPrompts: Array.isArray(liveSettings.customThoughtPrompts) ? liveSettings.customThoughtPrompts : [],
-      customRingtones: Array.isArray(liveSettings.customRingtones) ? liveSettings.customRingtones : [],
-      customNotebooks: Array.isArray(liveSettings.customNotebooks) ? liveSettings.customNotebooks : [],
-      customMealFavorites: Array.isArray(liveSettings.customMealFavorites) ? liveSettings.customMealFavorites : [],
-      defaultCurrency: liveSettings.defaultCurrency || 'USD',
-      notificationPrefs: {
-        ...defaults.notificationPrefs,
-        ...(liveSettings.notificationPrefs ?? {}),
-      },
-    };
-  }, [liveSettings]);
+    const base: AppSettings = !liveSettings
+      ? defaults
+      : {
+          ...defaults,
+          ...liveSettings,
+          familyProfiles: liveSettings.familyProfiles?.length ? liveSettings.familyProfiles : defaults.familyProfiles,
+          activeProfileId: liveSettings.activeProfileId || 'all',
+          eventCategories: liveSettings.eventCategories?.length ? liveSettings.eventCategories : defaults.eventCategories,
+          customTabs: Array.isArray(liveSettings.customTabs) ? liveSettings.customTabs : [],
+          plannerTitle:
+            !liveSettings.plannerTitle || liveSettings.plannerTitle === 'Dayplana' ? 'Planaday' : liveSettings.plannerTitle,
+          cardRadius: liveSettings.cardRadius || 'soft',
+          mobileLayoutMode: liveSettings.mobileLayoutMode || 'adaptive',
+          uiScalePct: typeof liveSettings.uiScalePct === 'number' ? liveSettings.uiScalePct : 100,
+          hiddenSidebarViews: Array.isArray(liveSettings.hiddenSidebarViews) ? liveSettings.hiddenSidebarViews : [],
+          syncFallbackUrl: liveSettings.syncFallbackUrl ?? '',
+          weatherEnabled: liveSettings.weatherEnabled ?? true,
+          weatherLocationName: liveSettings.weatherLocationName ?? '',
+          weatherLat: liveSettings.weatherLat ?? null,
+          weatherLon: liveSettings.weatherLon ?? null,
+          weatherUnit: liveSettings.weatherUnit ?? 'F',
+          cachedWeather: liveSettings.cachedWeather ?? null,
+          factTopicFilter: liveSettings.factTopicFilter ?? 'All',
+          customTimerPresets: Array.isArray(liveSettings.customTimerPresets) ? liveSettings.customTimerPresets : [],
+          customMoods: Array.isArray(liveSettings.customMoods) ? liveSettings.customMoods : [],
+          customDiaryPrompts: Array.isArray(liveSettings.customDiaryPrompts) ? liveSettings.customDiaryPrompts : [],
+          customThoughtPrompts: Array.isArray(liveSettings.customThoughtPrompts) ? liveSettings.customThoughtPrompts : [],
+          customRingtones: Array.isArray(liveSettings.customRingtones) ? liveSettings.customRingtones : [],
+          customNotebooks: Array.isArray(liveSettings.customNotebooks) ? liveSettings.customNotebooks : [],
+          customMealFavorites: Array.isArray(liveSettings.customMealFavorites) ? liveSettings.customMealFavorites : [],
+          defaultCurrency: liveSettings.defaultCurrency || 'USD',
+          calendarPrefs: {
+            ...defaults.calendarPrefs!,
+            ...(liveSettings.calendarPrefs ?? {}),
+          },
+          notificationPrefs: {
+            ...defaults.notificationPrefs,
+            ...(liveSettings.notificationPrefs ?? {}),
+          },
+        };
+    return inFlightSettingsPatches.reduce((acc, item) => mergeSettingsObject(acc, item.patch), base);
+  }, [liveSettings, inFlightSettingsPatches]);
 
   const [logicalToday, setLogicalToday] = useState<string>(() =>
     computeLogicalDateIso(Date.now(), settings.dayBoundaryHour, settings.defaultTimeZone)
@@ -281,20 +303,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeDate, setActiveDate] = useState<string>(logicalToday);
 
   // Boot Temporal, settings, persistent storage, trash cleanup, and sync daemon
+  // CONT-008: Never block initial UI mount on optional browser storage permission prompts (e.g. Firefox persist())!
   useEffect(() => {
     let mounted = true;
     (async () => {
       await ensureTemporal();
       const s = await getOrInitSettings();
-      await requestPersistentStorage();
-      await purgeExpiredTrash();
-      const health = await getStorageHealth();
       if (!mounted) return;
-      setStorageHealth(health);
       const todayNow = computeLogicalDateIso(Date.now(), s.dayBoundaryHour, s.defaultTimeZone);
       setLogicalToday(todayNow);
       setActiveDate(todayNow);
       setReady(true);
+
+      // Run maintenance, optional persistent storage request & sync non-blocking after UI is interactive
+      void Promise.allSettled([
+        requestPersistentStorage(2500),
+        purgeExpiredTrash(),
+      ]).then(async () => {
+        if (!mounted) return;
+        const health = await getStorageHealth();
+        if (mounted) setStorageHealth(health);
+      });
       await startSyncDaemon();
     })();
     return () => {
@@ -533,11 +562,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   const patchSettings = useCallback(async (patch: Partial<AppSettings>) => {
-    const next = await updateSettings(patch);
-    if (patch.operatingMode !== undefined || patch.syncServerUrl !== undefined || patch.syncFallbackUrl !== undefined) {
-      await startSyncDaemon();
+    // Apply synchronously so controlled checkboxes & selects (e.g. Calendar Adaptive Text) respond immediately
+    // without reverting while IndexedDB commits asynchronously (R-0005 / CAL-002).
+    const opId = ++settingsPatchSeqRef.current;
+    setInFlightSettingsPatches((prev) => [...prev, { id: opId, patch }]);
+    try {
+      const next = await updateSettings(patch);
+      completedSettingsSeqRef.current = Math.max(completedSettingsSeqRef.current, opId);
+      if (
+        patch.operatingMode !== undefined ||
+        patch.syncServerUrl !== undefined ||
+        patch.syncFallbackUrl !== undefined ||
+        patch.syncAuthToken !== undefined
+      ) {
+        await startSyncDaemon();
+      }
+      applySettingsToDocument(next);
+    } catch (err) {
+      setInFlightSettingsPatches((prev) => prev.filter((item) => item.id !== opId));
+      throw err;
     }
-    applySettingsToDocument(next);
   }, []);
 
   // Phase 6: Schedule-Based Automatic Workspace Layout Switching (Section 18.4)

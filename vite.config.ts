@@ -1,10 +1,48 @@
-import { defineConfig } from 'vite';
+import fs from 'node:fs';
+import path from 'node:path';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
+/**
+ * PD-009 / PF-05: Emits dist/offline-manifest.json containing every built JS/CSS/HTML chunk
+ * so public/sw.js precaches ALL lazy studio chunks atomically on install!
+ */
+function planadayOfflineManifestPlugin(): Plugin {
+  return {
+    name: 'planaday-offline-manifest',
+    apply: 'build',
+    closeBundle() {
+      const distDir = path.resolve(__dirname, 'dist');
+      if (!fs.existsSync(distDir)) return;
+      const assets = new Set<string>(['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg']);
+      const walk = (dir: string, relBase = '') => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            walk(full, rel);
+          } else if (/\.(js|css|svg|png|webp|woff2|webmanifest|html)$/i.test(entry.name)) {
+            assets.add(`/${rel.replace(/\\/g, '/')}`);
+          }
+        }
+      };
+      walk(distDir);
+      const manifest = {
+        version: '4.1.0',
+        buildId: `planaday-4.1.0-${Date.now().toString(36)}`,
+        generatedAt: new Date().toISOString(),
+        assets: Array.from(assets).sort(),
+      };
+      fs.writeFileSync(path.join(distDir, 'offline-manifest.json'), JSON.stringify(manifest, null, 2));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), planadayOfflineManifestPlugin()],
   build: {
-    target: 'esnext',
+    // CONT-005: Downlevel optional chaining (?.) & nullish coalescing (??) so Android 10 WebView 74 boots cleanly!
+    target: ['chrome74', 'firefox78', 'safari13.1', 'es2019'],
     outDir: 'dist',
     sourcemap: false,
     rollupOptions: {
@@ -84,5 +122,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
+    exclude: ['docs/**', 'node_modules/**', 'dist/**', 'dist-server/**'],
   },
 });

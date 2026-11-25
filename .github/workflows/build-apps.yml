@@ -34,9 +34,11 @@ jobs:
             yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
           fi
 
-      - name: Install web deps & build Planaday PWA
+      - name: Install web deps, run verification gate & build Planaday PWA
         run: |
           npm ci || npm install
+          npm run typecheck
+          npm test
           npm run build:client
 
       - name: Add Capacitor 7 Android + Local Notifications (for lock-screen alarms)
@@ -101,9 +103,11 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Build Planaday web bundle
+      - name: Run verification gate & build Planaday web bundle
         run: |
           npm ci || npm install
+          npm run typecheck
+          npm test
           npm run build:client
 
       - name: Copy built web bundle into desktop wrapper

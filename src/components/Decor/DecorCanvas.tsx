@@ -369,8 +369,9 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
         <button
           type="button"
           className="dp-btn dp-btn-sm"
-          style={{ padding: '2px 8px', fontSize: '0.75rem', opacity: 0.9 }}
+          style={{ padding: '4px 9px', fontSize: '0.76rem', minHeight: 28, opacity: 0.92 }}
           onClick={() => setDrawerOpen(true)}
+          aria-label="Open stickers and decor drawer"
           title="Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
         >
           <Sparkles size={12} /> Decor
@@ -378,8 +379,9 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
         <button
           type="button"
           className={`dp-btn dp-btn-sm ${inkMode ? 'dp-btn-primary' : ''}`}
-          style={{ padding: '2px 8px', fontSize: '0.75rem', opacity: 0.9 }}
+          style={{ padding: '4px 9px', fontSize: '0.76rem', minHeight: 28, opacity: 0.92 }}
           onClick={() => setInkMode((v) => !v)}
+          aria-label={inkMode ? 'Turn off ink mode' : 'Turn on ink mode'}
           title="Toggle Smooth Pen, Highlighter & Stroke Eraser"
         >
           <PenTool size={12} /> {inkMode ? 'Ink On' : 'Ink'}

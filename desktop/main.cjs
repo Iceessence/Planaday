@@ -166,8 +166,17 @@ async function createWindow(appIcon) {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       backgroundThrottling: false, // Keep timers & alarms ticking accurately while minimized to tray
     },
+  });
+
+  // PD-020: Restrict external window opens & unexpected top-level navigations away from local bundle
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
+    if (!targetUrl.startsWith(localUrl)) {
+      event.preventDefault();
+    }
   });
 
   await mainWindow.loadURL(localUrl);

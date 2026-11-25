@@ -129,15 +129,16 @@ export const FileManagerView: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 250px) 1fr', gap: '0.85rem' }}>
+      <div className="dp-studio-split">
         {/* Nested Folder Tree */}
-        <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+        <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', minWidth: 0 }}>
           <strong style={{ fontSize: '0.85rem' }}>Folders ({folders.length})</strong>
           <div style={{ display: 'flex', gap: '0.25rem' }}>
-            <input className="dp-input" placeholder="New folder..." value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} style={{ flex: 1 }} />
+            <input className="dp-input" placeholder="New folder..." value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
             <button
               type="button"
               className="dp-btn"
+              aria-label="Create folder"
               onClick={async () => {
                 if (!newFolderName.trim()) return;
                 await createRecord<FolderPayload>('file_folder', newFolderName.trim(), {
@@ -161,23 +162,23 @@ export const FileManagerView: React.FC = () => {
                 <button
                   type="button"
                   className={`dp-btn ${activeFolderId === f.id ? 'dp-btn-primary' : ''}`}
-                  style={{ flex: 1, justifyContent: 'flex-start' }}
+                  style={{ flex: 1, minWidth: 0, justifyContent: 'flex-start' }}
                   onClick={() => setActiveFolderId(f.id)}
                 >
                   {fp.parentFolderId ? '↳ ' : '📂 '} {f.title}
                 </button>
-                <button type="button" className="dp-btn" onClick={() => void softDeleteRecord(f.id)}><Trash2 size={11} /></button>
+                <button type="button" className="dp-btn" aria-label={`Delete folder ${f.title}`} title="Delete folder" onClick={() => void softDeleteRecord(f.id)}><Trash2 size={11} /></button>
               </div>
             );
           })}
         </div>
 
         {/* Document List */}
-        <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', minWidth: 0 }}>
           <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <Search size={15} />
-            <input className="dp-input" placeholder="Filter documents by title, type, or tag..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-            <select className="dp-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <input className="dp-input" placeholder="Filter documents by title, type, or tag..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '1 1 120px', minWidth: 0 }} />
+            <select aria-label="Filter document type" className="dp-select" style={{ maxWidth: '100%', width: 'auto' }} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
               <option value="all">All Types ({visibleDocs.length})</option>
               {DOC_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
             </select>

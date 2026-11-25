@@ -15,6 +15,31 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="padding:24px;font-family:system-ui,sans-serif;max-width:520px;margin:40px auto;border:1px solid #ccc;border-radius:12px;">
+        <h2>Planaday requires JavaScript</h2>
+        <p>Please enable JavaScript or update Android System WebView (Chrome 74+ / Android 10+) to launch Planaday.</p>
+      </div>
+    </noscript>
+    <script>
+      // CONT-005: ES5-safe boot compatibility guard so unsupported ancient WebViews show a clear message instead of a blank screen
+      (function () {
+        var missing = [];
+        if (typeof window.indexedDB === 'undefined') missing.push('IndexedDB');
+        if (typeof window.Promise === 'undefined') missing.push('Promises');
+        if (typeof window.fetch === 'undefined') missing.push('Fetch API');
+        if (missing.length > 0) {
+          var el = document.getElementById('root');
+          if (el) {
+            el.innerHTML =
+              '<div style="padding:24px;font-family:system-ui,sans-serif;max-width:520px;margin:40px auto;border:1px solid #c96f53;border-radius:12px;">' +
+              '<h2>Browser / WebView Update Required</h2>' +
+              '<p>This device WebView is missing required Planaday features (' + missing.join(', ') + ').</p>' +
+              '<p>Please update Android System WebView or Chrome (v74+) and reopen Planaday.</p></div>';
+          }
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
