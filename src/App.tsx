@@ -12,7 +12,7 @@ import { CommandPalette } from './components/Common/CommandPalette';
 import { OnboardingModal } from './components/Settings/OnboardingModal';
 const TodaySpread = lazy(() => import('./modules/plan/TodaySpread').then((m) => ({ default: m.TodaySpread })));
 import { ZenSheetOverlay } from './modules/time/ZenSheetOverlay';
-import { DecorCanvasOverlay } from './components/Decor/DecorCanvas';
+const DecorCanvasOverlay = lazy(() => import('./components/Decor/DecorCanvas').then((m) => ({ default: m.DecorCanvasOverlay })));
 
 // On-demand lazy chunks for ALL non-initial views & studios (v4.2.0 §2 cold-start optimization)
 const SettingsView = lazy(() => import('./components/Settings/SettingsView').then((m) => ({ default: m.SettingsView })));
@@ -79,7 +79,7 @@ const ActiveWorkspaceStage: React.FC = () => {
   if (activeView === 'trash') return <TrashView />;
   if (activeView === 'home') return <HomeDashboard />;
   if (activeView === 'quick_glance') return <QuickGlanceView />;
-  if (activeView === 'today') return <TodaySpread renderDecorOverlay={(k) => <DecorCanvasOverlay spreadKey={k} />} />;
+  if (activeView === 'today') return <TodaySpread renderDecorOverlay={(k) => <Suspense fallback={null}><DecorCanvasOverlay spreadKey={k} /></Suspense>} />;
   if (activeView === 'digital_planner') return <DigitalPlannerView />;
   if (activeView === 'calendar') return <FlowCalendarView />;
   if (activeView === 'task_calendar') return <TaskCalendarView />;
@@ -130,7 +130,7 @@ const ActiveWorkspaceStage: React.FC = () => {
   if (activeView === 'insights') return <StudioExtrasView mode="insights" />;
   if (activeView === 'automations') return <StudioExtrasView mode="automations" />;
 
-  return <TodaySpread renderDecorOverlay={(k) => <DecorCanvasOverlay spreadKey={k} />} />;
+  return <TodaySpread renderDecorOverlay={(k) => <Suspense fallback={null}><DecorCanvasOverlay spreadKey={k} /></Suspense>} />;
 };
 
 const ShellFrame: React.FC = () => {

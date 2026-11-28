@@ -15,7 +15,7 @@ import {
   Undo2,
   Wifi,
 } from 'lucide-react';
-import { useApp } from '../../core/AppContext';
+import { useApp, useSyncState } from '../../core/AppContext';
 import { normalizeServerUrl, testServerConnection } from '../../core/sync';
 import { ModalDialog } from '../Common/ModalDialog';
 import type { NavView } from '../../core/types';
@@ -80,13 +80,13 @@ const VIEW_TITLES: Record<NavView, string> = {
   settings: 'Settings',
 };
 
-export const TopBar: React.FC = () => {
+export const TopBar: React.FC = React.memo(() => {
+  const syncState = useSyncState();
   const {
     settings,
     patchSettings,
     activeView,
     activeCustomTabId,
-    syncState,
     triggerSyncNow,
     setQuickCaptureOpen,
     setSearchOpen,
@@ -446,4 +446,4 @@ export const TopBar: React.FC = () => {
       </ModalDialog>
     </>
   );
-};
+});

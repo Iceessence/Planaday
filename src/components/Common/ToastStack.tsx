@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { useApp } from '../../core/AppContext';
+import { useApp, useToasts } from '../../core/AppContext';
 
-export const ToastStack: React.FC = () => {
-  const { toasts, dismissToast, undo, pushToast } = useApp();
+export const ToastStack: React.FC = React.memo(() => {
+  const toasts = useToasts();
+  const { dismissToast, undo, pushToast } = useApp();
   const lock = useRef(false);
   const [undoPending, setUndoPending] = useState(false);
   const undoLatest = async (id: string) => {
@@ -33,4 +34,4 @@ export const ToastStack: React.FC = () => {
       ))}
     </div>
   );
-};
+});

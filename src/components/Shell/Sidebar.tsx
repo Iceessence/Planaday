@@ -73,7 +73,7 @@ interface NavGroup {
   items: NavEntry[];
 }
 
-export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = ({
+export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => void }> = React.memo(({
   collapsed,
   onToggleCollapse,
 }) => {
@@ -381,4 +381,4 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
       })}
     </aside>
   );
-};
+});

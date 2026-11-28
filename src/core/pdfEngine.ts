@@ -136,31 +136,38 @@ export async function extractPdfTextByPage(
     useWorkerFetch: false,
     disableFontFace: true,
   });
-  const pdfDoc = await loadingTask.promise;
-  const textByPage: Record<number, string> = {};
-  const scannedPages: number[] = [];
+  try {
+    const pdfDoc = await loadingTask.promise;
+    const textByPage: Record<number, string> = {};
+    const scannedPages: number[] = [];
 
-  for (let p = 1; p <= pdfDoc.numPages; p++) {
-    const page = await pdfDoc.getPage(p);
-    const content = await page.getTextContent();
-    const parts: string[] = [];
-    for (const item of content.items as Array<{ str?: string; hasEOL?: boolean }>) {
-      if (typeof item.str === 'string') {
-        parts.push(item.str);
-        if (item.hasEOL) parts.push('\n');
-        else parts.push(' ');
+    for (let p = 1; p <= pdfDoc.numPages; p++) {
+      const page = await pdfDoc.getPage(p);
+      try {
+        const content = await page.getTextContent();
+        const parts: string[] = [];
+        for (const item of content.items as Array<{ str?: string; hasEOL?: boolean }>) {
+          if (typeof item.str === 'string') {
+            parts.push(item.str);
+            if (item.hasEOL) parts.push('\n');
+            else parts.push(' ');
+          }
+        }
+        const cleaned = parts.join('').replace(/[ \t]+\n/g, '\n').replace(/\s{3,}/g, '  ').trim();
+        textByPage[p] = cleaned;
+        if (cleaned.length < 15) {
+          scannedPages.push(p);
+        }
+      } finally {
+        page.cleanup();
       }
     }
-    const cleaned = parts.join('').replace(/[ \t]+\n/g, '\n').replace(/\s{3,}/g, '  ').trim();
-    textByPage[p] = cleaned;
-    if (cleaned.length < 15) {
-      scannedPages.push(p);
-    }
-  }
 
-  const pageCount = pdfDoc.numPages;
-  await loadingTask.destroy();
-  return { textByPage, scannedPages, pageCount };
+    const pageCount = pdfDoc.numPages;
+    return { textByPage, scannedPages, pageCount };
+  } finally {
+    await loadingTask.destroy().catch(() => undefined);
+  }
 }
 
 export function searchPdfText(textByPage: Record<number, string>, query: string): PdfSearchHit[] {

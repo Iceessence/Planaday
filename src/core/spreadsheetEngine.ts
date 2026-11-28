@@ -208,15 +208,22 @@ export interface EvaluatedCellResult {
   error?: string;
 }
 
-/**
- * Evaluates all cells in a multi-sheet workbook cleanly with memoization,
- * explicit #REF! missing-sheet errors (CONT-006), composite expressions (CONT-007), & circular-ref detection.
- */
-export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<string, EvaluatedCellResult>> {
+interface EvalTrackingHooks {
+  onDependency?: (callerTag: string, targetTag: string) => void;
+  onVolatile?: (callerTag: string) => void;
+}
+
+function createWorkbookEvaluator(
+  sheets: WorksheetDef[],
+  cache: Record<string, Record<string, EvaluatedCellResult>>,
+  hooks?: EvalTrackingHooks
+) {
   const byName = new Map(sheets.map((s) => [s.name.toLowerCase(), s]));
   const byId = new Map(sheets.map((s) => [s.id, s]));
-  const cache: Record<string, Record<string, EvaluatedCellResult>> = Object.create(null);
-  for (const s of sheets) cache[s.id] = Object.create(null);
+  for (const s of sheets) {
+    if (!cache[s.id]) cache[s.id] = Object.create(null);
+  }
+  const evalStack: string[] = [];
 
   // CONT-006: Never silently fall back to active sheet when an explicit worksheet name does not exist!
   const resolveExplicitSheetId = (rawSheetName: string): string => {
@@ -230,8 +237,11 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
 
   const evalCell = (sheetId: string, key: string, visiting: Set<string>): EvaluatedCellResult => {
     const upKey = key.toUpperCase();
-    if (cache[sheetId]?.[upKey]) return cache[sheetId][upKey];
     const visitTag = `${sheetId}!${upKey}`;
+    if (hooks?.onDependency && evalStack.length > 0) {
+      hooks.onDependency(evalStack[evalStack.length - 1], visitTag);
+    }
+    if (cache[sheetId]?.[upKey]) return cache[sheetId][upKey];
     if (visiting.size >= 512) return { value: '#ERR!', error: 'Formula dependency depth exceeds 512' };
     if (visiting.has(visitTag)) return { value: '#CIRC!', error: 'Circular reference detected' };
 
@@ -256,6 +266,7 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     }
 
     visiting.add(visitTag);
+    evalStack.push(visitTag);
     try {
       const res = evalFormula(sheetId, raw.slice(1).trim(), visiting);
       cache[sheetId][upKey] = res;
@@ -273,6 +284,7 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
       cache[sheetId][upKey] = res;
       return res;
     } finally {
+      evalStack.pop();
       visiting.delete(visitTag);
     }
   };
@@ -448,7 +460,12 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
       const n = Math.floor(rawN);
       return { value: n === 0 ? '' : s.slice(-n) };
     }
-    if (fn === 'TODAY') return { value: new Date().toISOString().slice(0, 10) };
+    if (fn === 'TODAY') {
+      if (hooks?.onVolatile && evalStack.length > 0) {
+        hooks.onVolatile(evalStack[evalStack.length - 1]);
+      }
+      return { value: new Date().toISOString().slice(0, 10) };
+    }
     if (fn === 'PMT' && args.length >= 3) {
       const rate = Number(evalArgAsValue(sheetId, args[0], visiting));
       const nper = Number(evalArgAsValue(sheetId, args[1], visiting));
@@ -567,12 +584,190 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     return { value: Math.abs(numVal) >= 1e12 || (numVal !== 0 && Math.abs(numVal) < 1e-10) ? numVal : Math.round(numVal * 1e10) / 1e10 };
   };
 
+  return { evalCell };
+}
+
+/**
+ * Evaluates all cells in a multi-sheet workbook cleanly with memoization,
+ * explicit #REF! missing-sheet errors (CONT-006), composite expressions (CONT-007), & circular-ref detection.
+ */
+export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<string, EvaluatedCellResult>> {
+  const cache: Record<string, Record<string, EvaluatedCellResult>> = Object.create(null);
+  const { evalCell } = createWorkbookEvaluator(sheets, cache);
   for (const s of sheets) {
     for (const k of Object.keys(s.cells)) {
       evalCell(s.id, k, new Set());
     }
   }
   return cache;
+}
+
+/**
+ * Stateful incremental dependency-graph workbook evaluator:
+ * Caches evaluated cell results across edits and re-evaluates ONLY modified cells
+ * and their transitive dependents (falling back cleanly to a full rebuild on sheet/named-range structural changes).
+ */
+export class IncrementalWorkbookEvaluator {
+  private cache: Record<string, Record<string, EvaluatedCellResult>> = Object.create(null);
+  private prevRawBySheet = new Map<string, Map<string, string>>();
+  private depsByCell = new Map<string, Set<string>>();
+  private dependentsByCell = new Map<string, Set<string>>();
+  private volatileCells = new Set<string>();
+  private metaSignature = '';
+  public lastRecalculatedCount = 0;
+
+  public reset(): void {
+    this.cache = Object.create(null);
+    this.prevRawBySheet.clear();
+    this.depsByCell.clear();
+    this.dependentsByCell.clear();
+    this.volatileCells.clear();
+    this.metaSignature = '';
+    this.lastRecalculatedCount = 0;
+  }
+
+  private clearCellDeps(tag: string): void {
+    const oldDeps = this.depsByCell.get(tag);
+    if (oldDeps) {
+      for (const dep of oldDeps) {
+        const rev = this.dependentsByCell.get(dep);
+        if (rev) {
+          rev.delete(tag);
+          if (rev.size === 0) this.dependentsByCell.delete(dep);
+        }
+      }
+      this.depsByCell.delete(tag);
+    }
+    this.volatileCells.delete(tag);
+  }
+
+  private recordDep = (callerTag: string, targetTag: string): void => {
+    let deps = this.depsByCell.get(callerTag);
+    if (!deps) {
+      deps = new Set<string>();
+      this.depsByCell.set(callerTag, deps);
+    }
+    deps.add(targetTag);
+    let rev = this.dependentsByCell.get(targetTag);
+    if (!rev) {
+      rev = new Set<string>();
+      this.dependentsByCell.set(targetTag, rev);
+    }
+    rev.add(callerTag);
+  };
+
+  private recordVolatile = (callerTag: string): void => {
+    this.volatileCells.add(callerTag);
+  };
+
+  private buildMetaSignature(sheets: WorksheetDef[]): string {
+    return JSON.stringify(
+      sheets.map((s) => [s.id, s.name.toLowerCase(), s.namedRanges ?? null])
+    );
+  }
+
+  private snapshotOutput(sheets: WorksheetDef[]): Record<string, Record<string, EvaluatedCellResult>> {
+    const out: Record<string, Record<string, EvaluatedCellResult>> = Object.create(null);
+    for (const s of sheets) {
+      out[s.id] = { ...(this.cache[s.id] ?? {}) };
+    }
+    return out;
+  }
+
+  public evaluate(sheets: WorksheetDef[]): Record<string, Record<string, EvaluatedCellResult>> {
+    const nextMeta = this.buildMetaSignature(sheets);
+    const fullRebuild = !this.metaSignature || nextMeta !== this.metaSignature;
+
+    if (fullRebuild) {
+      this.reset();
+      this.metaSignature = nextMeta;
+      const { evalCell } = createWorkbookEvaluator(sheets, this.cache, {
+        onDependency: this.recordDep,
+        onVolatile: this.recordVolatile,
+      });
+      let count = 0;
+      for (const s of sheets) {
+        const rawMap = new Map<string, string>();
+        for (const [k, cell] of Object.entries(s.cells)) {
+          const up = k.toUpperCase();
+          rawMap.set(up, cell?.raw ?? '');
+          evalCell(s.id, up, new Set());
+          count++;
+        }
+        this.prevRawBySheet.set(s.id, rawMap);
+      }
+      this.lastRecalculatedCount = count;
+      return this.snapshotOutput(sheets);
+    }
+
+    // Diff cell raw values per sheet to find exact root dirty cells
+    const dirtyRoots: string[] = [];
+    for (const s of sheets) {
+      const prevMap = this.prevRawBySheet.get(s.id) ?? new Map<string, string>();
+      const nextMap = new Map<string, string>();
+      for (const [k, cell] of Object.entries(s.cells)) {
+        const up = k.toUpperCase();
+        const raw = cell?.raw ?? '';
+        nextMap.set(up, raw);
+        if (prevMap.get(up) !== raw) {
+          dirtyRoots.push(`${s.id}!${up}`);
+        }
+      }
+      for (const oldKey of prevMap.keys()) {
+        if (!nextMap.has(oldKey)) {
+          dirtyRoots.push(`${s.id}!${oldKey}`);
+        }
+      }
+      this.prevRawBySheet.set(s.id, nextMap);
+    }
+    for (const vTag of this.volatileCells) {
+      dirtyRoots.push(vTag);
+    }
+
+    if (dirtyRoots.length === 0) {
+      this.lastRecalculatedCount = 0;
+      return this.snapshotOutput(sheets);
+    }
+
+    // BFS over reverse dependency graph to collect transitive dirty closure
+    const dirtySet = new Set<string>(dirtyRoots);
+    const queue = [...dirtyRoots];
+    for (let head = 0; head < queue.length; head++) {
+      const tag = queue[head];
+      const dependents = this.dependentsByCell.get(tag);
+      if (!dependents) continue;
+      for (const depTag of dependents) {
+        if (!dirtySet.has(depTag)) {
+          dirtySet.add(depTag);
+          queue.push(depTag);
+        }
+      }
+    }
+
+    // Evict ONLY dirty cells & their outgoing dependency edges
+    for (const tag of dirtySet) {
+      const bang = tag.indexOf('!');
+      if (bang > 0) {
+        const sid = tag.slice(0, bang);
+        const key = tag.slice(bang + 1);
+        if (this.cache[sid]) delete this.cache[sid][key];
+      }
+      this.clearCellDeps(tag);
+    }
+
+    const { evalCell } = createWorkbookEvaluator(sheets, this.cache, {
+      onDependency: this.recordDep,
+      onVolatile: this.recordVolatile,
+    });
+    for (const tag of dirtySet) {
+      const bang = tag.indexOf('!');
+      if (bang > 0) {
+        evalCell(tag.slice(0, bang), tag.slice(bang + 1), new Set());
+      }
+    }
+    this.lastRecalculatedCount = dirtySet.size;
+    return this.snapshotOutput(sheets);
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Plus, Trash2, Users, Volume2 } from 'lucide-react';
-import { useApp } from '../../core/AppContext';
+import { useApp, useSyncState } from '../../core/AppContext';
 import {
   computeGuardedTheme,
   parseThemePack,
@@ -115,10 +115,10 @@ function CommitRange({ value, onCommit, ...props }: Omit<React.InputHTMLAttribut
 }
 
 export const SettingsView: React.FC = () => {
+  const syncState = useSyncState();
   const {
     settings,
     patchSettings,
-    syncState,
     triggerSyncNow,
     openConflicts,
     storageHealth,

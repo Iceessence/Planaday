@@ -177,14 +177,20 @@ export const PdfStudioView: React.FC = () => {
     return () => { cancelled = true; };
   }, [activeDoc?.id, activeHash, loadActiveBytes]);
 
-  // Render a bounded window. Dispose cancelled PDF.js workers and their canvases.
+  // Keep one persistent PDF.js document/worker alive per active PDF hash so page flips & zooms never respawn workers.
+  const [loadedPdf, setLoadedPdf] = useState<{
+    docId: string;
+    hash: string;
+    pdf: Awaited<ReturnType<Awaited<ReturnType<typeof loadPdfJs>>['getDocument']>['promise']>;
+  } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     let dispose: (() => Promise<void>) | undefined;
-    let cancelRender: (() => void) | undefined;
-    const urls: string[] = [];
-    setRenderedPages({});
-    if (!activeDoc) return;
+    setLoadedPdf(null);
+    if (!activeDoc || !activeHash) return;
+    const docId = activeDoc.id;
+    const hash = activeHash;
     void (async () => {
       try {
         const bytes = await loadActiveBytes();
@@ -195,7 +201,33 @@ export const PdfStudioView: React.FC = () => {
         let destroyed = false;
         dispose = async () => { if (!destroyed) { destroyed = true; await task.destroy(); } };
         const pdf = await task.promise;
-        if (cancelled) return;
+        if (cancelled) {
+          await dispose().catch(() => {});
+          return;
+        }
+        setLoadedPdf({ docId, hash, pdf });
+      } catch (err) {
+        if (!cancelled) console.warn('PDF worker load failed', err);
+        if (dispose) await dispose().catch(() => {});
+      }
+    })();
+    return () => {
+      cancelled = true;
+      setLoadedPdf(null);
+      if (dispose) void dispose().catch(() => {});
+    };
+  }, [activeDoc?.id, activeHash, loadActiveBytes]);
+
+  // Render a bounded window against the persistent PDF.js worker. Dispose cancelled render tasks and canvases.
+  useEffect(() => {
+    let cancelled = false;
+    let cancelRender: (() => void) | undefined;
+    const urls: string[] = [];
+    setRenderedPages({});
+    if (!activeDoc || !loadedPdf || loadedPdf.docId !== activeDoc.id || loadedPdf.hash !== activeHash) return;
+    const pdf = loadedPdf.pdf;
+    void (async () => {
+      try {
         const zoom = Math.max(0.1, Math.min(8, activeDoc.payload.zoom || 1.15));
         const cur = Math.max(1, Math.min(pdf.numPages, activeDoc.payload.currentPage || 1));
         const from = activeDoc.payload.viewMode === 'continuous' ? Math.max(1, cur - 3) : cur;
@@ -203,7 +235,7 @@ export const PdfStudioView: React.FC = () => {
         const nextUrls: Record<number, string> = {};
         for (let pageNum = from; pageNum <= to && !cancelled; pageNum++) {
           const page = await pdf.getPage(pageNum);
-          if (cancelled) break;
+          if (cancelled) { page.cleanup(); break; }
           const natural = page.getViewport({ scale: zoom * 1.25 });
           const limit = Math.min(1, Math.sqrt(8_000_000 / Math.max(1, natural.width * natural.height)), 4096 / Math.max(1, natural.width, natural.height));
           const viewport = page.getViewport({ scale: zoom * 1.25 * limit });
@@ -227,10 +259,9 @@ export const PdfStudioView: React.FC = () => {
           } finally { canvas.width = 0; canvas.height = 0; page.cleanup(); }
         }
       } catch (err) { if (!cancelled) console.warn('PDF rendering failed', err); }
-      finally { if (dispose) await dispose().catch(() => {}); }
     })();
-    return () => { cancelled = true; cancelRender?.(); if (dispose) void dispose().catch(() => {}); urls.forEach(url => URL.revokeObjectURL(url)); };
-  }, [activeDoc?.id, activeHash, activeDoc?.payload.currentPage, activeDoc?.payload.zoom, activeDoc?.payload.viewMode, loadActiveBytes]);
+    return () => { cancelled = true; cancelRender?.(); urls.forEach(url => URL.revokeObjectURL(url)); };
+  }, [loadedPdf, activeDoc?.id, activeHash, activeDoc?.payload.currentPage, activeDoc?.payload.zoom, activeDoc?.payload.viewMode]);
 
   const importPdfFile = async (file: File) => {
     setBusyMsg(`Importing "${file.name}"…`);

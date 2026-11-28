@@ -87,17 +87,51 @@ export default defineConfig({
           ) {
             return 'mathOffice';
           }
+          if (norm.includes('/src/modules/plan/TodaySpread.tsx')) {
+            return 'todaySpread';
+          }
+          if (norm.includes('/src/components/Decor/') || norm.includes('/src/data/stickers.ts')) {
+            return 'decor';
+          }
+          // Exact cold-boot shell & core files only — prevents pulling lazy studios into eager preload!
           if (
-            norm.includes('/src/core/') ||
-            norm.includes('/src/components/Common/') ||
+            norm.includes('/src/core/AppContext.tsx') ||
+            norm.includes('/src/core/db.ts') ||
+            norm.includes('/src/core/repository.ts') ||
+            norm.includes('/src/core/sync.ts') ||
+            norm.includes('/src/core/blobCache.ts') ||
+            norm.includes('/src/core/searchIndex.ts') ||
+            norm.includes('/src/core/search.ts') ||
+            norm.includes('/src/core/temporal.ts') ||
+            norm.includes('/src/core/recurrence.ts') ||
+            norm.includes('/src/core/planActions.ts') ||
+            norm.includes('/src/core/capture.ts') ||
+            norm.includes('/src/core/audio.ts') ||
+            norm.includes('/src/core/alarmSchedule.ts') ||
+            norm.includes('/src/core/nativeAlarms.ts') ||
+            norm.includes('/src/core/releaseInfo.ts') ||
+            norm.includes('/src/core/types.ts') ||
+            norm.includes('/src/data/themes.ts') ||
+            norm.includes('/src/data/sampleData.ts') ||
             norm.includes('/src/components/Shell/') ||
-            norm.includes('/src/components/Decor/') ||
+            norm.includes('/src/components/Common/ModalDialog.tsx') ||
+            norm.includes('/src/components/Common/ToastStack.tsx') ||
+            norm.includes('/src/components/Common/GlobalAlarmRingModal.tsx') ||
+            norm.includes('/src/components/Common/QuickCaptureDialog.tsx') ||
+            norm.includes('/src/components/Common/GlobalSearchDialog.tsx') ||
+            norm.includes('/src/components/Common/CommandPalette.tsx') ||
             norm.includes('/src/components/Settings/OnboardingModal.tsx') ||
-            norm.includes('/src/modules/plan/TodaySpread.tsx') ||
-            norm.includes('/src/modules/time/ZenSheetOverlay.tsx') ||
-            norm.includes('/src/data/')
+            norm.includes('/src/modules/time/ZenSheetOverlay.tsx')
           ) {
             return 'appCore';
+          }
+          // Non-boot shared helpers & catalogs live in a single lazy studioShared chunk (zero circularity!)
+          if (
+            norm.includes('/src/core/') ||
+            norm.includes('/src/data/') ||
+            norm.includes('/src/components/Common/')
+          ) {
+            return 'studioShared';
           }
           if (norm.includes('/src/modules/lab/')) return 'lab';
           if (norm.includes('/src/modules/planner/') || norm.includes('/src/modules/life/ReportsView.tsx')) {

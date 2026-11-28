@@ -16,7 +16,7 @@ function formatCountdown(sec: number): string {
   return neg ? `+${core}` : core;
 }
 
-export const MiniBar: React.FC = () => {
+export const MiniBar: React.FC = React.memo(() => {
   const { runningTimers, toggleTimerPause, extendTimer, dismissTimer, records, setActiveView, pushToast } = useApp();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const busyRef = useRef(new Set<string>());
@@ -141,4 +141,4 @@ export const MiniBar: React.FC = () => {
       </button>
     </div>
   );
-};
+});

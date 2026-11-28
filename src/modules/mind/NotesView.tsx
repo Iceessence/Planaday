@@ -20,7 +20,7 @@ import {
   Square,
   Trash2,
 } from 'lucide-react';
-import { useApp } from '../../core/AppContext';
+import { useApp, useSyncState } from '../../core/AppContext';
 import {
   createNamedNoteCheckpoint,
   createRecord,
@@ -47,6 +47,7 @@ import { computeLineDiff, useBufferedText } from '../../components/Common/SafeTe
 import type { FontPairing, LifeRecord, NotePayload, PaperMaterial, RevisionRecord, TaskPayload } from '../../core/types';
 
 export const NotesView: React.FC = () => {
+  const syncState = useSyncState();
   const {
     settings,
     patchSettings,
@@ -60,7 +61,6 @@ export const NotesView: React.FC = () => {
     setSelectedNoteId,
     notesInitialTab,
     setNotesInitialTab,
-    syncState,
   } = useApp();
   const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
 

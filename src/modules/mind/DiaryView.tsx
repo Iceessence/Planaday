@@ -1,7 +1,7 @@
 import { scopeKey, withScopedRecords } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Download, Image as ImageIcon, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
-import { useApp } from '../../core/AppContext';
+import { useApp, useSyncState } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
 import { createId, getBlobObjectUrl, storeBlob } from '../../core/db';
 import { triggerBrowserDownload } from '../../core/backup';
@@ -29,7 +29,8 @@ const WELLNESS_RATINGS = [
 ];
 
 export const DiaryView: React.FC = () => {
-  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, syncState } = useApp();
+  const syncState = useSyncState();
+  const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast } = useApp();
   const [diarySaveState, setDiarySaveState] = useState<LocalSaveState>('clean');
   const [promptCategory, setPromptCategory] = useState('All');
   const [promptIdx, setPromptIdx] = useState(0);

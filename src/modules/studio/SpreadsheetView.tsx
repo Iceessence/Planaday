@@ -21,10 +21,10 @@ import { createRecord, softDeleteRecord, updateRecord } from '../../core/reposit
 import { downloadFile } from '../../core/backup';
 import {
   SPREADSHEET_FORMULA_DOCS,
+  IncrementalWorkbookEvaluator,
   cellKey,
   colIndexToLetter,
   parseCellRef,
-  evaluateWorkbook,
   exportSheetToDelimited,
   importDelimitedToSheet,
   type SheetCell,
@@ -244,10 +244,20 @@ export const SpreadsheetView: React.FC = () => {
   const [chartTitle, setChartTitle] = useState('Chart 1');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const evaluatorRef = useRef<{ workbookId: string | null; engine: IncrementalWorkbookEvaluator }>({
+    workbookId: null,
+    engine: new IncrementalWorkbookEvaluator(),
+  });
   const evaluated = useMemo(() => {
     if (!payload?.sheets) return {};
-    return evaluateWorkbook(payload.sheets);
-  }, [payload?.sheets]);
+    if (evaluatorRef.current.workbookId !== (activeRec?.id ?? null)) {
+      evaluatorRef.current = {
+        workbookId: activeRec?.id ?? null,
+        engine: new IncrementalWorkbookEvaluator(),
+      };
+    }
+    return evaluatorRef.current.engine.evaluate(payload.sheets);
+  }, [activeRec?.id, payload?.sheets]);
 
   const mutatePayload = async (updater: (p: WorkbookPayload) => WorkbookPayload) => {
     if (!activeRec) return;

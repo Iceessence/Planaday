@@ -24,6 +24,7 @@ import {
   purgeExpiredTrash,
 } from './repository';
 import {
+  getSyncState,
   runSyncCycle,
   startSyncDaemon,
   stopSyncDaemon,
@@ -159,8 +160,67 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const SyncStateContext = createContext<SyncStateSnapshot | null>(null);
+const ToastsListContext = createContext<ToastItem[]>([]);
+const ToastActionsContext = createContext<{
+  pushToast: (message: string, opts?: { canUndo?: boolean; tone?: ToastItem['tone'] }) => void;
+  dismissToast: (id: string) => void;
+  latestToastsRef: React.MutableRefObject<ToastItem[]>;
+} | null>(null);
 const EMPTY_RECORDS: LifeRecord[] = [];
 const EMPTY_CONFLICTS: SyncConflict[] = [];
+
+/**
+ * Returns the previous array reference whenever every element's (id, rev, updatedAt) matches,
+ * preventing unrelated record writes (e.g., typing a Note) from invalidating Alarm/Event/Timer slices.
+ */
+function useStableRecordSlice<T extends LifeRecord>(items: T[]): T[] {
+  const prevRef = React.useRef<T[]>(items);
+  const prev = prevRef.current;
+  if (
+    prev.length === items.length &&
+    items.every((item, idx) => {
+      const p = prev[idx];
+      return p === item || (p.id === item.id && p.rev === item.rev && p.updatedAt === item.updatedAt);
+    })
+  ) {
+    return prev;
+  }
+  prevRef.current = items;
+  return items;
+}
+
+const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const latestToastsRef = React.useRef<ToastItem[]>(toasts);
+  latestToastsRef.current = toasts;
+
+  const pushToast = useCallback((message: string, opts?: { canUndo?: boolean; tone?: ToastItem['tone'] }) => {
+    const id = createId('toast');
+    setToasts((prev) => [...prev.slice(-3), { id, message, canUndo: opts?.canUndo, tone: opts?.tone }]);
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5200);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const actions = useMemo(() => ({ pushToast, dismissToast, latestToastsRef }), [pushToast, dismissToast]);
+
+  return (
+    <ToastActionsContext.Provider value={actions}>
+      <ToastsListContext.Provider value={toasts}>{children}</ToastsListContext.Provider>
+    </ToastActionsContext.Provider>
+  );
+};
+
+const SyncStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [syncState, setSyncState] = useState<SyncStateSnapshot>(() => getSyncState());
+  useEffect(() => subscribeSyncState(setSyncState), []);
+  return <SyncStateContext.Provider value={syncState}>{children}</SyncStateContext.Provider>;
+};
 
 export function applySettingsToDocument(settings: AppSettings) {
   if (typeof document === 'undefined') return;
@@ -224,11 +284,12 @@ export function applySettingsToDocument(settings: AppSettings) {
   }
 }
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AppCoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const toastActions = useContext(ToastActionsContext)!;
+  const { pushToast, dismissToast, latestToastsRef } = toastActions;
   const [ready, setReady] = useState(false);
   const [activeView, setActiveView] = useState<NavView>('today');
   const [activeCustomTabId, setActiveCustomTabId] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -244,13 +305,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
   const firedAlertsRef = React.useRef<Set<string>>(new Set());
   const lastMinuteCheckedRef = React.useRef<string>('');
-  const [syncState, setSyncState] = useState<SyncStateSnapshot>({
-    status: 'standalone',
-    pendingCount: 0,
-    conflictCount: 0,
-    lastSyncAt: null,
-    serverReachable: false,
-  });
 
   const liveSettings = useLiveQuery(() => db.settings.get('app-settings'), []);
   const [inFlightSettingsPatches, setInFlightSettingsPatches] = useState<Array<{ id: number; patch: Partial<AppSettings> }>>([]);
@@ -395,9 +449,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // All document-affecting fields are represented in the signature above.
   }, [documentSettingsKey]);
 
-  // Subscribe to sync updates + online reconnect auto-flush + PWA install prompt
+  // Subscribe to online reconnect auto-flush + PWA install prompt
   useEffect(() => {
-    const unsub = subscribeSyncState(setSyncState);
     const onOnline = () => {
       void runSyncCycle(fetch, { manual: false });
     };
@@ -408,7 +461,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('online', onOnline);
     window.addEventListener('beforeinstallprompt', onBeforeInstall);
     return () => {
-      unsub();
       window.removeEventListener('online', onOnline);
       window.removeEventListener('beforeinstallprompt', onBeforeInstall);
     };
@@ -437,61 +489,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     globalSearchIndex.syncFromArray(records);
   }, [records]);
 
-  // Pre-memoized active slices so the notification scheduler never re-filters the full record table per tick (v4.2.0 §2)
-  const activeAlarms = useMemo(
+  // Pre-memoized active slices with referential stability so unrelated edits never cascade into timers/alarms/notifications
+  const rawActiveAlarms = useMemo(
     () => records.filter((r) => r.type === 'alarm' && r.status === 'active'),
     [records]
   );
-  const activeEvents = useMemo(
+  const activeAlarms = useStableRecordSlice(rawActiveAlarms);
+
+  const rawActiveEvents = useMemo(
     () => records.filter((r) => r.type === 'event' && r.status === 'active') as Array<LifeRecord<CalendarEventPayload>>,
     [records]
   );
-  const activeChores = useMemo(
+  const activeEvents = useStableRecordSlice(rawActiveEvents);
+
+  const rawActiveChores = useMemo(
     () => records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<LifeRecord<ChorePayload>>,
     [records]
   );
-  const activeMeds = useMemo(
+  const activeChores = useStableRecordSlice(rawActiveChores);
+
+  const rawActiveMeds = useMemo(
     () => records.filter((r) => r.type === 'medication' && r.status === 'active'),
     [records]
   );
+  const activeMeds = useStableRecordSlice(rawActiveMeds);
 
-  const trashedRecords = useMemo(
+  const rawTrashedRecords = useMemo(
     () => allRecordsIncludingTrash.filter((r) => Boolean(r.deletedAt)),
     [allRecordsIncludingTrash]
   );
+  const trashedRecords = useStableRecordSlice(rawTrashedRecords);
 
   // Timers persisted in IndexedDB so concurrent countdowns reconstruct accurately across reload
+  const rawActiveTimerRecords = useMemo(
+    () => allRecordsIncludingTrash.filter((r) => r.type === 'timer' && !r.deletedAt && r.status === 'active'),
+    [allRecordsIncludingTrash]
+  );
+  const stableActiveTimerRecords = useStableRecordSlice(rawActiveTimerRecords);
   const runningTimers = useMemo<RunningTimer[]>(() => {
-    return allRecordsIncludingTrash
-      .filter((r) => r.type === 'timer' && !r.deletedAt && r.status === 'active')
-      .map((r) => {
-        const p = r.payload as unknown as RunningTimer;
-        return {
-          id: r.id,
-          label: r.title,
-          durationSec: p.durationSec ?? 300,
-          targetEndMs: p.targetEndMs ?? null,
-          remainingSecWhenPaused: p.remainingSecWhenPaused ?? p.durationSec ?? 300,
-          kind: p.kind ?? 'countdown',
-          linkedRecordId: p.linkedRecordId ?? null,
-          startedAtIso: p.startedAtIso ?? r.createdAt,
-          customSound: p.customSound,
-          customVolume: p.customVolume ?? null,
-        };
-      });
-  }, [allRecordsIncludingTrash]);
-
-  const pushToast = useCallback((message: string, opts?: { canUndo?: boolean; tone?: ToastItem['tone'] }) => {
-    const id = createId('toast');
-    setToasts((prev) => [...prev.slice(-3), { id, message, canUndo: opts?.canUndo, tone: opts?.tone }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5200);
-  }, []);
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+    return stableActiveTimerRecords.map((r) => {
+      const p = r.payload as unknown as RunningTimer;
+      return {
+        id: r.id,
+        label: r.title,
+        durationSec: p.durationSec ?? 300,
+        targetEndMs: p.targetEndMs ?? null,
+        remainingSecWhenPaused: p.remainingSecWhenPaused ?? p.durationSec ?? 300,
+        kind: p.kind ?? 'countdown',
+        linkedRecordId: p.linkedRecordId ?? null,
+        startedAtIso: p.startedAtIso ?? r.createdAt,
+        customSound: p.customSound,
+        customVolume: p.customVolume ?? null,
+      };
+    });
+  }, [stableActiveTimerRecords]);
 
   const triggerAlarmRing = useCallback(
     (alarm: LifeRecord) => {
@@ -958,13 +1009,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', tick); };
   }, [runningTimers, activeAlarms, activeEvents, activeChores, activeMeds, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser, triggerAlarmRing]);
 
-  // Schedule native Capacitor alerts for ALL enabled Smart Alarms' next scheduled trigger
+  // Schedule native Capacitor alerts for ALL enabled Smart Alarms' next scheduled trigger (depends strictly on activeAlarms)
   useEffect(() => {
     const prefs = settings.notificationPrefs;
     if (!settings.notificationsEnabled || !prefs.enabled || !prefs.notifyAlarms) return;
-    const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
     const now = new Date();
-    for (const a of alarms) {
+    for (const a of activeAlarms) {
       const next = computeNextAlarmTrigger(a.payload as Record<string, unknown>, now);
       if (next) {
         const p = normalizeAlarmPayload(a.payload as Record<string, unknown>);
@@ -978,17 +1028,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         void cancelNativeNotification(a.id);
       }
     }
-  }, [records, settings.notificationsEnabled, settings.notificationPrefs]);
+  }, [activeAlarms, settings.notificationsEnabled, settings.notificationPrefs]);
 
-  // Schedule native Capacitor alerts for today's upcoming events so Android rings even when closed
+  // Schedule native Capacitor alerts for today's upcoming events (depends strictly on activeEvents)
   useEffect(() => {
     const prefs = settings.notificationPrefs;
     if (!settings.notificationsEnabled || !prefs.enabled || !prefs.notifyEvents) return;
     const nowMs = Date.now();
-    const events = records.filter((r) => r.type === 'event' && r.status === 'active') as Array<
-      LifeRecord<CalendarEventPayload>
-    >;
-    for (const ev of events) {
+    for (const ev of activeEvents) {
       if (ev.payload.allDay || !ev.payload.startTime || ev.payload.startDate !== logicalToday) continue;
       const [hh, mm] = ev.payload.startTime.split(':').map(Number);
       const fireDate = new Date();
@@ -1002,7 +1049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
     }
-  }, [records, logicalToday, settings.notificationsEnabled, settings.notificationPrefs]);
+  }, [activeEvents, logicalToday, settings.notificationsEnabled, settings.notificationPrefs]);
 
   const openEventInCalendar = useCallback((eventId: string, dateIso?: string) => {
     if (dateIso) setActiveDate(dateIso);
@@ -1087,77 +1134,145 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [logicalToday, undo, redo, zenOpen]);
 
-  return (
-    <AppContext.Provider
-      value={{
-        ready,
-        settings,
-        patchSettings,
-        logicalToday,
-        activeDate,
-        setActiveDate,
-        activeView,
-        setActiveView,
-        activeCustomTabId,
-        openCustomTab,
-        records,
-        allWorkspaceRecords,
-        allRecordsIncludingTrash,
-        trashedRecords,
-        openConflicts,
-        syncState,
-        triggerSyncNow,
-        storageHealth,
-        toasts,
-        pushToast,
-        dismissToast,
-        undo,
-        redo,
-        quickCaptureOpen,
-        setQuickCaptureOpen,
-        searchOpen,
-        setSearchOpen,
-        paletteOpen,
-        setPaletteOpen,
-        zenOpen,
-        setZenOpen,
-        zenFocusText,
-        setZenFocusText,
-        runningTimers,
-        startCountdownTimer,
-        toggleTimerPause,
-        extendTimer,
-        dismissTimer,
-        isModuleEnabled,
-        selectedNoteId,
-        setSelectedNoteId,
-        notesInitialTab,
-        setNotesInitialTab,
-        openDailyNotesArchive,
-        selectedPdfId,
-        setSelectedPdfId,
-        openPdfInStudio,
-        selectedEventId,
-        setSelectedEventId,
-        openEventInCalendar,
-        canInstallPwa: Boolean(installPrompt),
-        triggerInstallPwa,
-        mobileMenuOpen,
-        setMobileMenuOpen,
-        ringingAlarm,
-        triggerAlarmRing,
-        dismissRingingAlarm,
-        snoozeRingingAlarm,
-        notifyUser,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+  const canInstallPwa = Boolean(installPrompt);
+  const contextValue = useMemo<AppContextValue>(
+    () => ({
+      ready,
+      settings,
+      patchSettings,
+      logicalToday,
+      activeDate,
+      setActiveDate,
+      activeView,
+      setActiveView,
+      activeCustomTabId,
+      openCustomTab,
+      records,
+      allWorkspaceRecords,
+      allRecordsIncludingTrash,
+      trashedRecords,
+      openConflicts,
+      get syncState() {
+        return getSyncState();
+      },
+      triggerSyncNow,
+      storageHealth,
+      get toasts() {
+        return latestToastsRef.current;
+      },
+      pushToast,
+      dismissToast,
+      undo,
+      redo,
+      quickCaptureOpen,
+      setQuickCaptureOpen,
+      searchOpen,
+      setSearchOpen,
+      paletteOpen,
+      setPaletteOpen,
+      zenOpen,
+      setZenOpen,
+      zenFocusText,
+      setZenFocusText,
+      runningTimers,
+      startCountdownTimer,
+      toggleTimerPause,
+      extendTimer,
+      dismissTimer,
+      isModuleEnabled,
+      selectedNoteId,
+      setSelectedNoteId,
+      notesInitialTab,
+      setNotesInitialTab,
+      openDailyNotesArchive,
+      selectedPdfId,
+      setSelectedPdfId,
+      openPdfInStudio,
+      selectedEventId,
+      setSelectedEventId,
+      openEventInCalendar,
+      canInstallPwa,
+      triggerInstallPwa,
+      mobileMenuOpen,
+      setMobileMenuOpen,
+      ringingAlarm,
+      triggerAlarmRing,
+      dismissRingingAlarm,
+      snoozeRingingAlarm,
+      notifyUser,
+    }),
+    [
+      ready,
+      settings,
+      patchSettings,
+      logicalToday,
+      activeDate,
+      activeView,
+      activeCustomTabId,
+      openCustomTab,
+      records,
+      allWorkspaceRecords,
+      allRecordsIncludingTrash,
+      trashedRecords,
+      openConflicts,
+      triggerSyncNow,
+      storageHealth,
+      latestToastsRef,
+      pushToast,
+      dismissToast,
+      undo,
+      redo,
+      quickCaptureOpen,
+      searchOpen,
+      paletteOpen,
+      zenOpen,
+      zenFocusText,
+      runningTimers,
+      startCountdownTimer,
+      toggleTimerPause,
+      extendTimer,
+      dismissTimer,
+      isModuleEnabled,
+      selectedNoteId,
+      notesInitialTab,
+      openDailyNotesArchive,
+      selectedPdfId,
+      openPdfInStudio,
+      selectedEventId,
+      openEventInCalendar,
+      canInstallPwa,
+      triggerInstallPwa,
+      mobileMenuOpen,
+      ringingAlarm,
+      triggerAlarmRing,
+      dismissRingingAlarm,
+      snoozeRingingAlarm,
+      notifyUser,
+    ]
   );
+
+  return <AppContext.Provider value={contextValue}>{children}</AppContext.Provider>;
 };
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <ToastProvider>
+    <SyncStateProvider>
+      <AppCoreProvider>{children}</AppCoreProvider>
+    </SyncStateProvider>
+  </ToastProvider>
+);
 
 export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used inside AppProvider');
   return ctx;
+}
+
+export function useSyncState(): SyncStateSnapshot {
+  const ctx = useContext(SyncStateContext);
+  return ctx ?? getSyncState();
+}
+
+export function useToasts(): ToastItem[] {
+  return useContext(ToastsListContext);
 }

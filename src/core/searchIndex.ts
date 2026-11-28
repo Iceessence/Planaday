@@ -417,17 +417,12 @@ export class InvertedSearchIndex {
       return true;
     };
 
-    const matched: SearchHit[] = [];
+    const matched: Array<{ doc: IndexedDoc; score: number }> = [];
 
     if (queryTokens.length === 0) {
       for (const doc of this.docs.values()) {
         if (!passesFilter(doc)) continue;
-        matched.push({
-          record: doc.record,
-          score: 1,
-          snippet: doc.corpus.slice(0, 140),
-          jumpDate: doc.jumpDate,
-        });
+        matched.push({ doc, score: 1 });
       }
     } else {
       // Resolve postings per query token and intersect starting from the smallest posting map!
@@ -457,28 +452,46 @@ export class InvertedSearchIndex {
             if (doc.lowerTitle.includes(queryTokens[i])) totalScore += 10;
           }
 
-          const firstIdx = doc.lowerCorpus.indexOf(queryTokens[0]);
-          const start = firstIdx > 30 ? firstIdx - 30 : 0;
-          const snippet = (start > 0 ? '…' : '') + doc.corpus.slice(start, start + 140).trim();
-          matched.push({
-            record: doc.record,
-            score: totalScore,
-            snippet,
-            jumpDate: doc.jumpDate,
-          });
+          matched.push({ doc, score: totalScore });
         }
       }
     }
 
-    matched.sort((a, b) => b.score - a.score || b.record.updatedAt.localeCompare(a.record.updatedAt));
+    // Direct lexicographical ISO-8601 comparison avoids costly Intl.Collator overhead on 100k+ hits.
+    matched.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const ua = a.doc.record.updatedAt;
+      const ub = b.doc.record.updatedAt;
+      return ua < ub ? 1 : ua > ub ? -1 : 0;
+    });
 
     const total = matched.length;
     const pageCount = Math.max(1, Math.ceil(total / pageSize));
     const safePage = Math.max(1, Math.min(page, pageCount));
     const startIdx = (safePage - 1) * pageSize;
+    const pageEntries = matched.slice(startIdx, startIdx + pageSize);
+    const firstQueryTok = queryTokens[0];
+
+    // Materialize snippet substrings ONLY for the returned page slice!
+    const hits: SearchHit[] = pageEntries.map(({ doc, score }) => {
+      let snippet: string;
+      if (!firstQueryTok) {
+        snippet = doc.corpus.slice(0, 140);
+      } else {
+        const firstIdx = doc.lowerCorpus.indexOf(firstQueryTok);
+        const start = firstIdx > 30 ? firstIdx - 30 : 0;
+        snippet = (start > 0 ? '…' : '') + doc.corpus.slice(start, start + 140).trim();
+      }
+      return {
+        record: doc.record,
+        score,
+        snippet,
+        jumpDate: doc.jumpDate,
+      };
+    });
 
     return {
-      hits: matched.slice(startIdx, startIdx + pageSize),
+      hits,
       total,
       page: safePage,
       pageCount,
