@@ -134,7 +134,7 @@ export const AllInOneView: React.FC = () => {
       </div>
 
       {visibleSections.map((sec) => {
-        const isClosed = Boolean(collapsed[sec.id]);
+        const isClosed = (collapsed[sec.id] ?? (sec.id !== 'sec-today'));
         return (
           <section key={sec.id} id={sec.id} style={{ scrollMarginTop: 148 }} className="dp-stack">
             <div className="dp-between" style={{ padding: '4px 6px' }}>
@@ -142,7 +142,8 @@ export const AllInOneView: React.FC = () => {
                 type="button"
                 className="dp-btn dp-btn-ghost"
                 style={{ fontFamily: 'var(--dp-font-heading)', fontSize: '1.1rem', fontWeight: 700, padding: '2px 6px' }}
-                onClick={() => setCollapsed((p) => ({ ...p, [sec.id]: !p[sec.id] }))}
+                aria-expanded={!isClosed}
+                onClick={() => setCollapsed((p) => ({ ...p, [sec.id]: !(p[sec.id] ?? (sec.id !== 'sec-today')) }))}
               >
                 {isClosed ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
                 {sec.label}

@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -245,6 +246,9 @@ ${payload.slides
 
 export const PresentationView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const decks = useMemo(
     () =>
       records
@@ -269,6 +273,8 @@ export const PresentationView: React.FC = () => {
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const imgInputRef = useRef<HTMLInputElement | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ elId: string; x: number; y: number } | null>(null);
+  const dragPreviewRef = useRef<typeof dragPreview>(null);
   const dragRef = useRef<{ elId: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
 
   const slides = payload?.slides ?? [];
@@ -279,13 +285,16 @@ export const PresentationView: React.FC = () => {
 
   useEffect(() => {
     if (!timerRunning) return;
-    const t = window.setInterval(() => setTimerSec((s) => s + 1), 1000);
+    const started = Date.now();
+    let previous = 0;
+    const t = window.setInterval(() => { const elapsed = Math.floor((Date.now() - started) / 1000); if (elapsed > previous) { const delta = elapsed - previous; previous = elapsed; setTimerSec(s => s + delta); } }, 1000);
     return () => window.clearInterval(t);
   }, [timerRunning]);
 
   useEffect(() => {
     if (!presenting) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || (e.target instanceof HTMLElement && (e.target.matches('input,textarea,select,button') || e.target.isContentEditable))) return;
       if (e.key === 'ArrowRight' || e.key === ' ') setSlideIdx((i) => Math.min(slides.length - 1, i + 1));
       else if (e.key === 'ArrowLeft') setSlideIdx((i) => Math.max(0, i - 1));
       else if (e.key === 'Escape') {
@@ -297,18 +306,27 @@ export const PresentationView: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [presenting, slides.length]);
 
-  // Hydrate image blobs used across slides
+  useEffect(() => { dragRef.current = null; dragPreviewRef.current = null; setDragPreview(null); }, [activeDeck?.id, activeSlide?.id]);
+
+  // Own only current-slide image URLs; exports read all slides separately.
+  const slideImageKey = JSON.stringify(Array.from(new Set((activeSlide?.elements ?? []).flatMap(el => el.blobHash ? [el.blobHash] : []))));
   useEffect(() => {
-    const hashes = new Set<string>();
-    slides.forEach((s) => s.elements.forEach((el) => el.blobHash && hashes.add(el.blobHash)));
-    hashes.forEach((h) => {
-      if (!blobUrls[h]) {
-        void getBlobObjectUrl(h, false).then((url) => {
-          if (url) setBlobUrls((prev) => ({ ...prev, [h]: url }));
-        });
+    let cancelled = false;
+    const owned: string[] = [];
+    setBlobUrls({});
+    void (async () => {
+      const next: Record<string, string> = {};
+      for (const hash of JSON.parse(slideImageKey) as string[]) {
+        if (cancelled) break;
+        try { const url = await getBlobObjectUrl(hash, false, true); if (!url) continue;
+          if (cancelled) { URL.revokeObjectURL(url); break; }
+          owned.push(url); next[hash] = url;
+        } catch { /* placeholder */ }
       }
-    });
-  }, [slides, blobUrls]);
+      if (!cancelled) setBlobUrls(next);
+    })();
+    return () => { cancelled = true; owned.forEach(url => URL.revokeObjectURL(url)); };
+  }, [slideImageKey]);
 
   const mutateDeck = async (updater: (p: PresentationPayload) => PresentationPayload) => {
     if (!activeDeck) return;
@@ -445,12 +463,12 @@ export const PresentationView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const rec = await createRecord('presentation', `Presentation ${decks.length + 1}`, createStarterPresentation('paper'));
               setSelectedDeckId(rec.id);
               setSlideIdx(0);
               pushToast('Created new presentation', { tone: 'ok' });
-            }}
+            })}
           >
             <Plus size={14} /> New Deck
           </button>
@@ -467,7 +485,7 @@ export const PresentationView: React.FC = () => {
               >
                 <Play size={14} /> Present
               </button>
-              <button type="button" className="dp-btn" onClick={() => void exportHtmlDeck()}>
+              <button type="button" className="dp-btn" onClick={guardAction('deck-export', () => exportHtmlDeck())}>
                 <Download size={14} /> HTML Deck
               </button>
               <button type="button" className="dp-btn" onClick={() => window.print()}>
@@ -476,11 +494,11 @@ export const PresentationView: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn"
-                onClick={async () => {
+                onClick={guardAction('action-2', async () => {
                   await softDeleteRecord(activeDeck.id);
                   setSelectedDeckId(null);
                   pushToast('Moved presentation to Trash', { tone: 'info' });
-                }}
+                })}
               >
                 <Trash2 size={14} />
               </button>
@@ -650,9 +668,11 @@ export const PresentationView: React.FC = () => {
                 const dyPct = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
                 const nx = Math.max(0, Math.min(92, Math.round(dragRef.current.origX + dxPct)));
                 const ny = Math.max(0, Math.min(92, Math.round(dragRef.current.origY + dyPct)));
-                void updateElement(dragRef.current.elId, { x: nx, y: ny });
+                const preview = { elId: dragRef.current.elId, x: nx, y: ny };
+                dragPreviewRef.current = preview; setDragPreview(preview);
               }}
-              onPointerUp={() => { dragRef.current = null; }}
+              onPointerUp={() => { const preview = dragPreviewRef.current; dragRef.current = null; dragPreviewRef.current = null; setDragPreview(null); if (preview) void updateElement(preview.elId, { x: preview.x, y: preview.y }).catch(error => pushToast(String(error), { tone: 'danger' })); }}
+              onPointerCancel={() => { dragRef.current = null; dragPreviewRef.current = null; setDragPreview(null); }}
               style={{
                 position: 'relative',
                 width: '100%',
@@ -672,14 +692,15 @@ export const PresentationView: React.FC = () => {
                     onPointerDown={(e) => {
                       e.stopPropagation();
                       setSelectedElId(el.id);
-                      if (!el.locked) {
+                      if (!el.locked && e.button === 0) {
+                        e.currentTarget.setPointerCapture(e.pointerId);
                         dragRef.current = { elId: el.id, startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
                       }
                     }}
                     style={{
                       position: 'absolute',
-                      left: `${el.x}%`,
-                      top: `${el.y}%`,
+                      left: `${dragPreview?.elId === el.id ? dragPreview.x : el.x}%`,
+                      top: `${dragPreview?.elId === el.id ? dragPreview.y : el.y}%`,
                       width: `${el.w}%`,
                       height: `${el.h}%`,
                       background: el.bgColor || 'transparent',
@@ -692,6 +713,7 @@ export const PresentationView: React.FC = () => {
                       padding: 6,
                       cursor: el.locked ? 'not-allowed' : 'move',
                       userSelect: 'none',
+                      touchAction: 'none',
                       boxSizing: 'border-box',
                     }}
                   >

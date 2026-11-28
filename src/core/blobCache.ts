@@ -13,16 +13,17 @@ interface CacheEntry {
 export class BoundedBlobUrlCache {
   private map = new Map<string, CacheEntry>();
   private maxEntries: number;
+  private pending = new Map<string, Promise<string | null>>();
   private hits = 0;
   private misses = 0;
   private evictions = 0;
 
   constructor(maxEntries = 64) {
-    this.maxEntries = Math.max(4, maxEntries);
+    this.maxEntries = Number.isFinite(maxEntries) ? Math.max(4, Math.floor(maxEntries)) : 64;
   }
 
   public setMaxEntries(limit: number): void {
-    this.maxEntries = Math.max(4, limit);
+    this.maxEntries = Number.isFinite(limit) ? Math.max(4, Math.floor(limit)) : 64;
     this.enforceLimit();
   }
 
@@ -40,6 +41,7 @@ export class BoundedBlobUrlCache {
   }
 
   public set(key: string, url: string, byteSize = 0): string {
+    this.pending.delete(key); // An explicit replacement supersedes any pending load.
     const existing = this.map.get(key);
     if (existing) {
       if (existing.url !== url) {
@@ -58,13 +60,24 @@ export class BoundedBlobUrlCache {
   ): Promise<string | null> {
     const cached = this.get(key);
     if (cached) return cached;
-    const loaded = await loader();
-    if (!loaded) return null;
-    const url = URL.createObjectURL(loaded.blob);
-    return this.set(key, url, loaded.byteSize ?? loaded.blob.size);
+    const existing = this.pending.get(key);
+    if (existing) return existing;
+    // Defer the loader so the pending identity is registered before any work begins.
+    const pending: Promise<string | null> = Promise.resolve().then(async () => {
+      const loaded = await loader();
+      if (!loaded || this.pending.get(key) !== pending) return null;
+      const url = URL.createObjectURL(loaded.blob);
+      return this.set(key, url, loaded.byteSize ?? loaded.blob.size);
+    });
+    this.pending.set(key, pending);
+    try { return await pending; }
+    finally { if (this.pending.get(key) === pending) this.pending.delete(key); }
   }
 
   public invalidateHash(hash: string): void {
+    for (const key of this.pending.keys()) {
+      if (key === hash || key.startsWith(`${hash}:`)) this.pending.delete(key);
+    }
     for (const key of Array.from(this.map.keys())) {
       if (key === hash || key.startsWith(`${hash}:`)) {
         const entry = this.map.get(key);
@@ -75,6 +88,7 @@ export class BoundedBlobUrlCache {
   }
 
   public clear(): void {
+    this.pending.clear();
     for (const entry of this.map.values()) {
       this.safeRevoke(entry.url);
     }

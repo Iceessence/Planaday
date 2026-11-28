@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Camera,
@@ -34,6 +35,9 @@ interface PhotoAssetPayload {
 
 export const PhotoStudioView: React.FC = () => {
   const { records, pushToast, setActiveView, setSelectedNoteId } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const photos = useMemo(
     () => records.filter((r) => r.type === 'photo_asset' && !r.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records]
@@ -48,6 +52,8 @@ export const PhotoStudioView: React.FC = () => {
   const pPayload = activePhoto?.payload as PhotoAssetPayload | undefined;
 
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const [photoPage, setPhotoPage] = useState(0);
   const [showOriginal, setShowOriginal] = useState(false);
 
   // Non-destructive Editor Adjustments
@@ -83,22 +89,44 @@ export const PhotoStudioView: React.FC = () => {
     [photos, albumFilter]
   );
 
-  // Hydrate photo URLs cleanly
+  const pageIndex = Math.min(photoPage, Math.max(0, Math.ceil(filteredPhotos.length / 48) - 1));
+  const visiblePhotos = useMemo(() => filteredPhotos.slice(pageIndex * 48, (pageIndex + 1) * 48), [filteredPhotos, pageIndex]);
+  const thumbKey = JSON.stringify(visiblePhotos.map(p => (p.payload as PhotoAssetPayload).originalBlobHash));
+  const fullKey = JSON.stringify(pPayload ? [pPayload.originalBlobHash, ...(pPayload.editedVersions ?? []).map(v => v.blobHash)] : []);
   useEffect(() => {
-    const hashes = new Set<string>();
-    photos.forEach((p) => {
-      const pl = p.payload as PhotoAssetPayload;
-      if (pl.originalBlobHash) hashes.add(pl.originalBlobHash);
-      (pl.editedVersions ?? []).forEach((v) => hashes.add(v.blobHash));
-    });
-    hashes.forEach((h) => {
-      if (!blobUrls[h]) {
-        void getBlobObjectUrl(h, false).then((url) => {
-          if (url) setBlobUrls((prev) => ({ ...prev, [h]: url }));
-        });
+    let cancelled = false;
+    const owned: string[] = [];
+    setThumbUrls({});
+    void (async () => {
+      const next: Record<string, string> = {};
+      for (const hash of new Set<string>(JSON.parse(thumbKey))) {
+        if (cancelled) break;
+        try { const url = await getBlobObjectUrl(hash, true, true); if (!url) continue;
+          if (cancelled) { URL.revokeObjectURL(url); break; }
+          owned.push(url); next[hash] = url;
+        } catch { /* a missing photo remains a placeholder */ }
       }
-    });
-  }, [photos, blobUrls]);
+      if (!cancelled) setThumbUrls(next);
+    })();
+    return () => { cancelled = true; owned.forEach(url => URL.revokeObjectURL(url)); };
+  }, [thumbKey]);
+  useEffect(() => {
+    let cancelled = false;
+    const owned: string[] = [];
+    setBlobUrls({});
+    void (async () => {
+      const next: Record<string, string> = {};
+      for (const hash of new Set<string>(JSON.parse(fullKey))) {
+        if (cancelled) break;
+        try { const url = await getBlobObjectUrl(hash, false, true); if (!url) continue;
+          if (cancelled) { URL.revokeObjectURL(url); break; }
+          owned.push(url); next[hash] = url;
+          if (!cancelled) setBlobUrls({ ...next });
+        } catch { /* placeholder */ }
+      }
+    })();
+    return () => { cancelled = true; owned.forEach(url => URL.revokeObjectURL(url)); };
+  }, [fullKey]);
 
   const resetAdjustments = () => {
     setBrightness(100);
@@ -259,12 +287,13 @@ export const PhotoStudioView: React.FC = () => {
       {/* Album Filter Pills */}
       <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
         {albums.map((al) => (
-          <button key={al} type="button" className={`dp-btn ${albumFilter === al ? 'dp-btn-primary' : ''}`} onClick={() => setAlbumFilter(al)}>
+          <button key={al} type="button" className={`dp-btn ${albumFilter === al ? 'dp-btn-primary' : ''}`} onClick={() => { setAlbumFilter(al); setPhotoPage(0); }}>
             {al}
           </button>
         ))}
       </div>
 
+      <div className="dp-row" style={{ flexWrap: 'wrap' }}><button type="button" className="dp-btn dp-btn-sm" disabled={pageIndex === 0} onClick={() => setPhotoPage(pageIndex - 1)}>Previous photos</button><span className="dp-muted" role="status">Page {pageIndex + 1} of {Math.max(1, Math.ceil(filteredPhotos.length / 48))}</span><button type="button" className="dp-btn dp-btn-sm" disabled={(pageIndex + 1) * 48 >= filteredPhotos.length} onClick={() => setPhotoPage(pageIndex + 1)}>Next photos</button></div>
       <div className="dp-studio-split">
         {/* Photo Library Grid */}
         <div className="dp-card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', alignContent: 'start', maxHeight: 580, overflowY: 'auto' }}>
@@ -273,9 +302,9 @@ export const PhotoStudioView: React.FC = () => {
               Drag & drop, paste (Ctrl+V), import, or capture a photo with your camera.
             </div>
           ) : (
-            filteredPhotos.map((ph) => {
+            visiblePhotos.map((ph) => {
               const pl = ph.payload as PhotoAssetPayload;
-              const url = blobUrls[pl.originalBlobHash];
+              const url = thumbUrls[pl.originalBlobHash];
               return (
                 <div
                   key={ph.id}
@@ -323,13 +352,13 @@ export const PhotoStudioView: React.FC = () => {
                 <button type="button" className={`dp-btn ${showOriginal ? 'dp-btn-primary' : ''}`} onClick={() => setShowOriginal((s) => !s)}>
                   {showOriginal ? 'Showing Original' : 'Before / After'}
                 </button>
-                <button type="button" className="dp-btn dp-btn-primary" onClick={() => void handleSaveEditedCopy()}>
+                <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('photo-save', () => handleSaveEditedCopy())}>
                   <Copy size={13} /> Save Edited Copy
                 </button>
                 <button
                   type="button"
                   className="dp-btn"
-                  onClick={async () => {
+                  onClick={guardAction('action-1', async () => {
                     const note = await createRecord('note', `Photo Note: ${activePhoto.title}`, {
                       notebookId: 'nb_personal',
                       writtenForDate: new Date().toISOString().slice(0, 10),
@@ -342,11 +371,11 @@ export const PhotoStudioView: React.FC = () => {
                     setSelectedNoteId(note.id);
                     setActiveView('notes');
                     pushToast('Attached photo to a new Note (original remains safe in Photo Library)', { tone: 'ok' });
-                  }}
+                  })}
                 >
                   Attach to Note
                 </button>
-                <button type="button" className="dp-btn" onClick={async () => { await softDeleteRecord(activePhoto.id); setSelectedId(null); }} title="Move original photo to Trash">
+                <button type="button" className="dp-btn" onClick={guardAction('action-2', async () => { await softDeleteRecord(activePhoto.id); setSelectedId(null); })} title="Move original photo to Trash">
                   <Trash2 size={13} />
                 </button>
               </div>

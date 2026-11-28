@@ -114,6 +114,7 @@ export async function applyOnboardingPreset(
   presetId: OnboardingPreset['id'],
   options: { loadSamples: boolean; dayBoundaryHour?: number; logicalToday: string }
 ): Promise<AppSettings> {
+  return db.transaction('rw', [db.settings, db.records, db.outbox, db.undoStack, db.redoStack, db.revisions], async () => {
   const preset = ONBOARDING_PRESETS.find((p) => p.id === presetId) ?? ONBOARDING_PRESETS[0];
   const theme = THEME_PRESETS.find((t) => t.id === preset.themePresetId) ?? THEME_PRESETS[0];
   const current = await getOrInitSettings();
@@ -137,9 +138,11 @@ export async function applyOnboardingPreset(
   }
 
   return updated;
+  });
 }
 
 export async function seedSampleData(logicalToday: string): Promise<void> {
+  return db.transaction('rw', [db.settings, db.records, db.outbox, db.undoStack, db.redoStack, db.revisions], async () => {
   const existingSamples = await db.records.filter((r) => r.isSample === true).count();
   if (existingSamples > 0) return;
 
@@ -443,4 +446,5 @@ export async function seedSampleData(logicalToday: string): Promise<void> {
     { isSample: true, category: 'Meals' },
     { skipUndo: true }
   );
+  });
 }

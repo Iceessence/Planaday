@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { Box, Car, Check, Gift, HeartHandshake, PawPrint, Plane, Plus, Printer, Trash2, Wrench } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -7,6 +8,9 @@ import { ModalDialog } from '../../components/Common/ModalDialog';
 
 export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_assets' }> = ({ mode }) => {
   const { settings, records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   // Travel & Party state
   const [tripTitle, setTripTitle] = useState('');
@@ -61,7 +65,7 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
         <form
           className="dp-card dp-stack"
           style={{ padding: 12 }}
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-1', async (e) => {
             e.preventDefault();
             if (!tripTitle.trim()) return;
             const packing = [
@@ -82,7 +86,7 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             setTripTitle('');
             setTripNotes('');
             pushToast('Created trip with auto-multiplied packing list (projected to Countdowns!)');
-          }}
+          })}
         >
           <div className="dp-row">
             <input className="dp-input" style={{ flex: 2 }} placeholder="Trip destination…" value={tripTitle} onChange={(e) => setTripTitle(e.target.value)} />
@@ -155,13 +159,13 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <h4>🎉 Party Hosting Mode (RSVPs & Auto-Scaling Menu Count)</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-2', async (e) => {
               e.preventDefault();
               if (!partyTitle.trim()) return;
               await createRecord('party', partyTitle.trim(), { guestCount: partyGuests, dietaryNotes: 'None', rsvps: [] });
               setPartyTitle('');
               pushToast('Created party hosting workspace');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2 }} placeholder="Gathering / dinner party…" value={partyTitle} onChange={(e) => setPartyTitle(e.target.value)} />
             <label className="dp-row">
@@ -200,7 +204,7 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
         <form
           className="dp-card dp-row"
           style={{ padding: 12 }}
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-3', async (e) => {
             e.preventDefault();
             if (!personName.trim()) return;
             await createRecord('person', personName.trim(), {
@@ -213,7 +217,7 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             setPersonCoffee('');
             setPersonSizes('');
             pushToast('Saved relationship card');
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Person's name…" value={personName} onChange={(e) => setPersonName(e.target.value)} />
           <input className="dp-input" style={{ flex: 1 }} placeholder="Favorite coffee / food…" value={personCoffee} onChange={(e) => setPersonCoffee(e.target.value)} />
@@ -268,13 +272,13 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <h4><Gift size={15} /> Gift Planner</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-4', async (e) => {
               e.preventDefault();
               if (!giftIdea.trim()) return;
               await createRecord('gift', giftIdea.trim(), { recipient: giftFor || 'Friend', budget: giftBudget, stage: 'Idea' });
               setGiftIdea('');
               pushToast('Saved gift idea');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2 }} placeholder="Gift idea…" value={giftIdea} onChange={(e) => setGiftIdea(e.target.value)} />
             <input className="dp-input" style={{ flex: 1 }} placeholder="For whom?" value={giftFor} onChange={(e) => setGiftFor(e.target.value)} />
@@ -317,24 +321,24 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
             <button
               type="button"
               className="dp-btn"
-              onClick={async () => {
+              onClick={guardAction('action-1', async () => {
                 if (!personToDelete) return;
                 await softDeleteRecord(personToDelete.id, { personBirthdayAction: 'unlink' });
                 setPersonToDelete(null);
                 pushToast('Moved person to Trash and kept Birthdays unlinked', { canUndo: true });
-              }}
+              })}
             >
               Keep Birthdays (Unlink)
             </button>
             <button
               type="button"
               className="dp-btn dp-btn-danger"
-              onClick={async () => {
+              onClick={guardAction('action-2', async () => {
                 if (!personToDelete) return;
                 await softDeleteRecord(personToDelete.id, { personBirthdayAction: 'trash' });
                 setPersonToDelete(null);
                 pushToast('Moved person & linked Birthdays to Trash', { canUndo: true });
-              }}
+              })}
             >
               Also Trash Linked Birthdays
             </button>
@@ -357,13 +361,13 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <h4><Box size={15} /> Storage Bin Locator (Global Search Indexed)</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-5', async (e) => {
               e.preventDefault();
               if (!storageItemName.trim()) return;
               await createRecord('storage_item', storageItemName.trim(), { binLocation: storageBinLocation.trim() });
               setStorageItemName('');
               pushToast('Indexed storage item for Global Search');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder='Item (e.g., "holiday lights")' value={storageItemName} onChange={(e) => setStorageItemName(e.target.value)} />
             <input className="dp-input" style={{ flex: 1 }} placeholder="Room / Shelf / Bin #" value={storageBinLocation} onChange={(e) => setStorageBinLocation(e.target.value)} />
@@ -387,14 +391,14 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <h4>Home Assets (Filters, Paint Codes, Serials)</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-6', async (e) => {
               e.preventDefault();
               if (!assetName.trim()) return;
               await createRecord('home_asset', assetName.trim(), { modelNumber: assetSpec });
               setAssetName('');
               setAssetSpec('');
               pushToast('Saved home asset');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Asset (e.g., HVAC Furnace)" value={assetName} onChange={(e) => setAssetName(e.target.value)} />
             <input className="dp-input" style={{ flex: 1 }} placeholder="Filter size / paint code / serial" value={assetSpec} onChange={(e) => setAssetSpec(e.target.value)} />
@@ -418,13 +422,13 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <h4><Car size={15} /> Vehicle Service Logs</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-7', async (e) => {
               e.preventDefault();
               if (!vehicleName.trim()) return;
               await createRecord('vehicle', vehicleName.trim(), { mileage: vehicleMileage, nextOilChangeMileage: vehicleMileage + 5000 });
               setVehicleName('');
               pushToast('Saved vehicle service log');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Vehicle (e.g., Subaru Outback)" value={vehicleName} onChange={(e) => setVehicleName(e.target.value)} />
             <label className="dp-row" style={{ gap: 4 }}>
@@ -454,14 +458,14 @@ export const TravelPeopleHomeView: React.FC<{ mode: 'travel' | 'people' | 'home_
           <h4><PawPrint size={15} /> Pet & Plant Care Cards</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-8', async (e) => {
               e.preventDefault();
               if (!petPlantName.trim()) return;
               await createRecord('pet_plant', petPlantName.trim(), { careNotes: petPlantCare });
               setPetPlantName('');
               setPetPlantCare('');
               pushToast('Saved care card');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Pet or Plant name…" value={petPlantName} onChange={(e) => setPetPlantName(e.target.value)} />
             <input className="dp-input" style={{ flex: 1 }} placeholder="Feeding / vet / watering light notes" value={petPlantCare} onChange={(e) => setPetPlantCare(e.target.value)} />

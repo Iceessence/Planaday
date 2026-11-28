@@ -302,6 +302,7 @@ export const GuideView: React.FC = () => {
   const [query, setQuery] = useState('');
 
   const filteredDirectory = useMemo(() => {
+    if (guideTab !== 'directory') return [];
     const q = query.trim().toLowerCase();
     if (!q) return FEATURE_DIRECTORY;
     return FEATURE_DIRECTORY.filter(
@@ -311,7 +312,7 @@ export const GuideView: React.FC = () => {
         item.where.toLowerCase().includes(q) ||
         item.keywords.toLowerCase().includes(q)
     );
-  }, [query]);
+  }, [query, guideTab]);
 
   return (
     <div className="dp-paper-sheet dp-stack" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-5)', gap: 18 }}>
@@ -328,14 +329,14 @@ export const GuideView: React.FC = () => {
           <button
             type="button"
             className={`dp-btn dp-btn-sm ${guideTab === 'directory' ? 'dp-btn-primary' : ''}`}
-            onClick={() => setGuideTab('directory')}
+            aria-pressed={guideTab === 'directory'} onClick={() => setGuideTab('directory')}
           >
             <Compass size={14} /> Feature Directory
           </button>
           <button
             type="button"
             className={`dp-btn dp-btn-sm ${guideTab === 'changelog' ? 'dp-btn-primary' : ''}`}
-            onClick={() => setGuideTab('changelog')}
+            aria-pressed={guideTab === 'changelog'} onClick={() => setGuideTab('changelog')}
           >
             <History size={14} /> What&apos;s New &amp; Changelog (v{PLANADAY_CHANGELOG[0].version})
           </button>

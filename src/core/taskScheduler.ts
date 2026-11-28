@@ -44,7 +44,7 @@ export function computeLearnedTaskDurations(tasks: Array<LifeRecord<TaskPayload>
     if (!key) continue;
     const logs = t.payload.completionLogs ?? [];
     for (const log of logs) {
-      if (log.actualMinutes > 0 && !log.distracted) {
+      if (Number.isFinite(log.actualMinutes) && log.actualMinutes > 0 && !log.distracted) {
         const arr = buckets.get(key) ?? [];
         arr.push(log.actualMinutes);
         buckets.set(key, arr);
@@ -92,17 +92,17 @@ export function computeDynamicTaskSchedule(opts: {
     activeContextId = null,
   } = opts;
 
-  const endCutoff = allowPastEndTime ? 24 * 60 : Math.max(nowMin + 15, timeToMinutes(preferredEndTime || '21:00'));
+  const endCutoff = allowPastEndTime ? 24 * 60 : Math.min(1440, timeToMinutes(preferredEndTime || '21:00'));
   const learnedAvgByType = computeLearnedTaskDurations(tasks);
   const ctxMap = new Map(contexts.map((c) => [c.id, c]));
 
   // Busy intervals from existing timed calendar events
   const busy: Array<{ start: number; end: number }> = [];
   for (const ev of dayEvents) {
-    if (ev.payload.allDay || ev.payload.eventStatus === 'canceled') continue;
-    const s = timeToMinutes(ev.payload.startTime || '09:00');
-    const e = Math.max(s + 15, timeToMinutes(ev.payload.endTime || '10:00'));
-    busy.push({ start: s, end: e });
+    if (ev.deletedAt || ev.payload.allDay || ev.payload.eventStatus === 'canceled') continue;
+    const s = ev.payload.startDate < dateIso ? 0 : timeToMinutes(ev.payload.startTime || '09:00');
+    const e = ev.payload.endDate > dateIso ? 1440 : timeToMinutes(ev.payload.endTime || '10:00');
+    if (e > s) busy.push({ start: s, end: e });
   }
 
   const blocks: ScheduledTaskBlock[] = [];
@@ -156,7 +156,7 @@ export function computeDynamicTaskSchedule(opts: {
   // 2. Select eligible active tasks (today, overdue, or unscheduled) and sort by priority + custom order
   const eligibleActive = tasks
     .filter((t) => {
-      if (t.status !== 'active') return false;
+      if (t.deletedAt || t.status !== 'active') return false;
       if (activeContextId && t.payload.contextId && t.payload.contextId !== activeContextId) return false;
       if (t.doDate && t.doDate > dateIso) return false;
       return true;
@@ -171,9 +171,17 @@ export function computeDynamicTaskSchedule(opts: {
       return a.createdAt.localeCompare(b.createdAt);
     });
 
+  // Reserve every manual slot before automatic scheduling, irrespective of priority.
+  const pinnedFirst = [...eligibleActive.filter(t => t.payload.manualStartTime), ...eligibleActive.filter(t => !t.payload.manualStartTime)];
   // Helper to check if [s, e) overlaps any busy block
+  busy.sort((a, b) => a.start - b.start);
+  const insertBusy = (block: { start: number; end: number }) => {
+    let low = 0, high = busy.length;
+    while (low < high) { const mid = (low + high) >>> 1; if (busy[mid].start <= block.start) low = mid + 1; else high = mid; }
+    busy.splice(low, 0, block);
+  };
   const findFirstFreeSlot = (earliest: number, latestEnd: number, duration: number): number | null => {
-    const sortedBusy = [...busy].sort((a, b) => a.start - b.start);
+    const sortedBusy = busy;
     let cursor = Math.ceil(earliest / 5) * 5;
     for (const b of sortedBusy) {
       if (b.end <= cursor) continue;
@@ -186,7 +194,7 @@ export function computeDynamicTaskSchedule(opts: {
   };
 
   // 3. Place manually pinned tasks first, then dynamically fill remaining tasks
-  for (const t of eligibleActive) {
+  for (const t of pinnedFirst) {
     const typeKey = t.payload.taskType?.trim().toLowerCase();
     const duration = Math.max(
       5,
@@ -207,7 +215,7 @@ export function computeDynamicTaskSchedule(opts: {
         kind: 'planned_manual',
         contextName: ctx?.name,
       });
-      busy.push({ start: sMin, end: eMin });
+      insertBusy({ start: sMin, end: eMin });
       continue;
     }
 
@@ -245,7 +253,7 @@ export function computeDynamicTaskSchedule(opts: {
       kind: 'planned_auto',
       contextName: ctx?.name,
     });
-    busy.push({ start: slotStart, end: slotEnd });
+    insertBusy({ start: slotStart, end: slotEnd });
   }
 
   blocks.sort((a, b) => a.startMin - b.startMin);
@@ -378,8 +386,8 @@ export function computeDurationAnalytics(
     avgAllMin: avg(allMins),
     avgUndistractedMin: avg(undistracted),
     avgDistractedMin: avg(distracted),
-    fastestMin: Math.min(...allMins),
-    longestMin: Math.max(...allMins),
+    fastestMin: allMins.reduce((a, n) => Math.min(a, n), Infinity),
+    longestMin: allMins.reduce((a, n) => Math.max(a, n), -Infinity),
     avgEstimatedMin: avg(estimates),
     totalDistractionMin: Math.round(entries.reduce((s, e) => s + (e.log.distractionMinutes ?? 0), 0)),
     byLabel,

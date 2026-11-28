@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -32,6 +33,7 @@ import type { LifeRecord, PantryLotPayload, RecipePayload } from '../../core/typ
 
 export const RecipesView: React.FC = () => {
   const { settings, records, logicalToday, pushToast, startCountdownTimer, setActiveView } = useApp();
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileRecipePane, setMobileRecipePane] = useState<'list' | 'detail'>('list');
@@ -106,32 +108,38 @@ export const RecipesView: React.FC = () => {
 
   useEffect(() => {
     if (activeRecipe) setTargetServings(activeRecipe.payload.servings || 2);
-  }, [activeRecipe?.id, activeRecipe]);
+  }, [activeRecipe?.id, activeRecipe?.payload.servings]);
 
   useEffect(() => {
     let alive = true;
+    setHeroUrl(null);
+    let ownedUrl: string | null = null;
     const h = activeRecipe?.payload.heroBlobId;
     if (!h) {
       setHeroUrl(null);
       return;
     }
-    void getBlobObjectUrl(h).then((u) => {
-      if (alive) setHeroUrl(u);
-    });
+    void getBlobObjectUrl(h, false, true).then((u) => {
+      if (alive) { ownedUrl = u; setHeroUrl(u); } else if (u) URL.revokeObjectURL(u);
+    }).catch(() => { if (alive) setHeroUrl(null); });
     return () => {
       alive = false;
+      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
     };
   }, [activeRecipe?.payload.heroBlobId]);
 
+  const cookingActive = Boolean(cookingSession);
+  const finishOpen = Boolean(cookingSession?.finishOpen);
   // Wake Lock & Spacebar step advance during Hands-Free Cooking Mode
   useEffect(() => {
-    if (!cookingSession) return;
+    if (!cookingActive) return;
+    let disposed = false;
     let wakeLock: { release?: () => Promise<void> } | null = null;
     const nav = navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } };
-    nav.wakeLock?.request('screen').then((w) => { wakeLock = w; }).catch(() => { /* optional */ });
+    nav.wakeLock?.request('screen').then((w) => { if (disposed) void w.release().catch(() => undefined); else wakeLock = w; }).catch(() => { /* optional */ });
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !cookingSession.finishOpen) {
+      if (e.code === 'Space' && !finishOpen && !e.repeat && !(e.target instanceof HTMLElement && (e.target.closest('input, textarea, select, button, [contenteditable=true]')))) {
         e.preventDefault();
         setCookingSession((prev) =>
           prev ? { ...prev, stepIdx: Math.min(prev.snapshot.steps.length - 1, prev.stepIdx + 1) } : null
@@ -141,9 +149,10 @@ export const RecipesView: React.FC = () => {
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      void wakeLock?.release?.();
+      disposed = true;
+      void wakeLock?.release?.().catch(() => undefined);
     };
-  }, [cookingSession]);
+  }, [cookingActive, finishOpen]);
 
   const scaledIngredients = useMemo(
     () => (activeRecipe ? scaleAndConvertIngredients(activeRecipe.payload, targetServings, unitMode) : []),
@@ -151,18 +160,21 @@ export const RecipesView: React.FC = () => {
   );
 
   const rankedMatches = useMemo(
-    () => rankWhatCanIMake(recipes, pantryLots, logicalToday),
-    [recipes, pantryLots, logicalToday]
+    () => showWhatCanIMake ? rankWhatCanIMake(recipes, pantryLots, logicalToday) : [],
+    [recipes, pantryLots, logicalToday, showWhatCanIMake]
   );
 
   const handleClipUrl = async () => {
     if (!clipUrl.trim()) return;
     setClippingBusy(true);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
     try {
       const base = settings.syncServerUrl.replace(/\/+$/, '');
       const res = await fetch(`${base}/api/proxy/recipe`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', ...(settings.syncAuthToken ? { Authorization: `Bearer ${settings.syncAuthToken}` } : {}) },
         body: JSON.stringify({ url: clipUrl.trim() }),
       });
       const json = (await res.json()) as {
@@ -180,7 +192,7 @@ export const RecipesView: React.FC = () => {
           nutrition?: RecipePayload['nutrition'];
         };
       };
-      if (!json.ok || !json.draft) {
+      if (!res.ok || !json.ok || !json.draft) {
         throw new Error(json.error || 'Could not parse recipe URL');
       }
       const d = json.draft;
@@ -201,7 +213,7 @@ export const RecipesView: React.FC = () => {
         ingredients: d.ingredients.map(parseIngredientLine),
         steps: d.steps.map((text, idx) => ({ id: createId('stp'), order: idx + 1, text })),
         nutrition: d.nutrition,
-      });
+      }, { workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId });
       setSelectedId(created.id);
       setClipperOpen(false);
       setClipUrl('');
@@ -212,6 +224,7 @@ export const RecipesView: React.FC = () => {
         { tone: 'warn' }
       );
     } finally {
+      window.clearTimeout(timeout);
       setClippingBusy(false);
     }
   };
@@ -579,7 +592,7 @@ export const RecipesView: React.FC = () => {
             <strong><Globe size={14} /> Import from URL (via Docker CORS-Free Proxy)</strong>
             <div className="dp-row">
               <input className="dp-input" style={{ flex: 1 }} placeholder="https://example.com/recipe..." value={clipUrl} onChange={(e) => setClipUrl(e.target.value)} />
-              <button type="button" className="dp-btn dp-btn-primary" disabled={clippingBusy} onClick={() => void handleClipUrl()}>
+              <button type="button" className="dp-btn dp-btn-primary" disabled={clippingBusy} onClick={guardAction('action-1', () => handleClipUrl())}>
                 {clippingBusy ? 'Fetching…' : 'Clip URL'}
               </button>
             </div>
@@ -595,7 +608,7 @@ export const RecipesView: React.FC = () => {
               onChange={(e) => setClipText(e.target.value)}
             />
             <div className="dp-row" style={{ justifyContent: 'flex-end' }}>
-              <button type="button" className="dp-btn dp-btn-primary" onClick={() => void handleClipRawText()}>
+              <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('action-2', () => handleClipRawText())}>
                 Parse & Save Recipe Offline
               </button>
             </div>
@@ -768,7 +781,7 @@ export const RecipesView: React.FC = () => {
                 <button
                   type="button"
                   className="dp-btn dp-btn-primary"
-                  onClick={async () => {
+                  onClick={guardAction('action-3', async () => {
                     const res = await finishCookingSession(cookingSession.recipeId, {
                       scaleFactor: cookingSession.scaleFactor,
                       deductPantry,
@@ -782,7 +795,7 @@ export const RecipesView: React.FC = () => {
                       `Cooked! Deducted ${res.deductedLots} pantry lot(s)${res.createdLeftoverId ? ` & logged ${leftoverPortions} leftover portions.` : '.'}`,
                       { canUndo: true }
                     );
-                  }}
+                  })}
                 >
                   Confirm Finish (1-Click Undoable)
                 </button>

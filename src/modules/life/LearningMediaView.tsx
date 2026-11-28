@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { BookOpen, Compass, Film, Play, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -6,6 +7,9 @@ import { addDaysIso } from '../../core/temporal';
 
 export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mode }) => {
   const { settings, records, logicalToday, pushToast, startCountdownTimer } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   // Spaced review card state
   const [question, setQuestion] = useState('');
@@ -31,7 +35,8 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
           if (p.dismissedUntil && p.dismissedUntil > logicalToday) return false;
           return (p.nextReviewDate ?? logicalToday) <= logicalToday;
         })
-        .slice(0, dailyLimit),
+        .sort((a, b) => String(a.payload.nextReviewDate ?? logicalToday).localeCompare(String(b.payload.nextReviewDate ?? logicalToday)) || a.createdAt.localeCompare(b.createdAt))
+        .slice(0, Math.max(0, dailyLimit)),
     [cards, logicalToday, dailyLimit]
   );
 
@@ -60,7 +65,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
         <form
           className="dp-card dp-stack"
           style={{ padding: 12 }}
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-1', async (e) => {
             e.preventDefault();
             if (!question.trim() || !answer.trim()) return;
             await createRecord('review_card', question.trim(), {
@@ -72,7 +77,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
             setQuestion('');
             setAnswer('');
             pushToast('Added Q&A review card');
-          }}
+          })}
         >
           <input className="dp-input" placeholder="Question / Prompt…" value={question} onChange={(e) => setQuestion(e.target.value)} />
           <textarea className="dp-textarea" style={{ minHeight: 68 }} placeholder="Answer / Key takeaway…" value={answer} onChange={(e) => setAnswer(e.target.value)} />
@@ -111,10 +116,10 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
                       type="button"
                       className="dp-icon-btn"
                       title="Delete review card"
-                      onClick={async () => {
+                      onClick={guardAction('action-1', async () => {
                         await softDeleteRecord(c.id);
                         pushToast('Moved review card to Trash', { canUndo: true });
-                      }}
+                      })}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -170,7 +175,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
         <h4><BookOpen size={15} /> Books, Audiobooks, Podcasts, Films, TV & Games</h4>
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-2', async (e) => {
             e.preventDefault();
             if (!mediaTitle.trim()) return;
             await createRecord('media_item', mediaTitle.trim(), {
@@ -181,7 +186,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
             });
             setMediaTitle('');
             pushToast('Added to Media Shelf');
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Title…" value={mediaTitle} onChange={(e) => setMediaTitle(e.target.value)} />
           <input list="dp-media-kinds" aria-label="Media type" className="dp-input" style={{ width: 130 }} value={mediaKind} onChange={(e) => setMediaKind(e.target.value)} placeholder="Type (pick or type)…" />
@@ -254,7 +259,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
         <h4>Hobby Project Tracker</h4>
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-3', async (e) => {
             e.preventDefault();
             if (!hobbyTitle.trim()) return;
             await createRecord('hobby_project', hobbyTitle.trim(), {
@@ -265,7 +270,7 @@ export const LearningMediaView: React.FC<{ mode: 'learning' | 'media' }> = ({ mo
             setHobbyTitle('');
             setHobbySupplies('');
             pushToast('Added hobby project');
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 1 }} placeholder="Project (e.g., Watercolor Sketchbook)" value={hobbyTitle} onChange={(e) => setHobbyTitle(e.target.value)} />
           <input className="dp-input" style={{ flex: 1 }} placeholder="Supplies (comma separated)" value={hobbySupplies} onChange={(e) => setHobbySupplies(e.target.value)} />

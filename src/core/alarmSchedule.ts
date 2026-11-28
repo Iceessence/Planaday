@@ -35,14 +35,14 @@ export const DAY_SHORT_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
 export function normalizeAlarmPayload(raw: Record<string, unknown>): AlarmPayload {
   const scheduleType = raw.scheduleType === 'once' ? 'once' : 'recurring';
   const rawDays = Array.isArray(raw.repeatDays)
-    ? raw.repeatDays.filter((d): d is number => typeof d === 'number' && d >= 0 && d <= 6)
+    ? raw.repeatDays.filter((d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 6)
     : undefined;
   return {
-    time: typeof raw.time === 'string' && /^\d{2}:\d{2}$/.test(raw.time) ? raw.time : '07:00',
+    time: typeof raw.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time) ? raw.time : '07:00',
     profile: typeof raw.profile === 'string' ? raw.profile : 'Workday',
     enabled: raw.enabled !== false,
     scheduleType,
-    repeatDays: rawDays ?? (scheduleType === 'recurring' ? [0, 1, 2, 3, 4, 5, 6] : []),
+    repeatDays: rawDays ? Array.from(new Set(rawDays)).sort((a,b) => a-b) : (scheduleType === 'recurring' ? [0, 1, 2, 3, 4, 5, 6] : []),
     scheduleDate: typeof raw.scheduleDate === 'string' && raw.scheduleDate ? raw.scheduleDate : null,
     ringtone: typeof raw.ringtone === 'string' && raw.ringtone ? raw.ringtone : 'sunrise_harp',
     ringtoneName: typeof raw.ringtoneName === 'string' ? raw.ringtoneName : undefined,
@@ -52,9 +52,9 @@ export function normalizeAlarmPayload(raw: Record<string, unknown>): AlarmPayloa
       raw.challenge === 'math' || raw.challenge === 'affirmation' || raw.challenge === 'memory'
         ? raw.challenge
         : 'none',
-    volumeRampSec: typeof raw.volumeRampSec === 'number' ? raw.volumeRampSec : 30,
-    snoozeMin: typeof raw.snoozeMin === 'number' ? raw.snoozeMin : 9,
-    maxSnoozes: typeof raw.maxSnoozes === 'number' ? raw.maxSnoozes : 3,
+    volumeRampSec: typeof raw.volumeRampSec === 'number' && Number.isFinite(raw.volumeRampSec) ? Math.max(0, Math.min(3600, raw.volumeRampSec)) : 30,
+    snoozeMin: typeof raw.snoozeMin === 'number' && Number.isFinite(raw.snoozeMin) ? Math.max(1, Math.min(1440, Math.round(raw.snoozeMin))) : 9,
+    maxSnoozes: typeof raw.maxSnoozes === 'number' && Number.isFinite(raw.maxSnoozes) ? Math.max(0, Math.floor(raw.maxSnoozes)) : 3,
     skipNext: Boolean(raw.skipNext),
     notes: typeof raw.notes === 'string' ? raw.notes : undefined,
   };
@@ -122,7 +122,7 @@ export function computeNextAlarmTrigger(
   now: Date = new Date()
 ): { nextFireMs: number; countdownText: string; dateIso: string } | null {
   const alarm = normalizeAlarmPayload(raw);
-  if (!alarm.enabled) return null;
+  if (!alarm.enabled || !Number.isFinite(now.getTime()) || (alarm.scheduleType === 'once' && alarm.skipNext)) return null;
 
   const [hh, mm] = alarm.time.split(':').map(Number);
   const hour = Number.isFinite(hh) ? hh : 7;
@@ -132,7 +132,7 @@ export function computeNextAlarmTrigger(
     if (alarm.scheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(alarm.scheduleDate)) {
       const [y, m, d] = alarm.scheduleDate.split('-').map(Number);
       const target = new Date(y, (m || 1) - 1, d || 1, hour, minute, 0, 0);
-      if (target.getTime() <= now.getTime()) return null;
+      if (target.getFullYear() !== y || target.getMonth() !== m - 1 || target.getDate() !== d || target.getTime() <= now.getTime()) return null;
       return {
         nextFireMs: target.getTime(),
         countdownText: formatCountdownMs(target.getTime() - now.getTime()),

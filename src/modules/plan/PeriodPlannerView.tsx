@@ -1,6 +1,8 @@
+import { SafeTextarea } from '../../components/Common/SafeTextEditor';
+import { scopeKey, withScopedRecords } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../core/AppContext';
-import { addDaysIso, formatDateLocalized, getWeekdayIso } from '../../core/temporal';
+import { addDaysIso, diffDaysIso, formatDateLocalized, getWeekdayIso } from '../../core/temporal';
 import { expandRecurrenceDates } from '../../core/recurrence';
 import { createRecord, updateRecord } from '../../core/repository';
 import { findFreeTimeGaps, minutesToTime, timeToMinutes } from '../../core/planActions';
@@ -11,14 +13,23 @@ import type {
   MealPlanPayload,
 } from '../../core/types';
 
+function shiftPeriod(date: string, tab: 'week' | 'month' | 'year' | 'agenda', direction: number): string {
+  if (tab === 'week' || tab === 'agenda') return addDaysIso(date, 7 * direction);
+  const [year, month, day] = date.split('-').map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + (tab === 'year' ? 12 : 1) * direction, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(day, last));
+  return target.toISOString().slice(0, 10);
+}
+
 export const PeriodPlannerView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, setActiveView } = useApp();
   const [periodTab, setPeriodTab] = useState<'week' | 'month' | 'year' | 'agenda'>('week');
   const [monthAgendaMode, setMonthAgendaMode] = useState(false);
 
-  const events = records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>;
-  const meals = records.filter((r) => r.type === 'meal_plan') as Array<LifeRecord<MealPlanPayload>>;
-  const diaries = records.filter((r) => r.type === 'diary') as Array<LifeRecord<DiaryPayload>>;
+  const events = useMemo(() => records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>, [records]);
+  const meals = useMemo(() => records.filter((r) => r.type === 'meal_plan') as Array<LifeRecord<MealPlanPayload>>, [records]);
+  const diaries = useMemo(() => records.filter((r) => r.type === 'diary') as Array<LifeRecord<DiaryPayload>>, [records]);
 
   // Week range starting Sun or Mon
   const weekDays = useMemo(() => {
@@ -43,24 +54,26 @@ export const PeriodPlannerView: React.FC = () => {
   }, [activeDate, settings.weekStartsOn]);
 
   // Period reflection note
-  const periodKey =
+  const canonicalPeriodKey =
     periodTab === 'week'
-      ? `week:${weekDays[0]}`
+      ? `week:${addDaysIso(activeDate, -((getWeekdayIso(activeDate) - settings.weekStartsOn + 7) % 7))}`
       : periodTab === 'month'
         ? `month:${activeDate.slice(0, 7)}`
         : `year:${activeDate.slice(0, 4)}`;
 
+  const legacyWeekKey = `week:${weekDays[0]}`;
+  const periodKey = periodTab === 'week' && !records.some(r => r.type === 'period_reflection' && r.payload.periodKey === canonicalPeriodKey) && records.some(r => r.type === 'period_reflection' && r.payload.periodKey === legacyWeekKey) ? legacyWeekKey : canonicalPeriodKey;
   const reflectionRec = records.find(
     (r) => r.type === 'period_reflection' && (r.payload as { periodKey?: string }).periodKey === periodKey
   );
   const reflectionText = String((reflectionRec?.payload as { notes?: string } | undefined)?.notes ?? '');
 
   const saveReflection = async (notes: string) => {
-    if (reflectionRec) {
-      await updateRecord(reflectionRec.id, (c) => ({ ...c, payload: { ...c.payload, notes } }), { skipUndo: true });
-    } else {
-      await createRecord('period_reflection', `Reflection ${periodKey}`, { periodKey, notes }, {}, { skipUndo: true });
-    }
+    await withScopedRecords(settings, 'period_reflection', async fresh => {
+      const existing = fresh.find(r => r.payload.periodKey === periodKey);
+      if (existing) await updateRecord(existing.id, c => ({ ...c, payload: { ...c.payload, notes } }), { skipUndo: true });
+      else await createRecord('period_reflection', `Reflection ${periodKey}`, { periodKey, notes }, { workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId }, { skipUndo: true });
+    });
   };
 
   // Year in Pixels mosaic data (365/366 days — visually distinguishing missing vs low!)
@@ -76,13 +89,26 @@ export const PeriodPlannerView: React.FC = () => {
     return '#b5453a';
   };
 
-  const eventsOnDate = (d: string) =>
-    events.filter((ev) => {
-      if (ev.recurrence) {
-        return expandRecurrenceDates(ev.payload.startDate, ev.recurrence, { rangeStart: d, rangeEnd: d, maxCount: 1 }).length > 0;
+  const agendaDates = useMemo(() => Array.from({ length: 30 }, (_, i) => addDaysIso(activeDate, i)), [activeDate]);
+  const eventsByDate = useMemo(() => {
+    const days = periodTab === 'week' ? weekDays : periodTab === 'month' ? monthGrid.map(d => d.iso) : periodTab === 'agenda' ? agendaDates : [];
+    const byDay = new Map<string, typeof events>(days.map(d => [d, []]));
+    if (!days.length) return byDay;
+    const start = days[0], end = days[days.length - 1];
+    for (const ev of events) {
+      if (ev.payload.eventStatus === 'canceled' || ev.status === 'canceled') continue;
+      const span = Math.max(0, diffDaysIso(ev.payload.startDate, ev.payload.endDate || ev.payload.startDate));
+      const starts = ev.recurrence ? expandRecurrenceDates(ev.payload.startDate, ev.recurrence, { rangeStart: addDaysIso(start, -span), rangeEnd: end, maxCount: Math.max(250, Math.min(10000, span + 42)) }) : [ev.payload.startDate];
+      const placedDays = new Set<string>();
+      for (const occurrence of starts) {
+        const finish = addDaysIso(occurrence, span);
+        for (const d of days) if (d >= occurrence && d <= finish && !placedDays.has(d)) { byDay.get(d)!.push(ev); placedDays.add(d); }
       }
-      return ev.payload.startDate <= d && (ev.payload.endDate || ev.payload.startDate) >= d;
-    });
+    }
+    return byDay;
+  }, [events, periodTab, weekDays, monthGrid, agendaDates]);
+  const eventsOnDate = (d: string) => eventsByDate.get(d) ?? [];
+
 
   return (
     <div className="dp-paper-sheet dp-stack" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-5)' }}>
@@ -105,7 +131,7 @@ export const PeriodPlannerView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-sm"
-            onClick={() => setActiveDate(addDaysIso(activeDate, periodTab === 'week' ? -7 : periodTab === 'month' ? -30 : -365))}
+            onClick={() => setActiveDate(shiftPeriod(activeDate, periodTab, -1))}
           >
             ← Prev
           </button>
@@ -115,7 +141,7 @@ export const PeriodPlannerView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-sm"
-            onClick={() => setActiveDate(addDaysIso(activeDate, periodTab === 'week' ? 7 : periodTab === 'month' ? 30 : 365))}
+            onClick={() => setActiveDate(shiftPeriod(activeDate, periodTab, 1))}
           >
             Next →
           </button>
@@ -325,7 +351,7 @@ export const PeriodPlannerView: React.FC = () => {
       {periodTab === 'agenda' && (
         <div className="dp-stack">
           <h3>Next 30 Days Agenda & Availability</h3>
-          {Array.from({ length: 30 }, (_, i) => addDaysIso(activeDate, i)).map((d) => {
+          {agendaDates.map((d) => {
             const evs = eventsOnDate(d);
             if (evs.length === 0) return null;
             const gaps = findFreeTimeGaps(
@@ -359,12 +385,13 @@ export const PeriodPlannerView: React.FC = () => {
       {/* Period Reflection Notes */}
       <div className="dp-card dp-stack" style={{ padding: 12 }}>
         <strong>Period Reflection ({periodKey})</strong>
-        <textarea
+        <SafeTextarea
+          recordKey={`reflection:${scopeKey(settings)}:${periodKey}`}
           className="dp-textarea"
           style={{ minHeight: 72 }}
           placeholder="Wins, intentions, and adjustments for this period…"
-          value={reflectionText}
-          onChange={(e) => void saveReflection(e.target.value)}
+          externalValue={reflectionText}
+          onCommit={saveReflection}
         />
       </div>
     </div>

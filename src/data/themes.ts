@@ -300,7 +300,7 @@ export function contrastRatio(hexA: string, hexB: string): number {
 }
 
 /**
- * Guarantees WCAG AA (>= 4.5) or AAA (>= 7.0) readable foreground ink against any background
+ * Targets WCAG AA (>= 4.5) or AAA (>= 7.0); returns the best black/white ratio when the target is mathematically impossible
  * by inspecting OKLCH lightness and choosing/adjusting ink lightness if the desired ink fails contrast.
  */
 export function guardReadableInk(
@@ -315,7 +315,6 @@ export function guardReadableInk(
     }
   }
 
-  const bgOklch = rgbToOklch(hexToRgb(bgHex));
   const darkInk = '#161411';
   const lightInk = '#faf8f4';
 
@@ -338,10 +337,11 @@ export function guardReadableInk(
     }
   }
 
-  if (bgOklch.L > 0.62 || darkRatio >= lightRatio) {
-    return { color: darkRatio >= lightRatio ? darkInk : lightInk, ratio: Math.max(darkRatio, lightRatio), adjusted: true };
-  }
-  return { color: lightInk, ratio: lightRatio, adjusted: true };
+  const themed = darkRatio >= lightRatio ? { color: darkInk, ratio: darkRatio } : { color: lightInk, ratio: lightRatio };
+  if (themed.ratio >= minRatio) return { ...themed, adjusted: true };
+  const black = contrastRatio(bgHex, '#000000');
+  const white = contrastRatio(bgHex, '#ffffff');
+  return { color: black >= white ? '#000000' : '#ffffff', ratio: Math.max(black, white), adjusted: true };
 }
 
 export interface ComputedThemeVars {

@@ -1,6 +1,5 @@
 import { createId, db, getOrInitSettings } from './db';
 import { blobUrlCache } from './blobCache';
-import { globalSearchIndex } from './searchIndex';
 import type {
   LifeRecord,
   MealPlanPayload,
@@ -44,7 +43,9 @@ export function subscribeRepository(fn: ChangeListener): () => void {
 }
 
 function notify() {
-  for (const fn of listeners) fn();
+  for (const fn of listeners) {
+    try { fn(); } catch (error) { console.error("Repository listener failed", error); }
+  }
 }
 
 export interface SaveOptions {
@@ -56,6 +57,8 @@ export interface SaveOptions {
 }
 
 async function pushUndoEntry(entry: UndoEntry): Promise<void> {
+  const last = await db.undoStack.orderBy('timestamp').last();
+  if (last && entry.timestamp <= last.timestamp) entry = { ...entry, timestamp: new Date(Date.parse(last.timestamp) + 1).toISOString() };
   await db.undoStack.put(entry);
   await db.redoStack.clear();
   const all = await db.undoStack.orderBy('timestamp').toArray();
@@ -93,6 +96,7 @@ async function enqueueOutbox(record: LifeRecord, baseRev: number): Promise<void>
  * down to at most 1 operation per unique recordId without losing a single edit.
  */
 export async function compactOutbox(): Promise<{ before: number; after: number; removed: number }> {
+  return db.transaction('rw', db.outbox, async () => {
   const all = await db.outbox.orderBy('createdAt').toArray();
   if (all.length <= 1) return { before: all.length, after: all.length, removed: 0 };
 
@@ -121,6 +125,7 @@ export async function compactOutbox(): Promise<{ before: number; after: number; 
   }
 
   return { before: all.length, after: all.length - deleteIds.length, removed: deleteIds.length };
+  });
 }
 
 export async function createRecord<P = Record<string, unknown>>(
@@ -183,13 +188,12 @@ export async function createRecord<P = Record<string, unknown>>(
         });
       }
 
-      if (type === 'note') {
+      if (type === 'note' && !options.skipRevision) {
         await saveNoteRevision(record as unknown as LifeRecord<NotePayload>);
       }
     }
   );
 
-  globalSearchIndex.upsert(record as LifeRecord);
   notify();
   return record;
 }
@@ -202,6 +206,7 @@ export async function updateRecord<P = Record<string, unknown>>(
   return withRecordLock(id, async () => {
     const settings = await getOrInitSettings();
     let updatedResult: LifeRecord<P> | null = null;
+    let didWrite = false;
 
     await db.transaction(
       'rw',
@@ -217,13 +222,16 @@ export async function updateRecord<P = Record<string, unknown>>(
         const nextRaw = typeof patch === 'function' ? patch(structuredClone(existing)) : { ...existing, ...patch };
 
         const fieldUpdatedAt = { ...(existing.fieldUpdatedAt ?? {}) };
-        for (const key of Object.keys(nextRaw) as Array<keyof LifeRecord<P>>) {
-          if (key === 'rev' || key === 'updatedAt' || key === 'fieldUpdatedAt') continue;
-          if (JSON.stringify(existing[key]) !== JSON.stringify(nextRaw[key])) {
+        let changed = false;
+        for (const key of new Set([...Object.keys(existing), ...Object.keys(nextRaw)]) as Set<keyof LifeRecord<P>>) {
+          if (key === 'rev' || key === 'updatedAt' || key === 'fieldUpdatedAt' || key === 'deviceId') continue;
+          if (existing[key] !== nextRaw[key] && JSON.stringify(existing[key]) !== JSON.stringify(nextRaw[key])) {
+            changed = true;
             fieldUpdatedAt[String(key)] = now;
           }
         }
 
+        if (!changed && !options.revisionLabel) { updatedResult = existing; return; }
         const updated: LifeRecord<P> = {
           ...nextRaw,
           id: existing.id,
@@ -253,13 +261,11 @@ export async function updateRecord<P = Record<string, unknown>>(
         }
 
         updatedResult = updated;
+        didWrite = true;
       }
     );
 
-    if (updatedResult) {
-      globalSearchIndex.upsert(updatedResult as LifeRecord);
-      notify();
-    }
+    if (didWrite) notify();
     return updatedResult;
   });
 }
@@ -269,32 +275,33 @@ export async function batchApplyChanges(
   mutator: () => Promise<Array<{ recordId: string; before: LifeRecord | null; after: LifeRecord | null }>>,
   options: { skipUndo?: boolean; skipOutbox?: boolean } = {}
 ): Promise<void> {
-  const changes = await mutator();
-  if (changes.length === 0) return;
-
-  const now = new Date().toISOString();
-  for (const ch of changes) {
-    if (ch.after) {
-      await db.records.put(ch.after);
-      globalSearchIndex.upsert(ch.after);
-      if (!options.skipOutbox) {
-        await enqueueOutbox(ch.after, ch.before?.rev ?? 0);
+  const wrote = await db.transaction('rw', [db.records, db.outbox, db.undoStack, db.redoStack, db.revisions, db.settings, db.timeLedger], async () => {
+    const changes = await mutator();
+    if (!changes.length) return false;
+    // Reject stale snapshots rather than silently overwriting edits from another tab or operation.
+    const checked = new Set<string>();
+    for (const ch of changes) {
+      if (checked.has(ch.recordId)) continue;
+      checked.add(ch.recordId);
+      const current = await db.records.get(ch.recordId);
+      if (JSON.stringify(current ?? null) !== JSON.stringify(ch.before ?? null)) {
+        throw new Error(`Record changed during operation: ${ch.recordId}. Refresh and retry.`);
       }
-    } else if (ch.before) {
-      await db.records.delete(ch.recordId);
-      globalSearchIndex.remove(ch.recordId);
     }
-  }
-
-  if (!options.skipUndo) {
-    await pushUndoEntry({
-      id: createId('undo'),
-      label,
-      timestamp: now,
-      changes,
-    });
-  }
-  notify();
+    const now = new Date().toISOString();
+    for (const ch of changes) {
+      if (ch.after) {
+        await db.records.put(ch.after);
+        if (!options.skipOutbox) await enqueueOutbox(ch.after, ch.before?.rev ?? 0);
+      } else if (ch.before) {
+        await db.records.delete(ch.recordId);
+        if (!options.skipOutbox) await enqueueOutbox({ ...ch.before, deletedAt: now, updatedAt: now, rev: ch.before.rev + 1 }, ch.before.rev);
+      }
+    }
+    if (!options.skipUndo) await pushUndoEntry({ id: createId('undo'), label, timestamp: now, changes });
+    return true;
+  });
+  if (wrote) notify();
 }
 
 async function saveNoteRevision(note: LifeRecord<NotePayload>, label?: string): Promise<void> {
@@ -442,41 +449,42 @@ export async function restoreFromTrash(id: string): Promise<LifeRecord | null> {
 }
 
 export async function permanentlyDeleteRecord(id: string): Promise<void> {
-  await db.records.delete(id);
-  await db.revisions.where('recordId').equals(id).delete();
-  globalSearchIndex.remove(id);
-  await runOrphanBlobGC();
+  await db.transaction('rw', [db.records, db.revisions], async () => {
+    const current = await db.records.get(id);
+    if (!current?.deletedAt) throw new Error('Only records in Trash can be permanently removed.');
+    await db.records.delete(id);
+    await db.revisions.where('recordId').equals(id).delete();
+  });
+  await runOrphanBlobGC().catch(error => console.warn('Deferred orphan cleanup', error));
   notify();
 }
 
 export async function purgeExpiredTrash(nowMs = Date.now()): Promise<number> {
   const cutoffMs = nowMs - TRASH_RETENTION_DAYS * 86400 * 1000;
-  const all = await db.records.toArray();
-  const expiredIds = all
-    .filter((r) => r.deletedAt && Date.parse(r.deletedAt) < cutoffMs)
-    .map((r) => r.id);
-
-  if (expiredIds.length === 0) return 0;
-  await db.records.bulkDelete(expiredIds);
-  for (const id of expiredIds) {
-    await db.revisions.where('recordId').equals(id).delete();
-  }
-  await runOrphanBlobGC();
-  notify();
-  return expiredIds.length;
+  const count = await db.transaction('rw', [db.records, db.revisions], async () => {
+    const cutoff = new Date(cutoffMs).toISOString();
+    const expired = await db.records.where('deletedAt').below(cutoff).filter(r => Boolean(r.deletedAt) && Date.parse(r.deletedAt!) < cutoffMs).primaryKeys();
+    if (!expired.length) return 0;
+    await db.records.bulkDelete(expired);
+    await db.revisions.where('recordId').anyOf(expired).delete();
+    return expired.length;
+  });
+  if (count) { await runOrphanBlobGC().catch(error => console.warn('Deferred orphan cleanup', error)); notify(); }
+  return count;
 }
 
 /**
  * Runs orphan-blob garbage collection ONLY for blobs no longer referenced by ANY active OR trashed record (15.06).
  */
 export async function runOrphanBlobGC(): Promise<number> {
+  return db.transaction('rw', [db.records, db.settings, db.undoStack, db.redoStack, db.revisions, db.outbox, db.blobs, db.drafts], async () => {
   const allRecords = await db.records.toArray();
   const referenced = new Set<string>();
 
   const scan = (val: unknown) => {
     if (!val) return;
     if (typeof val === 'string') {
-      if (/^[a-f0-9]{16,64}$/i.test(val)) referenced.add(val);
+      for (const match of val.matchAll(/(?:^|[^a-f0-9])([a-f0-9]{16,64})(?=$|[^a-f0-9])/gi)) referenced.add(match[1].toLowerCase());
       return;
     }
     if (Array.isArray(val)) {
@@ -490,20 +498,27 @@ export async function runOrphanBlobGC(): Promise<number> {
 
   for (const rec of allRecords) scan(rec.payload);
 
-  const blobs = await db.blobs.toArray();
-  const orphanHashes = blobs.filter((b) => !referenced.has(b.hash)).map((b) => b.hash);
+  scan(await db.settings.toArray());
+  scan(await db.undoStack.toArray());
+  scan(await db.redoStack.toArray());
+  scan(await db.revisions.toArray());
+  scan(await db.outbox.toArray());
+  scan(await db.drafts.toArray());
+  const cutoff = new Date(Date.now() - 86400000).toISOString();
+  const orphanHashes = (await db.blobs.where('createdAt').below(cutoff).primaryKeys()).filter(hash => !referenced.has(hash.toLowerCase()));
   if (orphanHashes.length > 0) {
     await db.blobs.bulkDelete(orphanHashes);
     for (const h of orphanHashes) blobUrlCache.invalidateHash(h);
   }
   return orphanHashes.length;
+  });
 }
 
 // --- 20-Step Global Undo & Redo ---
 
 export async function performUndo(): Promise<{ ok: boolean; label?: string }> {
-  const stack = await db.undoStack.orderBy('timestamp').toArray();
-  const latest = stack[stack.length - 1];
+  const result = await db.transaction('rw', [db.records, db.outbox, db.undoStack, db.redoStack, db.settings], async () => {
+  const latest = await db.undoStack.orderBy('timestamp').last();
   if (!latest) return { ok: false };
 
   const settings = await getOrInitSettings();
@@ -511,61 +526,69 @@ export async function performUndo(): Promise<{ ok: boolean; label?: string }> {
 
   for (let i = latest.changes.length - 1; i >= 0; i--) {
     const ch = latest.changes[i];
+    const current = await db.records.get(ch.recordId);
     if (ch.before) {
       const restored: LifeRecord = {
         ...ch.before,
         updatedAt: now,
-        rev: (ch.after?.rev ?? ch.before.rev) + 1,
+        rev: Math.max(current?.rev ?? 0, ch.after?.rev ?? 0, ch.before.rev) + 1,
         deviceId: settings.deviceId,
       };
       await db.records.put(restored);
-      await enqueueOutbox(restored, ch.after?.rev ?? ch.before.rev);
+      await enqueueOutbox(restored, current?.rev ?? ch.after?.rev ?? ch.before.rev);
     } else if (ch.after) {
       // Undo creation by soft-deleting cleanly
       const softRemoved: LifeRecord = {
         ...ch.after,
         deletedAt: now,
         updatedAt: now,
-        rev: ch.after.rev + 1,
+        rev: Math.max(current?.rev ?? 0, ch.after.rev) + 1,
         deviceId: settings.deviceId,
       };
       await db.records.put(softRemoved);
-      await enqueueOutbox(softRemoved, ch.after.rev);
+      await enqueueOutbox(softRemoved, current?.rev ?? ch.after.rev);
     }
   }
 
   await db.undoStack.delete(latest.id);
-  await db.redoStack.put(latest);
-  notify();
+  const top = await db.redoStack.orderBy('timestamp').last();
+  await db.redoStack.put({ ...latest, timestamp: top && top.timestamp >= now ? new Date(Date.parse(top.timestamp) + 1).toISOString() : now });
   return { ok: true, label: latest.label };
+  });
+  if (result.ok) notify();
+  return result;
 }
 
 export async function performRedo(): Promise<{ ok: boolean; label?: string }> {
-  const stack = await db.redoStack.orderBy('timestamp').toArray();
-  const latest = stack[stack.length - 1];
+  const result = await db.transaction('rw', [db.records, db.outbox, db.undoStack, db.redoStack, db.settings], async () => {
+  const latest = await db.redoStack.orderBy('timestamp').last();
   if (!latest) return { ok: false };
 
   const settings = await getOrInitSettings();
   const now = new Date().toISOString();
 
   for (const ch of latest.changes) {
+    const current = await db.records.get(ch.recordId);
     if (ch.after) {
       const reapplied: LifeRecord = {
         ...ch.after,
         deletedAt: ch.after.deletedAt ?? null,
         updatedAt: now,
-        rev: (ch.before?.rev ?? ch.after.rev) + 2,
+        rev: Math.max(current?.rev ?? 0, ch.before?.rev ?? 0, ch.after.rev) + 1,
         deviceId: settings.deviceId,
       };
       await db.records.put(reapplied);
-      await enqueueOutbox(reapplied, ch.after.rev);
+      await enqueueOutbox(reapplied, current?.rev ?? ch.after.rev);
     }
   }
 
   await db.redoStack.delete(latest.id);
-  await db.undoStack.put(latest);
-  notify();
+  const top = await db.undoStack.orderBy('timestamp').last();
+  await db.undoStack.put({ ...latest, timestamp: top && top.timestamp >= now ? new Date(Date.parse(top.timestamp) + 1).toISOString() : now });
   return { ok: true, label: latest.label };
+  });
+  if (result.ok) notify();
+  return result;
 }
 
 /**

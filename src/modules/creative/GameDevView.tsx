@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   Code,
@@ -42,6 +43,9 @@ interface GameEntityPayload {
 
 export const GameDevView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const games = useMemo(
     () => records.filter((r) => r.type === 'game_project' && !r.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records]
@@ -101,10 +105,10 @@ export const GameDevView: React.FC = () => {
 
   const xpCurve = useMemo(() => {
     const b = gPayload?.balancing ?? { baseXp: 100, growthRate: 1.38, maxLevel: 15, baseHp: 120, hpPerLvl: 24 };
-    const lvls = Math.max(5, Math.min(40, b.maxLevel));
+    const lvls = Math.max(5, Math.min(40, Number.isFinite(b.maxLevel) ? Math.floor(b.maxLevel) : 15));
     return Array.from({ length: lvls }).map((_, i) => {
       const lvl = i + 1;
-      const xp = Math.round(b.baseXp * Math.pow(b.growthRate, i));
+      const xp = Math.round(Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, (Number.isFinite(b.baseXp) ? b.baseXp : 100) * Math.pow(Number.isFinite(b.growthRate) ? Math.max(0, b.growthRate) : 1.38, i))));
       const hp = Math.round(b.baseHp + b.hpPerLvl * i);
       return { lvl, xp, hp };
     });
@@ -133,7 +137,7 @@ export const GameDevView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const title = newGameTitle.trim() || `Untitled Game ${games.length + 1}`;
               const rec = await createRecord<GameProjectPayload>('game_project', title, {
                 version: '0.1.0-alpha',
@@ -147,12 +151,12 @@ export const GameDevView: React.FC = () => {
               setNewGameTitle('');
               setSelectedGameId(rec.id);
               pushToast(`Created game project "${title}"`, { tone: 'ok' });
-            }}
+            })}
           >
             <Plus size={14} /> New Game
           </button>
           {activeGame && (
-            <button type="button" className="dp-btn" onClick={async () => { await softDeleteRecord(activeGame.id); setSelectedGameId(null); }}>
+            <button type="button" className="dp-btn" onClick={guardAction('action-2', async () => { await softDeleteRecord(activeGame.id); setSelectedGameId(null); })}>
               <Trash2 size={14} />
             </button>
           )}
@@ -243,7 +247,7 @@ export const GameDevView: React.FC = () => {
                     onChange={(e) => setEntityDetails(e.target.value)}
                     style={{ flex: 1, fontFamily: tab === 'logic' ? 'monospace' : 'inherit' }}
                   />
-                  <button type="button" className="dp-btn dp-btn-primary" onClick={() => void addEntity(defaultK)}>
+                  <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('entity-create', () => addEntity(defaultK))}>
                     <Plus size={13} /> Add
                   </button>
                 </div>

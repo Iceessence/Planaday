@@ -1,3 +1,4 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { CalendarPlus, Flame, Play, Plus, Target, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -36,6 +37,7 @@ function computeHabitStats(habit: HabitPayload, todayIso: string) {
 
 export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }) => {
   const { settings, records, logicalToday, activeDate, pushToast, startCountdownTimer } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
 
   // Goal creator
   const [goalTitle, setGoalTitle] = useState('');
@@ -83,6 +85,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
     () => records.filter((r) => r.type === 'habit') as Array<LifeRecord<HabitPayload>>,
     [records]
   );
+  const habitStatsById = useMemo(() => mode === 'habits' ? new Map(habits.map(h => [h.id, computeHabitStats(h.payload, logicalToday)])) : new Map<string, ReturnType<typeof computeHabitStats>>(), [habits, logicalToday, mode]);
   const filteredHabits = useMemo(() => {
     const q = ghSearch.trim().toLowerCase();
     const list = habits.filter((h) => {
@@ -95,12 +98,12 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
     const dir = habitSortDir === 'asc' ? 1 : -1;
     return [...list].sort((a, b) => {
       if (habitSortBy === 'title') return a.title.localeCompare(b.title) * dir;
-      const sa = computeHabitStats(a.payload, logicalToday);
-      const sb = computeHabitStats(b.payload, logicalToday);
+      const sa = habitStatsById.get(a.id) ?? { streak: 0, consistency28: 0 };
+      const sb = habitStatsById.get(b.id) ?? { streak: 0, consistency28: 0 };
       if (habitSortBy === 'consistency') return (sa.consistency28 - sb.consistency28) * dir;
       return (sa.streak - sb.streak) * dir;
     });
-  }, [habits, ghSearch, habitFilter, habitSortBy, habitSortDir, logicalToday]);
+  }, [habits, ghSearch, habitFilter, habitSortBy, habitSortDir, logicalToday, habitStatsById]);
   const routines = useMemo(() => records.filter((r) => r.type === 'routine'), [records]);
 
   const last7Days = useMemo(
@@ -120,7 +123,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
 
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-1', async (e) => {
             e.preventDefault();
             if (!goalTitle.trim()) return;
             await createRecord<GoalPayload>('goal', goalTitle.trim(), {
@@ -129,7 +132,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
             });
             setGoalTitle('');
             pushToast('Goal created', { canUndo: true });
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="New outcome goal…" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} />
           <input type="date" className="dp-input" style={{ width: 'auto' }} value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} />
@@ -281,7 +284,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
 
       <form
         className="dp-row"
-        onSubmit={async (e) => {
+        onSubmit={guardForm('form-2', async (e) => {
           e.preventDefault();
           if (!habitTitle.trim()) return;
           await createRecord<HabitPayload>('habit', habitTitle.trim(), {
@@ -293,7 +296,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
           });
           setHabitTitle('');
           pushToast('Habit added', { canUndo: true });
-        }}
+        })}
       >
         <input className="dp-input" style={{ flex: 2 }} placeholder="New gentle habit…" value={habitTitle} onChange={(e) => setHabitTitle(e.target.value)} />
         <select aria-label="Schedule" className="dp-select" style={{ width: 'auto' }} value={habitSchedule} onChange={(e) => setHabitSchedule(e.target.value as HabitPayload['scheduleType'])}>
@@ -351,7 +354,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
 
       <div className="dp-stack">
         {filteredHabits.map((h) => {
-          const stats = computeHabitStats(h.payload, logicalToday);
+          const stats = habitStatsById.get(h.id)!;
           return (
             <div key={h.id} className="dp-card dp-stack" style={{ padding: 12, gap: 8 }}>
               <div className="dp-between">
@@ -418,7 +421,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
       </div>
       <form
         className="dp-row"
-        onSubmit={async (e) => {
+        onSubmit={guardForm('form-3', async (e) => {
           e.preventDefault();
           if (!routineTitle.trim()) return;
           const steps = routineSteps
@@ -432,7 +435,7 @@ export const GoalsHabitsView: React.FC<{ mode: 'goals' | 'habits' }> = ({ mode }
           await createRecord('routine', routineTitle.trim(), { steps });
           setRoutineTitle('');
           pushToast('Routine saved');
-        }}
+        })}
       >
         <input className="dp-input" style={{ flex: 1 }} placeholder="Routine name (e.g., Morning Reset)" value={routineTitle} onChange={(e) => setRoutineTitle(e.target.value)} />
         <input className="dp-input" style={{ flex: 2 }} value={routineSteps} onChange={(e) => setRoutineSteps(e.target.value)} />

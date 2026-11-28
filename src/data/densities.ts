@@ -15,7 +15,7 @@ export const COOKING_DENSITIES: IngredientDensity[] = [
     aliases: ['water', 'milk', 'whole milk', 'skim milk', 'almond milk', 'oat milk', 'broth', 'stock', 'chicken broth', 'vegetable broth', 'buttermilk'],
     gramsPerCup: 240,
     densityGPerMl: 1.0,
-    notes: 'Exact baseline',
+    notes: 'Approximate cooking reference; milk and broth density varies.',
   },
   {
     id: 'all-purpose-flour',
@@ -126,13 +126,18 @@ export const MASS_TO_G: Record<string, number> = {
 };
 
 export function findIngredientDensity(name: string): IngredientDensity | undefined {
-  const norm = name.toLowerCase().trim();
+  const norm = name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   if (!norm) return undefined;
-  return COOKING_DENSITIES.find(
-    (d) =>
-      d.ingredient.toLowerCase().includes(norm) ||
-      d.aliases.some((alias) => norm === alias || norm.includes(alias))
-  );
+  // Exact and longest whole-word aliases win; avoid e.g. "coconut flour" matching oil via substrings.
+  const exact = COOKING_DENSITIES.find(d => d.aliases.includes(norm));
+  if (exact) return exact;
+  let best: IngredientDensity | undefined;
+  let bestLength = 0;
+  for (const d of COOKING_DENSITIES) for (const alias of d.aliases) {
+    const normalized = alias.replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    if (normalized.length > bestLength && (` ${norm} `).includes(` ${normalized} `)) { best = d; bestLength = normalized.length; }
+  }
+  return best;
 }
 
 export interface ConversionResult {
@@ -150,12 +155,14 @@ export function convertCookingUnit(
 ): ConversionResult {
   const f = fromUnit.toLowerCase().trim();
   const t = toUnit.toLowerCase().trim();
+  if (!Number.isFinite(amount)) return { value: amount, unit: fromUnit, warning: 'Invalid quantity' };
   if (f === t) return { value: amount, unit: toUnit };
 
-  const fromVol = VOLUME_TO_ML[f];
-  const toVol = VOLUME_TO_ML[t];
-  const fromMass = MASS_TO_G[f];
-  const toMass = MASS_TO_G[t];
+  const lookup = (units: Record<string, number>, key: string) => Object.prototype.hasOwnProperty.call(units, key) ? units[key] : undefined;
+  const fromVol = lookup(VOLUME_TO_ML, f);
+  const toVol = lookup(VOLUME_TO_ML, t);
+  const fromMass = lookup(MASS_TO_G, f);
+  const toMass = lookup(MASS_TO_G, t);
 
   if (fromVol && toVol) {
     return { value: (amount * fromVol) / toVol, unit: toUnit };
@@ -175,10 +182,7 @@ export function convertCookingUnit(
 
   // Exact cup <-> gram calibration when using cups
   if (fromVol && toMass) {
-    const grams =
-      f === 'cup' || f === 'cups'
-        ? amount * density.gramsPerCup
-        : amount * fromVol * density.densityGPerMl;
+    const grams = amount * fromVol * density.gramsPerCup / VOLUME_TO_ML.cup;
     return { value: grams / toMass, unit: toUnit, densityUsed: density };
   }
 
@@ -187,7 +191,7 @@ export function convertCookingUnit(
     if (t === 'cup' || t === 'cups') {
       return { value: grams / density.gramsPerCup, unit: toUnit, densityUsed: density };
     }
-    const ml = grams / density.densityGPerMl;
+    const ml = grams * VOLUME_TO_ML.cup / density.gramsPerCup;
     return { value: ml / toVol, unit: toUnit, densityUsed: density };
   }
 
@@ -201,6 +205,8 @@ export function convertCookingUnit(
 export function formatRationalFraction(val: number): string {
   if (!Number.isFinite(val)) return '';
   if (val === 0) return '0';
+  if (val < 0) return '-' + formatRationalFraction(-val);
+  if (val < 0.08) return Number(val.toPrecision(3)).toString();
   const whole = Math.floor(val + 1e-6);
   const rem = val - whole;
   const fractions: Array<[number, string]> = [
@@ -236,18 +242,19 @@ export function formatRationalFraction(val: number): string {
 export function parseQuantityText(raw: string): number {
   const cleaned = raw
     .trim()
-    .replace('⅛', ' 1/8')
-    .replace('¼', ' 1/4')
-    .replace('⅓', ' 1/3')
-    .replace('⅜', ' 3/8')
-    .replace('½', ' 1/2')
-    .replace('⅝', ' 5/8')
-    .replace('⅔', ' 2/3')
-    .replace('¾', ' 3/4')
-    .replace('⅞', ' 7/8')
+    .replace(/⅛/g, ' 1/8')
+    .replace(/¼/g, ' 1/4')
+    .replace(/⅓/g, ' 1/3')
+    .replace(/⅜/g, ' 3/8')
+    .replace(/½/g, ' 1/2')
+    .replace(/⅝/g, ' 5/8')
+    .replace(/⅔/g, ' 2/3')
+    .replace(/¾/g, ' 3/4')
+    .replace(/⅞/g, ' 7/8')
     .trim();
   if (!cleaned) return 0;
-  const parts = cleaned.split(/\s+/);
+  const negative = cleaned.startsWith('-');
+  const parts = cleaned.replace(/^[+-]/, '').trim().split(/\s+/);
   let total = 0;
   for (const p of parts) {
     if (p.includes('/')) {
@@ -260,5 +267,5 @@ export function parseQuantityText(raw: string): number {
       if (Number.isFinite(n)) total += n;
     }
   }
-  return total;
+  return negative ? -total : total;
 }

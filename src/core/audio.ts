@@ -106,6 +106,8 @@ class OfflineAudioEngine {
   private alarmIntervalId: number | null = null;
   private activeHtmlAudio: HTMLAudioElement | null = null;
   private activeObjectUrl: string | null = null;
+  private generation = 0;
+  private alarmOscillators = new Set<OscillatorNode>();
 
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -114,12 +116,13 @@ class OfflineAudioEngine {
     if (!AudioCtx) return null;
     if (!this.ctx) this.ctx = new AudioCtx();
     if (this.ctx.state === 'suspended') {
-      void this.ctx.resume();
+      void this.ctx.resume().catch(() => undefined);
     }
     return this.ctx;
   }
 
-  private playToneSequence(notes: ToneDef[], volume: number) {
+  private playToneSequence(notes: ToneDef[], volume: number, alarm = false) {
+    if (!Number.isFinite(volume) || volume <= 0) return;
     const ctx = this.ensureContext();
     if (!ctx) return;
     const clampedVol = Math.max(0.01, Math.min(1, volume));
@@ -137,6 +140,8 @@ class OfflineAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      if (alarm) this.alarmOscillators.add(osc);
+      osc.onended = () => { this.alarmOscillators.delete(osc); osc.disconnect(); gain.disconnect(); };
       osc.start(now + delay);
       osc.stop(now + delay + dur + 0.04);
     });
@@ -188,25 +193,31 @@ class OfflineAudioEngine {
    * Plays a single preview burst of any built-in musical ringtone OR a custom uploaded audio blob (`blob:<hash>`).
    */
   public async playRingtoneOnce(ringtoneId = 'sunrise_harp', volume = 0.75): Promise<void> {
-    const clampedVol = Math.max(0.02, Math.min(1, volume));
+    if (!Number.isFinite(volume) || volume <= 0) return;
+    const clampedVol = Math.min(1, volume);
+    const generation = this.generation;
     if (ringtoneId.startsWith('blob:')) {
       const hash = ringtoneId.slice(5);
-      const url = await getBlobObjectUrl(hash);
+      const url = await getBlobObjectUrl(hash, false, true).catch(() => null);
+      if (generation !== this.generation) { if (url) URL.revokeObjectURL(url); return; }
       if (url && typeof Audio !== 'undefined') {
         this.stopAlarmLoop();
         this.activeObjectUrl = url;
         const audio = new Audio(url);
         audio.volume = clampedVol;
         this.activeHtmlAudio = audio;
+        audio.onended = () => { if (this.activeHtmlAudio === audio) this.stopAlarmLoop(); };
         try {
           await audio.play();
           return;
         } catch {
+          if (this.activeHtmlAudio !== audio) return;
+          this.stopAlarmLoop();
           // fallback to synth if autoplay blocked
         }
       }
     }
-    const key = (ringtoneId in RINGTONE_PATTERNS ? ringtoneId : 'sunrise_harp') as AlarmRingtoneId;
+    const key = (Object.prototype.hasOwnProperty.call(RINGTONE_PATTERNS, ringtoneId) ? ringtoneId : 'sunrise_harp') as AlarmRingtoneId;
     this.playToneSequence(RINGTONE_PATTERNS[key], clampedVol);
   }
 
@@ -215,13 +226,16 @@ class OfflineAudioEngine {
    */
   public startAlarmLoop(ringtoneId = 'sunrise_harp', targetVolume = 0.85, rampSec = 20): void {
     this.stopAlarmLoop();
-    const clampedTarget = Math.max(0.05, Math.min(1, targetVolume));
+    if (!Number.isFinite(targetVolume) || targetVolume <= 0) return;
+    const generation = this.generation;
+    const clampedTarget = Math.min(1, targetVolume);
     const startedAt = Date.now();
-    const rampMs = Math.max(1000, rampSec * 1000);
+    const rampMs = Number.isFinite(rampSec) ? Math.max(1, rampSec * 1000) : 20000;
 
     if (ringtoneId.startsWith('blob:')) {
       const hash = ringtoneId.slice(5);
-      void getBlobObjectUrl(hash).then((url) => {
+      void getBlobObjectUrl(hash, false, true).catch(() => null).then((url) => {
+        if (generation !== this.generation) { if (url) URL.revokeObjectURL(url); return; }
         if (url && typeof Audio !== 'undefined') {
           this.activeObjectUrl = url;
           const audio = new Audio(url);
@@ -229,6 +243,8 @@ class OfflineAudioEngine {
           audio.volume = Math.min(clampedTarget, Math.max(0.15, clampedTarget * 0.35));
           this.activeHtmlAudio = audio;
           audio.play().catch(() => {
+            if (generation !== this.generation) return;
+            this.stopAlarmLoop();
             this.startSynthAlarmLoop('sunrise_harp', clampedTarget, rampMs, startedAt);
           });
           this.alarmIntervalId = window.setInterval(() => {
@@ -243,7 +259,7 @@ class OfflineAudioEngine {
       return;
     }
 
-    const key = (ringtoneId in RINGTONE_PATTERNS ? ringtoneId : 'sunrise_harp') as AlarmRingtoneId;
+    const key = (Object.prototype.hasOwnProperty.call(RINGTONE_PATTERNS, ringtoneId) ? ringtoneId : 'sunrise_harp') as AlarmRingtoneId;
     this.startSynthAlarmLoop(key, clampedTarget, rampMs, startedAt);
   }
 
@@ -252,13 +268,16 @@ class OfflineAudioEngine {
     const playStep = () => {
       const progress = Math.min(1, (Date.now() - startedAt) / rampMs);
       const vol = Math.min(targetVolume, Math.max(0.12, targetVolume * (0.3 + 0.7 * progress)));
-      this.playToneSequence(RINGTONE_PATTERNS[key], vol);
+      this.playToneSequence(RINGTONE_PATTERNS[key], vol, true);
     };
     playStep();
     this.alarmIntervalId = window.setInterval(playStep, def.loopIntervalMs);
   }
 
   public stopAlarmLoop(): void {
+    this.generation++;
+    for (const osc of this.alarmOscillators) { try { osc.stop(); } catch { /* already stopped */ } }
+    this.alarmOscillators.clear();
     if (this.alarmIntervalId !== null) {
       window.clearInterval(this.alarmIntervalId);
       this.alarmIntervalId = null;
@@ -343,7 +362,7 @@ class OfflineAudioEngine {
       });
       this.channels.set(channel, {
         gain,
-        stop: () => oscs.forEach((o) => { try { o.stop(); } catch { /* noop */ } }),
+        stop: () => { oscs.forEach((o) => { try { o.stop(); } catch { /* noop */ } o.disconnect(); }); filter.disconnect(); gain.disconnect(); },
       });
       return;
     }
@@ -398,6 +417,7 @@ class OfflineAudioEngine {
       stop: () => {
         try {
           src.stop();
+          src.disconnect(); filter.disconnect(); gain.disconnect();
         } catch {
           // ignore
         }

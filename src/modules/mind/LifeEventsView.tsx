@@ -1,3 +1,4 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { Cake, Gift, Hourglass, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -17,8 +18,13 @@ const OCCASION_CATEGORIES = [
   'Other',
 ];
 
+function validMonthDay(month: number, day: number): boolean {
+  return Number.isInteger(month) && month >= 1 && month <= 12 && Number.isInteger(day) && day >= 1 && day <= new Date(Date.UTC(2000, month, 0)).getUTCDate();
+}
+
 export const LifeEventsView: React.FC<{ initialTab?: 'occasions' | 'countdowns' }> = ({ initialTab = 'occasions' }) => {
   const { settings, records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
   const [tab, setTab] = useState<'occasions' | 'countdowns'>(initialTab);
   const [catFilter, setCatFilter] = useState('All');
 
@@ -53,14 +59,15 @@ export const LifeEventsView: React.FC<{ initialTab?: 'occasions' | 'countdowns' 
           rsvpCount?: number;
           budget?: number;
         };
-        let nextIso = resolveAnnualFloatingDate(p.month || 1, p.day || 1, currentYear, p.feb29Policy ?? 'feb28');
-        if (!nextIso || nextIso < logicalToday) {
-          nextIso = resolveAnnualFloatingDate(p.month || 1, p.day || 1, currentYear + 1, p.feb29Policy ?? 'feb28');
+        let nextIso: string | null = null;
+        for (let year = currentYear; validMonthDay(p.month || 1, p.day || 1) && year <= currentYear + 8; year++) {
+          const candidate = resolveAnnualFloatingDate(p.month || 1, p.day || 1, year, p.feb29Policy ?? 'feb28');
+          if (candidate && candidate >= logicalToday) { nextIso = candidate; break; }
         }
         const daysAway = nextIso ? diffDaysIso(logicalToday, nextIso) : 999;
         // Optional birth year — NEVER invent ages when birthYear is omitted! (Section 12.04)
         const turningAge =
-          p.birthYear && nextIso ? Number(nextIso.slice(0, 4)) - p.birthYear : null;
+          p.birthYear && nextIso && p.birthYear <= Number(nextIso.slice(0, 4)) ? Number(nextIso.slice(0, 4)) - p.birthYear : null;
         return { ev, p, nextIso, daysAway, turningAge };
       })
       .sort((a, b) => a.daysAway - b.daysAway);
@@ -133,9 +140,10 @@ export const LifeEventsView: React.FC<{ initialTab?: 'occasions' | 'countdowns' 
           <form
             className="dp-card dp-stack"
             style={{ padding: 12 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-1', async (e) => {
               e.preventDefault();
               if (!title.trim()) return;
+              if (!validMonthDay(month, day) || (birthYear.trim() && (!Number.isInteger(Number(birthYear)) || Number(birthYear) < 1 || Number(birthYear) > currentYear))) { pushToast('Enter a valid month, day and optional year.', { tone: 'warn' }); return; }
               await createRecord(
                 'life_event',
                 title.trim(),
@@ -153,7 +161,7 @@ export const LifeEventsView: React.FC<{ initialTab?: 'occasions' | 'countdowns' 
               setBirthYear('');
               setGiftIdeas('');
               pushToast('Saved life event', { canUndo: true });
-            }}
+            })}
           >
             <div className="dp-row">
               <input className="dp-input" style={{ flex: 2 }} placeholder="Occasion (e.g., Maya's Birthday)" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -229,13 +237,13 @@ export const LifeEventsView: React.FC<{ initialTab?: 'occasions' | 'countdowns' 
         <div className="dp-stack">
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-2', async (e) => {
               e.preventDefault();
               if (!cdTitle.trim()) return;
               await createRecord('countdown', cdTitle.trim(), { targetDate: cdDate });
               setCdTitle('');
               pushToast('Countdown created', { canUndo: true });
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2 }} placeholder="Standalone countdown title…" value={cdTitle} onChange={(e) => setCdTitle(e.target.value)} />
             <input type="date" className="dp-input" style={{ width: 'auto' }} value={cdDate} onChange={(e) => setCdDate(e.target.value)} />

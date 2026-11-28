@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AlarmClock, BellOff, Volume2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { getRingtoneLabel } from '../../core/audio';
@@ -7,19 +7,18 @@ import { ModalDialog } from './ModalDialog';
 
 export const GlobalAlarmRingModal: React.FC = () => {
   const { ringingAlarm, dismissRingingAlarm, snoozeRingingAlarm } = useApp();
-  const [answer, setAnswer] = useState('');
-  const [mathNums, setMathNums] = useState<[number, number]>([14, 19]);
-
-  useEffect(() => {
-    if (ringingAlarm) {
-      setAnswer('');
-      setMathNums([Math.floor(11 + Math.random() * 18), Math.floor(12 + Math.random() * 17)]);
-    }
-  }, [ringingAlarm]);
-
   if (!ringingAlarm) return null;
+  return <AlarmChallenge key={ringingAlarm.id} alarm={ringingAlarm} dismiss={dismissRingingAlarm} snooze={snoozeRingingAlarm} />;
+};
 
-  const p = normalizeAlarmPayload(ringingAlarm.payload as Record<string, unknown>);
+function AlarmChallenge({ alarm, dismiss, snooze }: {
+  alarm: NonNullable<ReturnType<typeof useApp>['ringingAlarm']>;
+  dismiss: ReturnType<typeof useApp>['dismissRingingAlarm'];
+  snooze: ReturnType<typeof useApp>['snoozeRingingAlarm'];
+}) {
+  const [answer, setAnswer] = useState('');
+  const [mathNums] = useState(() => [Math.floor(11 + Math.random() * 18), Math.floor(12 + Math.random() * 17)]);
+  const p = normalizeAlarmPayload(alarm.payload as Record<string, unknown>);
   const challengeOk =
     p.challenge === 'none' ||
     (p.challenge === 'math' && Number(answer.trim()) === mathNums[0] + mathNums[1]) ||
@@ -29,8 +28,9 @@ export const GlobalAlarmRingModal: React.FC = () => {
   return (
     <ModalDialog
       open={true}
-      title={`⏰ ${ringingAlarm.title}`}
-      onClose={dismissRingingAlarm}
+      title={`⏰ ${alarm.title}`}
+      onClose={() => dismiss(false)}
+      dismissible={p.challenge === 'none'}
     >
       <div className="dp-stack" style={{ gap: 12 }}>
         <div
@@ -70,6 +70,10 @@ export const GlobalAlarmRingModal: React.FC = () => {
             </p>
             <input
               autoFocus
+              aria-label="Wake-up challenge answer"
+              inputMode={p.challenge === 'math' || p.challenge === 'memory' ? 'numeric' : 'text'}
+              autoComplete="off"
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && challengeOk) { e.preventDefault(); dismiss(true); } }}
               className="dp-input"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
@@ -83,7 +87,7 @@ export const GlobalAlarmRingModal: React.FC = () => {
             <button
               type="button"
               className="dp-btn"
-              onClick={() => snoozeRingingAlarm(p.snoozeMin)}
+              onClick={() => snooze(p.snoozeMin)}
             >
               😴 Snooze +{p.snoozeMin}m
             </button>
@@ -91,7 +95,7 @@ export const GlobalAlarmRingModal: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn dp-btn-ghost dp-btn-sm"
-                onClick={() => dismissRingingAlarm(false)}
+                onClick={() => dismiss(false)}
               >
                 Emergency Bypass
               </button>
@@ -101,7 +105,7 @@ export const GlobalAlarmRingModal: React.FC = () => {
             type="button"
             className="dp-btn dp-btn-primary"
             disabled={!challengeOk}
-            onClick={() => dismissRingingAlarm(true)}
+            onClick={() => dismiss(true)}
           >
             <BellOff size={15} /> Dismiss &amp; Open Today
           </button>

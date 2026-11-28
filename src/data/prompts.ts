@@ -74,6 +74,11 @@ export const DIARY_PROMPTS: CategorizedPrompt[] = [
   { category: 'Weekly Review', text: 'What did your sleep, meals, and movement look like this week without judgment?' },
   { category: 'Weekly Review', text: 'What is one experiment you want to try next week to make mornings or evenings smoother?' },
   { category: 'Weekly Review', text: 'What are you proud of finishing or sticking with this week?' },
+  { category: 'Planning & Focus', text: 'Which three outcomes deserve the most attention today, and what can wait?' },
+  { category: 'Planning & Focus', text: 'Where is your next uninterrupted focus block, and what will you do during it?' },
+  { category: 'Learning', text: 'What did you understand today that you could not explain yesterday?' },
+  { category: 'Learning', text: 'Which idea would you like to revisit a week from now?' },
+  { category: 'Weekly Review', text: 'Which recurring commitment actually earned its place on your calendar this week?' },
 ];
 
 export const THOUGHT_PROMPTS: CategorizedPrompt[] = [
@@ -123,6 +128,10 @@ export const THOUGHT_PROMPTS: CategorizedPrompt[] = [
   { category: 'Unwind & Clarify', text: 'What deserves a firm "no" or "not this month" so my "yes" has room to breathe?' },
   { category: 'Unwind & Clarify', text: 'What would make tomorrow morning 20% calmer before I even have coffee?' },
   { category: 'Unwind & Clarify', text: 'What is going surprisingly right right now that I keep glossing over?' },
+  { category: 'Ideas & Projects', text: 'Describe one useful feature you could finish without expanding the scope of your project.' },
+  { category: 'Problem Solving', text: 'Separate the facts you have observed from the assumptions you need to test.' },
+  { category: 'Learning', text: 'Capture one question you want to investigate and the evidence that would answer it.' },
+  { category: 'Brain Sweep', text: 'What information belongs in permanent notes rather than on today’s to-do list?' },
 ];
 
 export function getDiaryPromptCategories(customPrompts?: string[]): string[] {

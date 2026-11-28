@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   CheckCircle2,
   Command,
@@ -106,6 +106,7 @@ export const TopBar: React.FC = () => {
   const [fallbackInput, setFallbackInput] = useState(settings.syncFallbackUrl || '');
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string>('');
+  const testingRef = useRef(false);
 
   const openSyncModal = () => {
     setPrimaryInput(settings.syncServerUrl || '');
@@ -117,6 +118,8 @@ export const TopBar: React.FC = () => {
   const syncLabel =
     syncState.status === 'synced'
       ? 'Synced'
+      : syncState.status === 'deferred'
+        ? `Saved locally (${syncState.pendingCount})`
       : syncState.status === 'syncing'
         ? 'Syncing…'
         : syncState.status === 'offline'
@@ -134,48 +137,37 @@ export const TopBar: React.FC = () => {
 
   const handleSaveAndTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTesting(true);
-    setTestMsg('');
-    const normPrimary = normalizeServerUrl(primaryInput);
-    const normFallback = normalizeServerUrl(fallbackInput);
-    setPrimaryInput(normPrimary);
-    setFallbackInput(normFallback);
-
-    await patchSettings({
-      operatingMode: 'docker-sync',
-      syncServerUrl: normPrimary,
-      syncFallbackUrl: normFallback,
-    });
-
-    const targets = [normPrimary, normFallback].filter(Boolean);
-    if (targets.length === 0) {
-      const sameOrigin = await testServerConnection('');
-      setTestMsg(
-        sameOrigin.ok
-          ? `✓ Connected to same-origin server (${sameOrigin.latencyMs}ms)`
-          : 'Enter your Docker LAN IP (e.g. http://192.168.88.31:3000) or Tailscale IP (http://100.x.y.z:3000).'
-      );
-      setTesting(false);
-      return;
-    }
-
-    const lines: string[] = [];
-    let anyOk = false;
-    for (const url of targets) {
-      const res = await testServerConnection(url);
-      if (res.ok) {
-        anyOk = true;
-        lines.push(`✓ ${res.normalizedUrl} — Connected (${res.latencyMs}ms · ${res.recordCount ?? 0} records)`);
-      } else {
-        lines.push(`✕ ${res.normalizedUrl} — ${res.error}`);
+    if (testingRef.current) return;
+    testingRef.current = true;
+    setTesting(true); setTestMsg('');
+    try {
+      const normPrimary = normalizeServerUrl(primaryInput);
+      const normFallback = normalizeServerUrl(fallbackInput);
+      for (const url of [normPrimary, normFallback].filter(Boolean)) {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+          throw new Error('Use an HTTP(S) server URL without credentials, query parameters or fragments.');
+        }
       }
-    }
-    setTestMsg(lines.join('\n'));
-    if (anyOk) {
+      setPrimaryInput(normPrimary); setFallbackInput(normFallback);
+      const targets = Array.from(new Set([normPrimary, normFallback].filter(Boolean)));
+      const results = await Promise.all((targets.length ? targets : ['']).map((url) => testServerConnection(url)));
+      setTestMsg(results.map((r) => r.ok
+        ? `✓ ${r.normalizedUrl || 'Same origin'} — Connected (${r.latencyMs}ms · ${r.recordCount ?? 0} records)`
+        : `✕ ${r.normalizedUrl || 'Same origin'} — ${r.error}`).join('\n'));
+      if (!results.some((r) => r.ok)) {
+        setTestMsg((msg) => `${msg}\nExisting settings retained. Check the address and try again.`);
+        return;
+      }
+      // Do not forward a previous server's bearer token to a newly configured address.
+      const changed = normPrimary !== normalizeServerUrl(settings.syncServerUrl || '') || normFallback !== normalizeServerUrl(settings.syncFallbackUrl || '');
+      await patchSettings({ operatingMode: 'docker-sync', syncServerUrl: normPrimary, syncFallbackUrl: normFallback,
+        ...(changed ? { syncAuthToken: '' } : {}) });
       await triggerSyncNow();
-      pushToast('Connected & synced with Planaday server!');
-    }
-    setTesting(false);
+      pushToast(changed && settings.syncAuthToken ? 'Server changed. Pair this device again in Settings if required.' : 'Server connection saved; sync requested.');
+    } catch (err) {
+      setTestMsg(err instanceof Error ? err.message : 'Connection setup failed.');
+    } finally { testingRef.current = false; setTesting(false); }
   };
 
   return (
@@ -190,7 +182,7 @@ export const TopBar: React.FC = () => {
         >
           <Menu size={21} />
         </button>
-        <div className="dp-mobile-title dp-mobile-only" onClick={() => setMobileMenuOpen(true)}>
+        <div className="dp-mobile-title dp-mobile-only" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMobileMenuOpen(true); } }} onClick={() => setMobileMenuOpen(true)}>
           <strong>{currentMobileTitle}</strong>
           {settings.activeProfileId !== 'all' && (
             <span className="dp-pill" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
@@ -306,6 +298,7 @@ export const TopBar: React.FC = () => {
           type="button"
           className={`dp-btn dp-btn-sm dp-desktop-only ${settings.lowEnergyMode ? 'dp-btn-primary' : ''}`}
           onClick={() => void patchSettings({ lowEnergyMode: !settings.lowEnergyMode })}
+          aria-pressed={settings.lowEnergyMode}
           title="Toggle Low-Energy / Overwhelmed Mode"
         >
           <Sparkles size={14} />
@@ -355,7 +348,7 @@ export const TopBar: React.FC = () => {
       </header>
 
       {/* Quick Server Sync & Tailscale Connection Wizard Modal */}
-      <ModalDialog open={syncModalOpen} onClose={() => setSyncModalOpen(false)} title="Docker & Tailscale Sync Connection">
+      <ModalDialog open={syncModalOpen} dismissible={!testing} onClose={() => { if (!testingRef.current) setSyncModalOpen(false); }} title="Docker & Tailscale Sync Connection">
         <form className="dp-stack" onSubmit={handleSaveAndTest}>
           <div className="dp-card dp-stack" style={{ padding: 12, background: 'var(--dp-surface-2)', gap: 6 }}>
             <div className="dp-between">
@@ -377,11 +370,13 @@ export const TopBar: React.FC = () => {
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong style={{ fontSize: '0.86rem' }}>1. Primary Server URL (Home Wi-Fi / LAN)</strong>
             <span className="dp-muted" style={{ fontSize: '0.78rem' }}>
-              Must include port <code>:3000</code> — e.g. <code>http://192.168.88.31:3000</code>
+              Include the port if your server uses a non-default port — e.g. <code>http://192.168.88.31:3000</code>
             </span>
             <input
               className="dp-input"
               placeholder="http://192.168.88.31:3000"
+              disabled={testing}
+              inputMode="url" autoCapitalize="none" spellCheck={false}
               value={primaryInput}
               onChange={(e) => setPrimaryInput(e.target.value)}
             />
@@ -395,6 +390,8 @@ export const TopBar: React.FC = () => {
             <input
               className="dp-input"
               placeholder="http://100.x.y.z:3000 (optional Tailscale fallback)"
+              disabled={testing}
+              inputMode="url" autoCapitalize="none" spellCheck={false}
               value={fallbackInput}
               onChange={(e) => setFallbackInput(e.target.value)}
             />
@@ -402,6 +399,7 @@ export const TopBar: React.FC = () => {
 
           {testMsg && (
             <pre
+              role="status"
               className="dp-card"
               style={{
                 margin: 0,
@@ -419,10 +417,13 @@ export const TopBar: React.FC = () => {
             <button
               type="button"
               className="dp-btn dp-btn-sm"
+              disabled={testing}
               onClick={async () => {
-                await patchSettings({ operatingMode: 'offline-phone' });
-                setSyncModalOpen(false);
-                pushToast('Switched to Standalone Offline Mode');
+                if (testingRef.current) return;
+                testingRef.current = true; setTesting(true);
+                try { await patchSettings({ operatingMode: 'offline-phone' }); setSyncModalOpen(false); pushToast('Switched to Standalone Offline Mode'); }
+                catch { setTestMsg('Could not switch mode. Please retry.'); }
+                finally { testingRef.current = false; setTesting(false); }
               }}
             >
               Use Offline Only
@@ -431,7 +432,8 @@ export const TopBar: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn dp-btn-sm"
-                onClick={() => void triggerSyncNow()}
+                disabled={testing || syncState.status === 'syncing'}
+                onClick={() => void triggerSyncNow().catch(() => setTestMsg('Sync request failed.'))}
               >
                 <RefreshCw size={13} /> Sync Now
               </button>

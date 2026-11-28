@@ -53,6 +53,7 @@ class SheetFormulaError extends Error {
 }
 
 export function colIndexToLetter(colIdx: number): string {
+  if (!Number.isSafeInteger(colIdx) || colIdx < 0) throw new RangeError('Invalid column index');
   let n = colIdx + 1;
   let out = '';
   while (n > 0) {
@@ -75,7 +76,9 @@ export function letterToColIndex(letters: string): number {
 export function parseCellRef(ref: string): { col: number; row: number } | null {
   const m = ref.trim().toUpperCase().match(/^([A-Z]+)([0-9]+)$/);
   if (!m) return null;
-  return { col: letterToColIndex(m[1]), row: Number(m[2]) - 1 };
+  const col = letterToColIndex(m[1]);
+  const row = Number(m[2]) - 1;
+  return Number.isSafeInteger(col) && Number.isSafeInteger(row) && col >= 0 && row >= 0 ? { col, row } : null;
 }
 
 export function cellKey(col: number, row: number): string {
@@ -93,8 +96,9 @@ export function expandCellRange(rangeStr: string): string[] {
   const r1 = Math.min(a.row, b.row);
   const r2 = Math.max(a.row, b.row);
   const keys: string[] = [];
-  for (let r = r1; r <= r2 && keys.length < 5000; r++) {
-    for (let c = c1; c <= c2 && keys.length < 5000; c++) {
+  if ((r2 - r1 + 1) * (c2 - c1 + 1) > 100_000) throw new SheetFormulaError('#VALUE!', 'Range exceeds 100,000 cells; use a smaller range');
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
       keys.push(cellKey(c, r));
     }
   }
@@ -211,8 +215,8 @@ export interface EvaluatedCellResult {
 export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<string, EvaluatedCellResult>> {
   const byName = new Map(sheets.map((s) => [s.name.toLowerCase(), s]));
   const byId = new Map(sheets.map((s) => [s.id, s]));
-  const cache: Record<string, Record<string, EvaluatedCellResult>> = {};
-  for (const s of sheets) cache[s.id] = {};
+  const cache: Record<string, Record<string, EvaluatedCellResult>> = Object.create(null);
+  for (const s of sheets) cache[s.id] = Object.create(null);
 
   // CONT-006: Never silently fall back to active sheet when an explicit worksheet name does not exist!
   const resolveExplicitSheetId = (rawSheetName: string): string => {
@@ -228,6 +232,7 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     const upKey = key.toUpperCase();
     if (cache[sheetId]?.[upKey]) return cache[sheetId][upKey];
     const visitTag = `${sheetId}!${upKey}`;
+    if (visiting.size >= 512) return { value: '#ERR!', error: 'Formula dependency depth exceeds 512' };
     if (visiting.has(visitTag)) return { value: '#CIRC!', error: 'Circular reference detected' };
 
     const sheet = byId.get(sheetId);
@@ -239,6 +244,7 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     }
 
     const raw = cell.raw.trim();
+    if (raw.startsWith('=') && raw.length > 16000) return cache[sheetId][upKey] = { value: '#ERR!', error: 'Formula is too long' };
     if (!raw.startsWith('=')) {
       const num = Number(raw);
       const res: EvaluatedCellResult =
@@ -373,11 +379,11 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     }
     if (fn === 'MIN') {
       const ns = extractNumbers(sheetId, args, visiting);
-      return { value: ns.length ? Math.min(...ns) : 0 };
+      return { value: ns.length ? ns.reduce((a, n) => Math.min(a, n), Infinity) : 0 };
     }
     if (fn === 'MAX') {
       const ns = extractNumbers(sheetId, args, visiting);
-      return { value: ns.length ? Math.max(...ns) : 0 };
+      return { value: ns.length ? ns.reduce((a, n) => Math.max(a, n), -Infinity) : 0 };
     }
     if (fn === 'MEDIAN') {
       const ns = extractNumbers(sheetId, args, visiting).sort((a, b) => a - b);
@@ -521,7 +527,8 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     let expanded = expr.trim();
     if (curSheet?.namedRanges) {
       for (const [nrName, nrRef] of Object.entries(curSheet.namedRanges)) {
-        expanded = expanded.replace(new RegExp(`\\b${nrName}\\b`, 'gi'), nrRef);
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(nrName)) continue;
+        expanded = expanded.replace(new RegExp(`"(?:""|[^"])*"|\\b${nrName}\\b`, 'gi'), match => match.startsWith('"') ? match : nrRef);
       }
     }
 
@@ -557,7 +564,7 @@ export function evaluateWorkbook(sheets: WorksheetDef[]): Record<string, Record<
     if (!Number.isFinite(numVal)) {
       return { value: '#DIV/0!', error: 'Division by zero or non-finite result' };
     }
-    return { value: Math.round(numVal * 1e10) / 1e10 };
+    return { value: Math.abs(numVal) >= 1e12 || (numVal !== 0 && Math.abs(numVal) < 1e-10) ? numVal : Math.round(numVal * 1e10) / 1e10 };
   };
 
   for (const s of sheets) {
@@ -592,6 +599,7 @@ export function exportSheetToDelimited(
   const rowLimit = maxUsedRow >= 0 ? maxUsedRow + 1 : Math.min(sheet.rows, 5);
   const colLimit = maxUsedCol >= 0 ? maxUsedCol + 1 : sheet.cols;
 
+  if (rowLimit * colLimit > 2_000_000) throw new Error('Export exceeds two million cells; split into smaller sheets.');
   const lines: string[] = [];
   for (let r = 0; r < rowLimit; r++) {
     const cols: string[] = [];

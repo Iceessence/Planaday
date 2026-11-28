@@ -1,3 +1,4 @@
+import { scopeKey, withScopedRecords } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Download, Image as ImageIcon, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -108,21 +109,14 @@ export const DiaryView: React.FC = () => {
   const entry: DiaryPayload = todayDiaryRec?.payload ?? { date: activeDate, emotions: [], extraEntries: [] };
 
   const saveDiary = async (patch: Partial<DiaryPayload>) => {
-    if (todayDiaryRec) {
-      await updateRecord<DiaryPayload>(
-        todayDiaryRec.id,
-        (c) => ({ ...c, payload: { ...c.payload, ...patch } }),
-        { skipUndo: true }
-      );
-    } else {
-      await createRecord<DiaryPayload>(
-        'diary',
-        `Daily Reflection — ${activeDate}`,
-        { date: activeDate, ...patch },
-        { category: 'Diary', tags: ['reflection'] },
-        { skipUndo: true }
-      );
-    }
+    await withScopedRecords(settings, 'diary', async (fresh) => {
+      const current = fresh.find(r => (r.payload as DiaryPayload).date === activeDate);
+      if (current) {
+        await updateRecord<DiaryPayload>(current.id, c => ({ ...c, payload: { ...c.payload, ...patch } }), { skipUndo: true });
+      } else {
+        await createRecord<DiaryPayload>('diary', `Daily Reflection — ${activeDate}`, { ...patch, date: activeDate }, { category: 'Diary', tags: ['reflection'], workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId }, { skipUndo: true });
+      }
+    });
   };
 
   const exportMarkdown = () => {
@@ -132,7 +126,7 @@ export const DiaryView: React.FC = () => {
         const p = d.payload;
         return [
           `# ${p.date} — Mood: ${p.mood || 'Unset'}`,
-          `Energy: ${p.energy ?? '-'}/5 · Stress: ${p.stress ?? '-'}/5 · Sleep: ${p.sleepHours ?? '-'}h`,
+          `Energy: ${p.energy ?? '-'} · Stress: ${p.stress ?? '-'} · Sleep: ${p.sleepHours ?? '-'}h`,
           p.summary ? `\n## Summary\n${p.summary}` : '',
           p.wins ? `\n## Wins\n${p.wins}` : '',
           p.challenges ? `\n## Challenges\n${p.challenges}` : '',
@@ -162,11 +156,13 @@ export const DiaryView: React.FC = () => {
       }
     }
     let alive = true;
+    setPhotoUrls({});
     const created: string[] = [];
     (async () => {
       const next: Record<string, string> = {};
       for (const h of hashes) {
-        const u = await getBlobObjectUrl(h);
+        const u = await getBlobObjectUrl(h, false, true);
+        if (!alive) { if (u) URL.revokeObjectURL(u); break; }
         if (u) {
           created.push(u);
           next[h] = u;
@@ -705,7 +701,7 @@ export const DiaryView: React.FC = () => {
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Summary</strong>
             <SafeTextarea
-              recordKey={`diary:${activeDate}:summary`}
+              recordKey={`diary:${scopeKey(settings)}:${activeDate}:summary`}
               externalValue={entry.summary ?? ''}
               onCommit={(val) => saveDiary({ summary: val })}
               onSaveStateChange={setDiarySaveState}
@@ -715,7 +711,7 @@ export const DiaryView: React.FC = () => {
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Gratitude</strong>
             <SafeTextarea
-              recordKey={`diary:${activeDate}:gratitude`}
+              recordKey={`diary:${scopeKey(settings)}:${activeDate}:gratitude`}
               externalValue={entry.gratitude ?? ''}
               onCommit={(val) => saveDiary({ gratitude: val })}
               onSaveStateChange={setDiarySaveState}
@@ -725,7 +721,7 @@ export const DiaryView: React.FC = () => {
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Wins</strong>
             <SafeTextarea
-              recordKey={`diary:${activeDate}:wins`}
+              recordKey={`diary:${scopeKey(settings)}:${activeDate}:wins`}
               externalValue={entry.wins ?? ''}
               onCommit={(val) => saveDiary({ wins: val })}
               onSaveStateChange={setDiarySaveState}
@@ -735,7 +731,7 @@ export const DiaryView: React.FC = () => {
           <label className="dp-stack" style={{ gap: 4 }}>
             <strong>Challenges &amp; Learned</strong>
             <SafeTextarea
-              recordKey={`diary:${activeDate}:learned`}
+              recordKey={`diary:${scopeKey(settings)}:${activeDate}:learned`}
               externalValue={entry.learned ?? ''}
               onCommit={(val) => saveDiary({ learned: val })}
               onSaveStateChange={setDiarySaveState}
@@ -808,7 +804,7 @@ export const DiaryView: React.FC = () => {
           />
         </div>
         <SafeTextarea
-          recordKey={`diary:${activeDate}:narrative`}
+          recordKey={`diary:${scopeKey(settings)}:${activeDate}:narrative`}
           externalValue={entry.narrative ?? ''}
           onCommit={(val) => saveDiary({ narrative: val })}
           onSaveStateChange={setDiarySaveState}

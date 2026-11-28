@@ -53,7 +53,7 @@ export const SortFilterBar: React.FC<SortFilterBarProps> = ({
   shownCount,
   onReset,
 }) => {
-  const isFiltered = shownCount !== totalCount || Boolean(search.trim());
+  const searchRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <div
@@ -80,6 +80,8 @@ export const SortFilterBar: React.FC<SortFilterBarProps> = ({
         >
           <Search size={14} className="dp-muted" />
           <input
+            ref={searchRef}
+            type="search"
             aria-label={searchPlaceholder}
             style={{
               flex: 1,
@@ -88,7 +90,7 @@ export const SortFilterBar: React.FC<SortFilterBarProps> = ({
               color: 'var(--dp-ink)',
               padding: '6px 0',
               fontSize: '0.86rem',
-              outline: 'none',
+              outlineOffset: 2,
               minWidth: 80,
             }}
             placeholder={searchPlaceholder}
@@ -101,7 +103,7 @@ export const SortFilterBar: React.FC<SortFilterBarProps> = ({
               className="dp-icon-btn"
               style={{ width: 22, height: 22, border: 'none' }}
               aria-label="Clear search"
-              onClick={() => onSearchChange('')}
+              onClick={() => { onSearchChange(''); searchRef.current?.focus(); }}
             >
               <X size={13} />
             </button>
@@ -146,17 +148,17 @@ export const SortFilterBar: React.FC<SortFilterBarProps> = ({
             className="dp-btn dp-btn-sm"
             onClick={onSortDirToggle}
             title={sortDir === 'asc' ? 'Ascending (click to reverse)' : 'Descending (click to reverse)'}
-            aria-label={sortDir === 'asc' ? 'Sort ascending' : 'Sort descending'}
+            aria-label={sortDir === 'asc' ? 'Sort descending (currently ascending)' : 'Sort ascending (currently descending)'}
           >
             {sortDir === 'asc' ? <ArrowUpNarrowWide size={14} /> : <ArrowDownWideNarrow size={14} />}
           </button>
         </div>
 
         {/* Count Badge + Reset */}
-        <span className="dp-muted" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+        <span className="dp-muted" aria-live="polite" aria-atomic="true" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
           {shownCount}/{totalCount}
         </span>
-        {isFiltered && onReset && (
+        {onReset && (
           <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" onClick={onReset}>
             Reset
           </button>
@@ -172,6 +174,7 @@ export const SortFilterBar: React.FC<SortFilterBarProps> = ({
               type="button"
               className="dp-chip"
               data-active={activeChip === chip.value}
+              aria-pressed={activeChip === chip.value}
               onClick={() => onChipChange(chip.value)}
             >
               {chip.label}

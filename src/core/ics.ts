@@ -8,7 +8,7 @@ function escapeIcsText(s: string): string {
 }
 
 function unescapeIcsText(s: string): string {
-  return s.replace(/\\n/gi, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
+  return s.replace(/\\([nN,;\\])/g, (_, ch: string) => ch.toLowerCase() === 'n' ? '\n' : ch);
 }
 
 function toIcsDate(dateIso: string): string {
@@ -79,7 +79,7 @@ export function exportEventsToIcs(events: Array<LifeRecord<CalendarEventPayload>
   for (const ev of events) {
     const p = ev.payload;
     lines.push('BEGIN:VEVENT');
-    lines.push(`UID:${p.icsUid || `${ev.id}@dayplana.local`}`);
+    lines.push(`UID:${escapeIcsText(p.icsUid || `${ev.id}@dayplana.local`).replace(/[\r\n]/g, '')}`);
     lines.push(`DTSTAMP:${stamp}`);
     lines.push(`SUMMARY:${escapeIcsText(ev.title)}`);
 
@@ -95,7 +95,11 @@ export function exportEventsToIcs(events: Array<LifeRecord<CalendarEventPayload>
       if (p.floating) {
         lines.push(`DTSTART:${toIcsDateTime(p.startDate, st)}`);
         lines.push(`DTEND:${toIcsDateTime(p.endDate || p.startDate, et)}`);
+      } else if (tz === 'UTC') {
+        lines.push(`DTSTART:${toIcsDateTime(p.startDate, st)}Z`);
+        lines.push(`DTEND:${toIcsDateTime(p.endDate || p.startDate, et)}Z`);
       } else {
+        if (!/^[A-Za-z0-9_+\-/]+$/.test(tz)) throw new Error('Invalid calendar time zone');
         lines.push(`DTSTART;TZID=${tz}:${toIcsDateTime(p.startDate, st)}`);
         lines.push(`DTEND;TZID=${tz}:${toIcsDateTime(p.endDate || p.startDate, et)}`);
       }
@@ -103,8 +107,8 @@ export function exportEventsToIcs(events: Array<LifeRecord<CalendarEventPayload>
 
     if (p.location) lines.push(`LOCATION:${escapeIcsText(p.location)}`);
     if (p.notes) lines.push(`DESCRIPTION:${escapeIcsText(p.notes)}`);
-    if (p.url) lines.push(`URL:${p.url}`);
-    if (p.eventStatus) lines.push(`STATUS:${p.eventStatus.toUpperCase()}`);
+    if (p.url) lines.push(`URL:${p.url.replace(/[\r\n]/g, '')}`);
+    if (p.eventStatus) lines.push(`STATUS:${p.eventStatus === 'canceled' ? 'CANCELLED' : p.eventStatus.toUpperCase()}`);
 
     if (ev.recurrence) {
       lines.push(`RRULE:${ruleToRrule(ev.recurrence)}`);
@@ -112,14 +116,25 @@ export function exportEventsToIcs(events: Array<LifeRecord<CalendarEventPayload>
         const exList = ev.recurrence.exceptions.map((d) =>
           p.allDay ? toIcsDate(d) : toIcsDateTime(d, p.startTime || '09:00')
         );
-        lines.push(`EXDATE${p.allDay ? ';VALUE=DATE' : ''}:${exList.join(',')}`);
+        const utc = !p.allDay && !p.floating && (p.timeZone || 'UTC') === 'UTC';
+        const param = p.allDay ? ';VALUE=DATE' : p.floating || utc ? '' : `;TZID=${p.timeZone}`;
+        lines.push(`EXDATE${param}:${exList.map(v => utc ? v + 'Z' : v).join(',')}`);
       }
     }
     lines.push('END:VEVENT');
   }
 
   lines.push('END:VCALENDAR');
-  return lines.join('\r\n');
+  const encoder = new TextEncoder();
+  return lines.map(line => {
+    let folded = '', bytes = 0;
+    for (const char of line) {
+      const size = encoder.encode(char).length;
+      if (bytes + size > 75) { folded += '\r\n '; bytes = 1; }
+      folded += char; bytes += size;
+    }
+    return folded;
+  }).join('\r\n') + '\r\n';
 }
 
 export interface ImportedIcsEvent {
@@ -131,7 +146,7 @@ export interface ImportedIcsEvent {
 
 function parseIcsDateField(rawVal: string, params: string, defaultTz: string) {
   const tzMatch = params.match(/TZID=([^;:]+)/i);
-  const tz = tzMatch ? tzMatch[1] : defaultTz;
+  const tz = tzMatch ? tzMatch[1].replace(/^"|"$/g, '') : defaultTz;
   const isDateOnly = /VALUE=DATE\b/i.test(params) || /^\d{8}$/.test(rawVal);
 
   const y = rawVal.slice(0, 4);
@@ -165,28 +180,36 @@ export function parseIcsCalendar(icsText: string, defaultTimeZone = 'UTC'): Impo
 
   const events: ImportedIcsEvent[] = [];
   let inEvent = false;
-  let current: Record<string, { val: string; params: string }[]> = {};
+  let current: Record<string, { val: string; params: string }[]> = Object.create(null);
+  let nested = 0;
 
   for (const line of lines) {
     if (line === 'BEGIN:VEVENT') {
       inEvent = true;
-      current = {};
+      current = Object.create(null);
+      nested = 0;
       continue;
     }
+    if (inEvent && /^BEGIN:/i.test(line)) { nested++; continue; }
+    if (inEvent && nested > 0) { if (/^END:/i.test(line)) nested--; continue; }
     if (line === 'END:VEVENT') {
       inEvent = false;
       const summary = unescapeIcsText(current.SUMMARY?.[0]?.val || 'Imported Event');
       const uid = current.UID?.[0]?.val || `ics_${Math.random().toString(36).slice(2, 10)}`;
       const dtStartRaw = current.DTSTART?.[0];
-      if (!dtStartRaw) continue;
+      if (!dtStartRaw || !/^\d{8}(?:T\d{6}Z?)?$/.test(dtStartRaw.val)) continue;
 
       const start = parseIcsDateField(dtStartRaw.val, dtStartRaw.params, defaultTimeZone);
+      const dateCheck = new Date(start.dateIso + 'T00:00:00Z');
+      if (!Number.isFinite(dateCheck.getTime()) || dateCheck.toISOString().slice(0,10) !== start.dateIso || (start.timeHHMM && !/^([01]\d|2[0-3]):[0-5]\d$/.test(start.timeHHMM))) continue;
       const dtEndRaw = current.DTEND?.[0];
       let endDate = start.dateIso;
       let endTime = start.allDay ? undefined : start.timeHHMM;
 
-      if (dtEndRaw) {
+      if (dtEndRaw && /^\d{8}(?:T\d{6}Z?)?$/.test(dtEndRaw.val)) {
         const end = parseIcsDateField(dtEndRaw.val, dtEndRaw.params, start.timeZone);
+        const endCheck = new Date(end.dateIso + 'T00:00:00Z');
+        if (!Number.isFinite(endCheck.getTime()) || endCheck.toISOString().slice(0,10) !== end.dateIso) continue;
         if (start.allDay) {
           // RFC 5545 DTEND for all-day is exclusive; convert to inclusive endDate
           const inclusive = addDaysIso(end.dateIso, -1);
@@ -245,7 +268,9 @@ export function parseIcsCalendar(icsText: string, defaultTimeZone = 'UTC'): Impo
     }
 
     if (!inEvent || !line.includes(':')) continue;
-    const colonIdx = line.indexOf(':');
+    let colonIdx = -1, quoted = false;
+    for (let i = 0; i < line.length; i++) { if (line[i] === '"') quoted = !quoted; else if (line[i] === ':' && !quoted) { colonIdx = i; break; } }
+    if (colonIdx < 0) continue;
     const left = line.slice(0, colonIdx);
     const val = line.slice(colonIdx + 1).trim();
     const semiIdx = left.indexOf(';');

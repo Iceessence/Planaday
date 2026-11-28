@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import { useViewActionGuard } from '../../components/Common/viewSafety';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import {
   Archive,
   ExternalLink,
@@ -58,6 +59,9 @@ interface FolderPayload {
 
 export const FileManagerView: React.FC = () => {
   const { records, setActiveView, setSelectedNoteId, openPdfInStudio, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState<'all' | 'personal' | 'lab' | 'favorites' | 'archived'>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -77,8 +81,9 @@ export const FileManagerView: React.FC = () => {
     [records]
   );
 
+  const deferredSearch = useDeferredValue(search);
   const visibleDocs = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     return docs.filter((d) => {
       const p = d.payload as { folderId?: string | null; favorite?: boolean; archived?: boolean };
       if (scope === 'archived') {
@@ -97,8 +102,10 @@ export const FileManagerView: React.FC = () => {
       }
       return true;
     });
-  }, [docs, search, scope, typeFilter, activeFolderId]);
+  }, [docs, deferredSearch, scope, typeFilter, activeFolderId]);
 
+  const [documentPage, setDocumentPage] = useState(0);
+  const pageIndex = Math.min(documentPage, Math.max(0, Math.ceil(visibleDocs.length / 120) - 1));
   const openDocument = (rec: LifeRecord) => {
     if (rec.type === 'note') setSelectedNoteId(rec.id);
     if (rec.type === 'pdf_doc') {
@@ -153,14 +160,14 @@ export const FileManagerView: React.FC = () => {
               type="button"
               className="dp-btn"
               aria-label="Create folder"
-              onClick={async () => {
+              onClick={guardAction('action-1', async () => {
                 if (!newFolderName.trim()) return;
                 await createRecord<FolderPayload>('file_folder', newFolderName.trim(), {
                   parentFolderId: activeFolderId !== 'all' ? activeFolderId : null,
                 });
                 setNewFolderName('');
                 pushToast('Created folder', { tone: 'ok' });
-              }}
+              })}
               title="Create folder (nested under active folder if selected)"
             >
               <FolderPlus size={14} />
@@ -198,11 +205,12 @@ export const FileManagerView: React.FC = () => {
             </select>
           </div>
 
+          <div className="dp-row" style={{ flexWrap: 'wrap' }}><button type="button" className="dp-btn dp-btn-sm" disabled={pageIndex === 0} onClick={() => setDocumentPage(pageIndex - 1)}>Previous</button><span role="status" className="dp-muted">Page {pageIndex + 1} of {Math.max(1, Math.ceil(visibleDocs.length / 120))}</span><button type="button" className="dp-btn dp-btn-sm" disabled={(pageIndex + 1) * 120 >= visibleDocs.length} onClick={() => setDocumentPage(pageIndex + 1)}>Next</button></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             {visibleDocs.length === 0 ? (
               <div className="dp-muted" style={{ textAlign: 'center', padding: '1.5rem' }}>No documents match the current folder or filter.</div>
             ) : (
-              visibleDocs.slice(0, 120).map((doc) => {
+              visibleDocs.slice(pageIndex * 120, (pageIndex + 1) * 120).map((doc) => {
                 const p = doc.payload as { folderId?: string | null; favorite?: boolean; archived?: boolean };
                 return (
                   <div

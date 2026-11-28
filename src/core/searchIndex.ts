@@ -106,7 +106,6 @@ interface IndexedDoc {
   lowerCorpus: string;
   jumpDate: string | null;
   tokens: string[];
-  deleted: boolean;
 }
 
 /**
@@ -119,15 +118,15 @@ interface IndexedDoc {
  * - Incremental `upsert` / `remove` / `syncFromArray` (never rebuilds all 100k docs on single edits!)
  */
 export class InvertedSearchIndex {
-  private docs: IndexedDoc[] = [];
+  private docs = new Map<number, IndexedDoc>();
+  private nextSlot = 0;
   private slotById = new Map<string, number>();
   private tokenPostings = new Map<string, Set<number>>();
   private prefix2ToTokens = new Map<string, Set<string>>();
   private trigramToTokens = new Map<string, Set<string>>();
-  private activeCount = 0;
 
   public get size(): number {
-    return this.activeCount;
+    return this.docs.size;
   }
 
   public get vocabSize(): number {
@@ -135,12 +134,12 @@ export class InvertedSearchIndex {
   }
 
   public clear(): void {
-    this.docs = [];
+    this.docs.clear();
+    this.nextSlot = 0;
     this.slotById.clear();
     this.tokenPostings.clear();
     this.prefix2ToTokens.clear();
     this.trigramToTokens.clear();
-    this.activeCount = 0;
   }
 
   private indexVocabToken(token: string): void {
@@ -197,8 +196,8 @@ export class InvertedSearchIndex {
 
     const existingSlot = this.slotById.get(record.id);
     if (existingSlot !== undefined) {
-      const existing = this.docs[existingSlot];
-      if (!existing.deleted && existing.rev === record.rev && existing.record.updatedAt === record.updatedAt) {
+      const existing = this.docs.get(existingSlot)!;
+      if (existing.rev === record.rev && existing.record.updatedAt === record.updatedAt) {
         return; // Unchanged — skip re-indexing!
       }
       this.removePostingsForDoc(existing);
@@ -211,15 +210,11 @@ export class InvertedSearchIndex {
       existing.lowerCorpus = corpus.toLowerCase();
       existing.jumpDate = resolveRecordJumpDate(record);
       existing.tokens = tokens;
-      if (existing.deleted) {
-        existing.deleted = false;
-        this.activeCount++;
-      }
       this.addPostingsForDoc(existing);
       return;
     }
 
-    const slot = this.docs.length;
+    const slot = this.nextSlot++;
     const corpus = extractRecordSearchText(record);
     const tokens = tokenizeSearchText(corpus);
     const doc: IndexedDoc = {
@@ -231,23 +226,21 @@ export class InvertedSearchIndex {
       lowerCorpus: corpus.toLowerCase(),
       jumpDate: resolveRecordJumpDate(record),
       tokens,
-      deleted: false,
     };
-    this.docs.push(doc);
+    this.docs.set(slot, doc);
     this.slotById.set(record.id, slot);
-    this.activeCount++;
     this.addPostingsForDoc(doc);
   }
 
   public remove(recordId: string): void {
     const slot = this.slotById.get(recordId);
     if (slot === undefined) return;
-    const doc = this.docs[slot];
-    if (!doc || doc.deleted) return;
+    const doc = this.docs.get(slot);
+    if (!doc) return;
     this.removePostingsForDoc(doc);
-    doc.deleted = true;
-    doc.tokens = [];
-    this.activeCount = Math.max(0, this.activeCount - 1);
+    // Drop the full record and its indexed text, including when switching profiles.
+    this.docs.delete(slot);
+    this.slotById.delete(recordId);
   }
 
   private addPostingsForDoc(doc: IndexedDoc): void {
@@ -289,7 +282,7 @@ export class InvertedSearchIndex {
   /**
    * Synchronizes the index incrementally against a live record array:
    * - Upserts added/modified records (skipping unchanged rev+updatedAt in O(1))
-   * - Marks removed records deleted
+   * - Releases removed records and all their postings
    */
   public syncFromArray(records: LifeRecord[]): void {
     const liveIds = new Set<string>();
@@ -299,9 +292,8 @@ export class InvertedSearchIndex {
       liveIds.add(rec.id);
       this.upsert(rec);
     }
-    for (const [id, slot] of this.slotById.entries()) {
-      const doc = this.docs[slot];
-      if (doc && !doc.deleted && !liveIds.has(id)) {
+    for (const id of this.slotById.keys()) {
+      if (!liveIds.has(id)) {
         this.remove(id);
       }
     }
@@ -400,6 +392,8 @@ export class InvertedSearchIndex {
     page = 1,
     pageSize = 25
   ): { hits: SearchHit[]; total: number; page: number; pageCount: number } {
+    pageSize = Number.isFinite(pageSize) ? Math.max(1, Math.floor(pageSize)) : 25;
+    page = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
     const queryTokens = query
       .toLowerCase()
       .trim()
@@ -412,13 +406,12 @@ export class InvertedSearchIndex {
     const filterTagLower = filter.tag ? filter.tag.toLowerCase() : null;
 
     const passesFilter = (doc: IndexedDoc): boolean => {
-      if (doc.deleted) return false;
       const rec = doc.record;
       if (rec.deletedAt) return false;
       if (hiddenSet && hiddenSet.has(rec.type)) return false;
       if (typeSet && !typeSet.has(rec.type)) return false;
       if (filterCatLower && (rec.category?.toLowerCase() ?? '') !== filterCatLower) return false;
-      if (filterTagLower && !rec.tags.some((t) => t.toLowerCase() === filterTagLower)) return false;
+      if (filterTagLower && !(rec.tags ?? []).some((t) => t.toLowerCase() === filterTagLower)) return false;
       if (filter.assigneeId && rec.assigneeId !== filter.assigneeId) return false;
       if (filter.date && doc.jumpDate !== filter.date) return false;
       return true;
@@ -427,8 +420,7 @@ export class InvertedSearchIndex {
     const matched: SearchHit[] = [];
 
     if (queryTokens.length === 0) {
-      for (let i = 0; i < this.docs.length; i++) {
-        const doc = this.docs[i];
+      for (const doc of this.docs.values()) {
         if (!passesFilter(doc)) continue;
         matched.push({
           record: doc.record,
@@ -457,7 +449,7 @@ export class InvertedSearchIndex {
           }
           if (!allMatch) continue;
 
-          const doc = this.docs[slot];
+          const doc = this.docs.get(slot);
           if (!doc || !passesFilter(doc)) continue;
 
           // Title match boost

@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -74,6 +75,16 @@ export function exportStopwatchLapsToCsv(laps: StopwatchLap[]): string {
 
 const ALARM_PROFILES = ['Workday', 'Weekend', 'Travel', 'Early Flight', 'Power Nap'] as const;
 
+/** Resolve elapsed interval steps from a deadline without accumulating timer drift. */
+export function advanceIntervalClock(steps: Array<{ sec: number }>, index: number, deadlineMs: number, nowMs: number) {
+  let idx = index, endMs = deadlineMs;
+  while (nowMs >= endMs && idx < steps.length) {
+    idx++;
+    if (idx < steps.length) endMs += steps[idx].sec * 1000;
+  }
+  return { idx, endMs, complete: idx >= steps.length, remSec: idx >= steps.length ? 0 : Math.max(0, Math.ceil((endMs - nowMs) / 1000)) };
+}
+
 export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers' | 'stopwatch' }> = ({
   initialTab,
 }) => {
@@ -91,6 +102,9 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     triggerAlarmRing,
     notifyUser,
   } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const runtimeInfo = useMemo(() => detectRuntimePlatform(), []);
 
   const [tab, setTab] = useState<'clock' | 'alarms' | 'timers' | 'stopwatch'>(initialTab);
@@ -161,6 +175,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     steps: Array<{ label: string; sec: number }>;
     idx: number;
     remSec: number;
+    endMs: number;
   } | null>(null);
 
   // Precision Stopwatch state (HH:MM:SS.cc) + customizable milestone notifications
@@ -171,7 +186,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
   const swBaseRef = useRef<number>(0);
   const swLastNotifiedStepRef = useRef<number>(0);
 
-  const timeLedger = useLiveQuery(() => db.timeLedger.orderBy('startedAt').reverse().limit(40).toArray(), []) ?? [];
+  const timeLedger = useLiveQuery(() => db.timeLedger.orderBy('startedAt').reverse().filter(entry => entry.workspaceId === settings.activeWorkspaceId).limit(40).toArray(), [settings.activeWorkspaceId]) ?? [];
   const alarms = useMemo(() => records.filter((r) => r.type === 'alarm'), [records]);
 
   const filteredSortedAlarms = useMemo(() => {
@@ -242,20 +257,31 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
   };
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 500);
-    return () => window.clearInterval(id);
-  }, []);
+    let id: number | undefined;
+    const refresh = () => {
+      if (id !== undefined) window.clearTimeout(id);
+      if (document.hidden) return;
+      setNow(new Date());
+      const step = tab === 'clock' || tab === 'timers' || nightstandOpen ? 1000 : 60000;
+      id = window.setTimeout(refresh, step - Date.now() % step + 10);
+    };
+    refresh();
+    document.addEventListener('visibilitychange', refresh);
+    return () => { if (id !== undefined) window.clearTimeout(id); document.removeEventListener('visibilitychange', refresh); };
+  }, [tab, nightstandOpen]);
 
   // Nightstand Wake Lock & OLED burn-in shift
   useEffect(() => {
     if (!nightstandOpen) return;
+    let cancelled = false;
     let wakeLock: { release?: () => Promise<void> } | null = null;
     const nav = navigator as unknown as { wakeLock?: { request: (type: string) => Promise<{ release: () => Promise<void> }> } };
-    nav.wakeLock?.request('screen').then((wl) => { wakeLock = wl; }).catch(() => { /* optional */ });
+    nav.wakeLock?.request('screen').then((wl) => { if (cancelled) void wl.release().catch(() => {}); else wakeLock = wl; }).catch(() => { /* optional */ });
     const shiftId = window.setInterval(() => {
       setBurnInShift({ x: Math.round((Math.random() - 0.5) * 28), y: Math.round((Math.random() - 0.5) * 28) });
     }, 30000);
     return () => {
+      cancelled = true;
       window.clearInterval(shiftId);
       void wakeLock?.release?.();
     };
@@ -288,26 +314,30 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
     return () => cancelAnimationFrame(raf);
   }, [swRunning, settings.notificationPrefs.notifyStopwatch, settings.notificationPrefs.stopwatchIntervalMin, notifyUser]);
 
-  // Active Interval Runner tick
+  // Timestamp-based intervals: no timer drift or duplicate chimes under StrictMode.
+  const intervalRef = useRef(activeIntervalRun);
+  intervalRef.current = activeIntervalRun;
+  const intervalRunning = Boolean(activeIntervalRun);
   useEffect(() => {
-    if (!activeIntervalRun) return;
-    const id = window.setInterval(() => {
-      setActiveIntervalRun((prev) => {
-        if (!prev) return null;
-        if (prev.remSec > 1) return { ...prev, remSec: prev.remSec - 1 };
-        const nextIdx = prev.idx + 1;
-        if (nextIdx >= prev.steps.length) {
-          audioEngine.playChime('complete');
-          audioEngine.speakStep(`${prev.name} complete`);
-          return null;
-        }
-        audioEngine.playChime('bell');
-        audioEngine.speakStep(`Next: ${prev.steps[nextIdx].label}`);
-        return { ...prev, idx: nextIdx, remSec: prev.steps[nextIdx].sec };
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [activeIntervalRun]);
+    if (!intervalRunning) return;
+    const tick = () => {
+      const prev = intervalRef.current;
+      if (!prev) return;
+      const nowMs = Date.now();
+      const { idx, endMs, complete, remSec } = advanceIntervalClock(prev.steps, prev.idx, prev.endMs, nowMs);
+      if (complete) {
+        intervalRef.current = null; setActiveIntervalRun(null);
+        audioEngine.playChime('complete'); audioEngine.speakStep(`${prev.name} complete`); return;
+      }
+      if (idx !== prev.idx) { audioEngine.playChime('bell'); audioEngine.speakStep(`Next: ${prev.steps[idx].label}`); }
+      if (idx !== prev.idx || remSec !== prev.remSec) {
+        const next = { ...prev, idx, endMs, remSec }; intervalRef.current = next; setActiveIntervalRun(next);
+      }
+    };
+    const id = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', tick); };
+  }, [intervalRunning]);
 
   const fastestLapMs = swLaps.length ? Math.min(...swLaps.map((l) => l.lapMs)) : null;
   const slowestLapMs = swLaps.length ? Math.max(...swLaps.map((l) => l.lapMs)) : null;
@@ -556,7 +586,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                 <button
                   type="button"
                   className="dp-btn dp-btn-primary dp-btn-sm"
-                  onClick={async () => {
+                  onClick={guardAction('action-1', async () => {
                     const endM = sliderMinutes + 60;
                     const endHHMM = `${String(Math.floor(endM / 60) % 24).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`;
                     await createRecord<CalendarEventPayload>('event', `Global Meeting (${sliderHHMM})`, {
@@ -572,7 +602,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                       eventStatus: 'confirmed',
                     });
                     pushToast(`Created meeting at ${sliderHHMM} ${settings.defaultTimeZone}`, { canUndo: true });
-                  }}
+                  })}
                 >
                   1-Click Create Event
                 </button>
@@ -699,7 +729,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
           <form
             className="dp-card dp-stack"
             style={{ padding: 14, gap: 10 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-1', async (e) => {
               e.preventDefault();
               audioEngine.stopAlarmLoop();
               setPreviewPlaying(false);
@@ -746,7 +776,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                 );
               }
               resetAlarmForm();
-            }}
+            })}
           >
             <div className="dp-between" style={{ flexWrap: 'wrap', gap: 6 }}>
               <strong>{editingAlarmId ? '✏️ Edit Scheduled Alarm' : '⏰ Schedule New Smart Alarm'}</strong>
@@ -1418,7 +1448,7 @@ export const TimeSuiteView: React.FC<{ initialTab: 'clock' | 'alarms' | 'timers'
                     if (steps.length === 0) return;
                     audioEngine.playChime('bell');
                     audioEngine.speakStep(`Starting ${steps[0].label}`);
-                    setActiveIntervalRun({ name: intervalName, steps, idx: 0, remSec: steps[0].sec });
+                    setActiveIntervalRun({ name: intervalName, steps, idx: 0, remSec: steps[0].sec, endMs: Date.now() + steps[0].sec * 1000 });
                   }}
                 >
                   Start Sequence

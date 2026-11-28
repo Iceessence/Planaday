@@ -2,6 +2,7 @@
 // Audio Chimes (with custom volume & sound styles), and Background Docker ntfy Push Bridge.
 
 import { audioEngine } from './audio';
+import { getOrInitSettings } from './db';
 import type { ChimeStyle, NotificationPreferences } from './types';
 
 export interface NativeBridgeInfo {
@@ -65,8 +66,7 @@ export async function requestAlarmNotificationPermission(): Promise<boolean> {
   if (typeof Notification !== 'undefined') {
     if (Notification.permission === 'granted') return true;
     if (Notification.permission !== 'denied') {
-      const res = await Notification.requestPermission();
-      return res === 'granted';
+      try { const res = await Notification.requestPermission(); return res === 'granted'; } catch { return false; }
     }
   }
   return false;
@@ -82,7 +82,7 @@ export async function scheduleNativeNotification(
   body: string,
   fireAtMs: number
 ): Promise<boolean> {
-  if (fireAtMs <= Date.now()) return false;
+  if (!Number.isFinite(fireAtMs) || fireAtMs <= Date.now()) return false;
   const cap = getCapacitor();
   if (cap?.isNativePlatform?.() && cap.Plugins?.LocalNotifications) {
     try {
@@ -171,12 +171,21 @@ export async function syncPushConfigToServer(
       notifyChores: prefs?.notifyChores ?? true,
       choreReminderTime: prefs?.choreReminderTime ?? '09:00',
     };
+    const settings = await getOrInitSettings();
+    const configured = (settings.syncServerUrl || '').trim().replace(/\/+$/, '');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (base === configured && settings.syncAuthToken) headers.Authorization = `Bearer ${settings.syncAuthToken}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
     const res = await fetch(`${base}/api/push-config`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      signal: controller.signal,
       body: JSON.stringify(body),
     });
     return res.ok;
+    } finally { clearTimeout(timeout); }
   } catch {
     return false;
   }

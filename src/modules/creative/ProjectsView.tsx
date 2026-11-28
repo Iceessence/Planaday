@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   Database,
@@ -12,7 +13,7 @@ import {
 import { useApp } from '../../core/AppContext';
 import { createId } from '../../core/db';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
-import { SafeTextarea } from '../../components/Common/SafeTextEditor';
+import { SafeInput, SafeTextarea } from '../../components/Common/SafeTextEditor';
 import { evaluateMathExpression } from '../../core/mathEngine';
 import type { LifeRecord } from '../../core/types';
 
@@ -57,6 +58,9 @@ const PROJECT_TEMPLATES = [
 
 export const ProjectsView: React.FC = () => {
   const { records, pushToast, setActiveView } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const [tab, setTab] = useState<'projects' | 'custom_types'>('projects');
 
   // --- Projects State ---
@@ -215,10 +219,11 @@ export const ProjectsView: React.FC = () => {
           {activeProj && projPayload ? (
             <div className="dp-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <input
+                <SafeInput
                   className="dp-input"
-                  value={activeProj.title}
-                  onChange={(e) => void updateRecord(activeProj.id, { title: e.target.value })}
+                  recordKey={`project-title:${activeProj.id}`}
+                  externalValue={activeProj.title}
+                  onCommit={async (title) => { await updateRecord(activeProj.id, { title }); }}
                   style={{ fontSize: '1.15rem', fontWeight: 700, flex: '1 1 140px', minWidth: 0 }}
                 />
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
@@ -239,11 +244,11 @@ export const ProjectsView: React.FC = () => {
                   <button
                     type="button"
                     className="dp-btn"
-                    onClick={async () => {
+                    onClick={guardAction('action-1', async () => {
                       await softDeleteRecord(activeProj.id);
                       setSelectedProjId(null);
                       pushToast('Moved project to Trash', { tone: 'info' });
-                    }}
+                    })}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -377,7 +382,7 @@ export const ProjectsView: React.FC = () => {
             <button
               type="button"
               className="dp-btn dp-btn-primary"
-              onClick={async () => {
+              onClick={guardAction('action-2', async () => {
                 const name = schemaName.trim() || `Custom Type ${schemas.length + 1}`;
                 const rec = await createRecord<CustomSchemaPayload>('custom_schema', name, {
                   icon: schemaIcon || '🧩',
@@ -393,7 +398,7 @@ export const ProjectsView: React.FC = () => {
                 setSchemaName('');
                 setSelectedSchemaId(rec.id);
                 pushToast(`Created Custom Record Type "${name}"`, { tone: 'ok' });
-              }}
+              })}
             >
               <Plus size={14} /> New Record Type
             </button>
@@ -425,7 +430,7 @@ export const ProjectsView: React.FC = () => {
                   <button type="button" className={`dp-btn ${entityViewMode === 'table' ? 'dp-btn-primary' : ''}`} onClick={() => setEntityViewMode('table')}><TableIcon size={13} /> Table</button>
                   <button type="button" className={`dp-btn ${entityViewMode === 'list' ? 'dp-btn-primary' : ''}`} onClick={() => setEntityViewMode('list')}><List size={13} /> List</button>
                   <button type="button" className={`dp-btn ${entityViewMode === 'gallery' ? 'dp-btn-primary' : ''}`} onClick={() => setEntityViewMode('gallery')}><Grid size={13} /> Gallery</button>
-                  <button type="button" className="dp-btn" onClick={async () => { await softDeleteRecord(activeSchema.id); setSelectedSchemaId(null); }}><Trash2 size={13} /></button>
+                  <button type="button" className="dp-btn" onClick={guardAction('action-3', async () => { await softDeleteRecord(activeSchema.id); setSelectedSchemaId(null); })}><Trash2 size={13} /></button>
                 </div>
               </div>
 
@@ -480,11 +485,11 @@ export const ProjectsView: React.FC = () => {
                 <button
                   type="button"
                   className="dp-btn dp-btn-primary"
-                  onClick={async () => {
+                  onClick={guardAction('action-4', async () => {
                     const t = entityTitle.trim() || `${activeSchema.title} #${schemaEntities.length + 1}`;
                     await createRecord<CustomEntityPayload>('custom_entity', t, { schemaId: activeSchema.id, values: {} });
                     setEntityTitle('');
-                  }}
+                  })}
                 >
                   <Plus size={13} /> Add Entry
                 </button>

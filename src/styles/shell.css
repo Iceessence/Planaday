@@ -760,3 +760,7 @@ dialog::backdrop {
     gap: 4px;
   }
 }
+
+/* Avoid main-column intrinsic sizing from wide spreadsheet and PDF content. */
+.dp-main-col, .dp-content { min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .dp-content *, .dp-sidebar * { scroll-behavior: auto !important; } }

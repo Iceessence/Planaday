@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useViewActionGuard } from '../../components/Common/viewSafety';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bookmark,
   Code,
@@ -71,6 +72,9 @@ type ToolMode = 'select' | 'pan' | 'pen' | 'highlighter' | 'marker' | 'eraser' |
 
 export const WhiteboardView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const boards = useMemo(
     () => records.filter((r) => r.type === 'whiteboard' && !r.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records]
@@ -95,6 +99,8 @@ export const WhiteboardView: React.FC = () => {
   const [liveStroke, setLiveStroke] = useState<WbStroke | null>(null);
   const [bookmarkName, setBookmarkName] = useState('');
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [nodePreview, setNodePreview] = useState<{ id: string; x: number; y: number } | null>(null);
+  const nodePreviewRef = useRef<typeof nodePreview>(null);
   const dragStateRef = useRef<{
     kind: 'pan' | 'node';
     nodeId?: string;
@@ -161,7 +167,9 @@ export const WhiteboardView: React.FC = () => {
     pushToast('Exported whiteboard as SVG', { tone: 'ok' });
   };
 
-  const nodes = Array.isArray(payload?.nodes) ? payload!.nodes : [];
+  const nodes = useMemo(() => (Array.isArray(payload?.nodes) ? payload.nodes : []).map(n => nodePreview?.id === n.id ? { ...n, x: nodePreview.x, y: nodePreview.y } : n), [payload?.nodes, nodePreview]);
+  const nodesById = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
+  useEffect(() => { dragStateRef.current = null; nodePreviewRef.current = null; setNodePreview(null); setLiveStroke(null); }, [activeBoard?.id]);
   const edges = Array.isArray(payload?.edges) ? payload!.edges : [];
   const strokes = Array.isArray(payload?.strokes) ? payload!.strokes : [];
   const bookmarks = Array.isArray(payload?.bookmarks) ? payload!.bookmarks : [];
@@ -186,7 +194,7 @@ export const WhiteboardView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const n1Id = createId('nd');
               const n2Id = createId('nd');
               const rec = await createRecord<WhiteboardPayload>('whiteboard', `Whiteboard ${boards.length + 1}`, {
@@ -200,7 +208,7 @@ export const WhiteboardView: React.FC = () => {
               });
               setSelectedId(rec.id);
               pushToast('Created new infinite whiteboard', { tone: 'ok' });
-            }}
+            })}
           >
             <Plus size={14} /> New Board
           </button>
@@ -208,7 +216,7 @@ export const WhiteboardView: React.FC = () => {
             <>
               <button type="button" className="dp-btn" onClick={exportSvg}><Download size={13} /> SVG</button>
               <button type="button" className="dp-btn" onClick={() => window.print()}><Printer size={13} /> PDF</button>
-              <button type="button" className="dp-btn" onClick={async () => { await softDeleteRecord(activeBoard.id); setSelectedId(null); }}><Trash2 size={13} /></button>
+              <button type="button" className="dp-btn" onClick={guardAction('action-2', async () => { await softDeleteRecord(activeBoard.id); setSelectedId(null); })}><Trash2 size={13} /></button>
             </>
           )}
         </div>
@@ -280,11 +288,14 @@ export const WhiteboardView: React.FC = () => {
               ref={svgRef}
               style={{ width: '100%', height: 500, display: 'block', touchAction: 'none', cursor: tool === 'pan' ? 'grab' : tool === 'select' ? 'default' : 'crosshair' }}
               onPointerDown={(e) => {
+                if (e.button !== 0) return;
                 if (tool === 'pan') {
+                  e.currentTarget.setPointerCapture(e.pointerId);
                   dragStateRef.current = { kind: 'pan', startClientX: e.clientX, startClientY: e.clientY, origX: pan.x, origY: pan.y };
                   return;
                 }
                 if (tool === 'pen' || tool === 'highlighter' || tool === 'marker') {
+                  e.currentTarget.setPointerCapture(e.pointerId);
                   const pt = clientToWorld(e.clientX, e.clientY);
                   setLiveStroke({
                     id: createId('st'),
@@ -313,10 +324,8 @@ export const WhiteboardView: React.FC = () => {
                     ny = Math.round(ny / 20) * 20;
                   }
                   const nid = dragStateRef.current.nodeId;
-                  void mutateBoard((p) => ({
-                    ...p,
-                    nodes: (Array.isArray(p.nodes) ? p.nodes : []).map((n) => (n.id === nid ? { ...n, x: nx, y: ny } : n)),
-                  }));
+                  const preview = { id: nid, x: nx, y: ny };
+                  nodePreviewRef.current = preview; setNodePreview(preview);
                   return;
                 }
                 if (liveStroke) {
@@ -324,8 +333,11 @@ export const WhiteboardView: React.FC = () => {
                   setLiveStroke((prev) => (prev ? { ...prev, points: [...prev.points, pt] } : null));
                 }
               }}
+              onPointerCancel={() => { dragStateRef.current = null; nodePreviewRef.current = null; setNodePreview(null); setLiveStroke(null); }}
               onPointerUp={() => {
-                dragStateRef.current = null;
+                const preview = nodePreviewRef.current;
+                dragStateRef.current = null; nodePreviewRef.current = null; setNodePreview(null);
+                if (preview) void mutateBoard(p => ({ ...p, nodes: (p.nodes ?? []).map(n => n.id === preview.id ? { ...n, x: preview.x, y: preview.y } : n) })).catch(error => pushToast(String(error), { tone: 'danger' }));
                 if (liveStroke && liveStroke.points.length > 1) {
                   const finished = liveStroke;
                   setLiveStroke(null);
@@ -348,8 +360,8 @@ export const WhiteboardView: React.FC = () => {
               <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
                 {/* Live-Attached Diagram Edges */}
                 {edges.map((ed) => {
-                  const a = nodes.find((n) => n.id === ed.fromId);
-                  const b = nodes.find((n) => n.id === ed.toId);
+                  const a = nodesById.get(ed.fromId);
+                  const b = nodesById.get(ed.toId);
                   if (!a || !b) return null;
                   const x1 = a.x + a.w / 2;
                   const y1 = a.y + a.h / 2;
@@ -365,7 +377,7 @@ export const WhiteboardView: React.FC = () => {
                         stroke="var(--dp-accent)"
                         strokeWidth={2}
                         markerEnd="url(#wbArrow)"
-                        onClick={() => tool === 'eraser' && void mutateBoard((p) => ({ ...p, edges: edges.filter((x) => x.id !== ed.id) }))}
+                        onClick={() => tool === 'eraser' && void mutateBoard((p) => ({ ...p, edges: (p.edges ?? []).filter((x) => x.id !== ed.id) }))}
                       />
                     </g>
                   );
@@ -384,7 +396,7 @@ export const WhiteboardView: React.FC = () => {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       opacity={st.tool === 'highlighter' ? 0.35 : 0.95}
-                      onClick={() => tool === 'eraser' && void mutateBoard((p) => ({ ...p, strokes: strokes.filter((x) => x.id !== st.id) }))}
+                      onClick={() => tool === 'eraser' && void mutateBoard((p) => ({ ...p, strokes: (p.strokes ?? []).filter((x) => x.id !== st.id) }))}
                     />
                   );
                 })}
@@ -401,8 +413,8 @@ export const WhiteboardView: React.FC = () => {
                         if (tool === 'eraser') {
                           void mutateBoard((p) => ({
                             ...p,
-                            nodes: nodes.filter((x) => x.id !== nd.id),
-                            edges: edges.filter((ed) => ed.fromId !== nd.id && ed.toId !== nd.id),
+                            nodes: (p.nodes ?? []).filter((x) => x.id !== nd.id),
+                            edges: (p.edges ?? []).filter((ed) => ed.fromId !== nd.id && ed.toId !== nd.id),
                           }));
                           return;
                         }
@@ -411,13 +423,15 @@ export const WhiteboardView: React.FC = () => {
                           else if (connectFromId !== nd.id) {
                             void mutateBoard((p) => ({
                               ...p,
-                              edges: [...edges, { id: createId('ed'), fromId: connectFromId, toId: nd.id }],
+                              edges: [...(p.edges ?? []), { id: createId('ed'), fromId: connectFromId, toId: nd.id }],
                             }));
                             setConnectFromId(null);
                           }
                           return;
                         }
                         setSelectedNodeId(nd.id);
+                        if (tool !== 'select' || e.button !== 0) return;
+                        e.currentTarget.setPointerCapture(e.pointerId);
                         dragStateRef.current = { kind: 'node', nodeId: nd.id, startClientX: e.clientX, startClientY: e.clientY, origX: nd.x, origY: nd.y };
                       }}
                       style={{ cursor: tool === 'select' ? 'move' : 'pointer' }}

@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -72,6 +73,9 @@ function createStarterCodeProject(): CodeProjectPayload {
 
 export const CodeStudioView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const projects = useMemo(
     () => records.filter((r) => r.type === 'code_project' && !r.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records]
@@ -120,7 +124,7 @@ export const CodeStudioView: React.FC = () => {
   };
 
   const handleRunCode = async () => {
-    if (!activeFile) return;
+    if (running || !activeFile) return;
     if (!langInfo.executable) {
       pushToast(`${langInfo.label} uses syntax editing only — export file to run in your local compiler/toolchain.`, { tone: 'info' });
       return;
@@ -130,20 +134,22 @@ export const CodeStudioView: React.FC = () => {
       return;
     }
     setRunning(true);
+    try {
     const res = await runSandboxedJs(activeFile.content, {
       timeoutMs: 2000,
       isTypeScript: activeFile.language === 'typescript',
     });
     setRunResult(res);
-    setRunning(false);
+    } finally { setRunning(false); }
   };
 
   const handleRunTests = async () => {
-    if (!activeFile || (activeFile.language !== 'javascript' && activeFile.language !== 'typescript')) {
+    if (running || !activeFile || (activeFile.language !== 'javascript' && activeFile.language !== 'typescript')) {
       pushToast('Unit test runner executes JavaScript / TypeScript files in the isolated Web Worker sandbox.', { tone: 'info' });
       return;
     }
     setRunning(true);
+    try {
     const results: CodeTestRunResult[] = [];
     for (const tc of tests) {
       let parsedInput: unknown = tc.inputJson;
@@ -171,8 +177,8 @@ export const CodeStudioView: React.FC = () => {
     setTestResults(results);
     const passed = results.filter((r) => r.passed).length;
     await mutateProj((p) => ({ ...p, lastTestSummary: `${passed}/${results.length} passed at ${new Date().toLocaleTimeString()}` }));
-    setRunning(false);
     pushToast(`Test run finished: ${passed}/${results.length} passed`, { tone: passed === results.length ? 'ok' : 'warn' });
+    } finally { setRunning(false); }
   };
 
   const lineCount = (activeFile?.content ?? '').split('\n').length;
@@ -199,16 +205,16 @@ export const CodeStudioView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const rec = await createRecord<CodeProjectPayload>('code_project', `Code Project ${projects.length + 1}`, createStarterCodeProject());
               setSelectedProjId(rec.id);
               pushToast('Created new code project', { tone: 'ok' });
-            }}
+            })}
           >
             <Plus size={14} /> New Project
           </button>
           {activeProj && (
-            <button type="button" className="dp-btn" onClick={async () => { await softDeleteRecord(activeProj.id); setSelectedProjId(null); }}>
+            <button type="button" className="dp-btn" onClick={guardAction('action-2', async () => { await softDeleteRecord(activeProj.id); setSelectedProjId(null); })}>
               <Trash2 size={14} />
             </button>
           )}
@@ -282,12 +288,12 @@ export const CodeStudioView: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn"
-                onClick={async () => {
+                onClick={guardAction('action-3', async () => {
                   const title = snipTitle.trim() || `${activeFile.name} snippet`;
                   await createRecord('code_snippet', title, { language: activeFile.language, content: activeFile.content });
                   setSnipTitle('');
                   pushToast(`Saved snippet "${title}"`, { tone: 'ok' });
-                }}
+                })}
               >
                 Save
               </button>
@@ -317,10 +323,10 @@ export const CodeStudioView: React.FC = () => {
               <select className="dp-select" value={activeFile.language} onChange={(e) => void updateActiveFile({ language: e.target.value })}>
                 {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
               </select>
-              <button type="button" className="dp-btn dp-btn-primary" disabled={running} onClick={() => void handleRunCode()}>
+              <button type="button" className="dp-btn dp-btn-primary" disabled={running} onClick={guardAction('run', () => handleRunCode())}>
                 <Play size={13} /> {running ? 'Running...' : langInfo.executable ? 'Run in Sandbox' : 'External Toolchain'}
               </button>
-              <button type="button" className="dp-btn" disabled={running} onClick={() => void handleRunTests()}>
+              <button type="button" className="dp-btn" disabled={running} onClick={guardAction('run', () => handleRunTests())}>
                 <Terminal size={13} /> Run {tests.length} Tests
               </button>
               <button

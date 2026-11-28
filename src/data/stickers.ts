@@ -263,6 +263,9 @@ const RAW_CATALOG: RawSpec[] = [
       ['Darts', 'U+1F3AF'],
       ['Fishing', 'U+1F3A3'],
       ['Bowling', 'U+1F3B3'],
+      ['Racing', 'U+1F3CE'],
+      ['Baseball', 'U+26BE'],
+      ['Football', 'U+1F3C8'],
     ],
   ],
   [
@@ -353,6 +356,9 @@ const RAW_CATALOG: RawSpec[] = [
       ['Documents', 'U+1F4C4'],
       ['Write', 'U+270F'],
       ['Calculate', 'U+1F9EE'],
+      ['Focus target', 'U+1F3AF'],
+      ['Scan document', 'U+1F4F7'],
+      ['PDF reading', 'U+1F4D6'],
     ],
   ],
   [
@@ -372,6 +378,9 @@ const RAW_CATALOG: RawSpec[] = [
       ['Clipboard QC', 'U+1F4CB'],
       ['Chart trend', 'U+1F4C8'],
       ['Magnet', 'U+1F9F2'],
+      ['Sample vial', 'U+1F9EA'],
+      ['Data review', 'U+1F4CA'],
+      ['Calibration', 'U+1F4CF'],
     ],
   ],
   [

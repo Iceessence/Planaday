@@ -1,3 +1,4 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, Plus, Receipt, ShieldCheck, Trash2, Wallet } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -10,16 +11,20 @@ import { TabSettingsDrawer } from '../../components/Common/TabSettingsDrawer';
  * Multi-currency accumulator — NEVER silently sums mixed currencies! (Section 13.03)
  */
 export function sumByCurrency(items: Array<{ amount: number; currency: string }>): Record<string, number> {
-  const totals: Record<string, number> = {};
+  const totals = new Map<string, number>();
   for (const item of items) {
-    const cur = (item.currency || 'USD').toUpperCase();
-    totals[cur] = Number(((totals[cur] ?? 0) + (Number(item.amount) || 0)).toFixed(2));
+    const cur = (item.currency || 'USD').trim().toUpperCase() || 'USD';
+    const amount = Number(item.amount);
+    if (Number.isFinite(amount)) totals.set(cur, (totals.get(cur) ?? 0) + amount);
   }
-  return totals;
+  return Object.fromEntries(Array.from(totals, ([currency, total]) => [currency, Number(total.toFixed(2))]));
 }
 
 export const FinanceView: React.FC = () => {
   const { settings, patchSettings, records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  
+
 
   // Bill / subscription form
   const [billTitle, setBillTitle] = useState('');
@@ -157,7 +162,7 @@ export const FinanceView: React.FC = () => {
         <h4>Recurring Bills & Subscriptions</h4>
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-1', async (e) => {
             e.preventDefault();
             if (!billTitle.trim()) return;
             await createRecord('bill', billTitle.trim(), {
@@ -170,7 +175,7 @@ export const FinanceView: React.FC = () => {
             }, { dueDate: billDue });
             setBillTitle('');
             pushToast('Saved recurring bill');
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Bill or subscription…" value={billTitle} onChange={(e) => setBillTitle(e.target.value)} />
           <label className="dp-row" style={{ gap: 4 }}>
@@ -247,12 +252,12 @@ export const FinanceView: React.FC = () => {
           <h4>Envelope Budgets</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-2', async (e) => {
               e.preventDefault();
               if (!envCategory.trim()) return;
               await createRecord('budget_envelope', envCategory.trim(), { limit: envLimit, currency: envCurrency });
               pushToast('Saved budget envelope');
-            }}
+            })}
           >
             <input list="dp-budget-cats" className="dp-input" style={{ flex: 1 }} value={envCategory} onChange={(e) => setEnvCategory(e.target.value)} placeholder="Category (pick or type)…" />
             <datalist id="dp-budget-cats">
@@ -299,7 +304,7 @@ export const FinanceView: React.FC = () => {
             <strong style={{ fontSize: '0.88rem' }}>Log Expense Against Budget ({expenses.length})</strong>
             <form
               className="dp-row"
-              onSubmit={async (e) => {
+              onSubmit={guardForm('form-3', async (e) => {
                 e.preventDefault();
                 if (!expTitle.trim()) return;
                 await createRecord(
@@ -310,7 +315,7 @@ export const FinanceView: React.FC = () => {
                 );
                 setExpTitle('');
                 pushToast(`Logged expense (${expCurrency} ${expAmount.toFixed(2)})`, { canUndo: true });
-              }}
+              })}
             >
               <input className="dp-input" style={{ flex: 2 }} placeholder="Expense (e.g., Trader Joe's)" value={expTitle} onChange={(e) => setExpTitle(e.target.value)} />
               <input list="dp-budget-cats" className="dp-input" style={{ width: 115 }} value={expCategory} onChange={(e) => setExpCategory(e.target.value)} placeholder="Category" />
@@ -342,13 +347,13 @@ export const FinanceView: React.FC = () => {
           <h4><ShieldCheck size={15} /> Warranties & 30-Day Cool-Off Wishlist</h4>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-4', async (e) => {
               e.preventDefault();
               if (!warrantyItem.trim()) return;
               await createRecord('warranty', warrantyItem.trim(), { expiresDate: warrantyExp });
               setWarrantyItem('');
               pushToast('Saved warranty');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Receipt / Warranty item…" value={warrantyItem} onChange={(e) => setWarrantyItem(e.target.value)} />
             <input type="date" className="dp-input" style={{ width: 'auto' }} value={warrantyExp} onChange={(e) => setWarrantyExp(e.target.value)} />
@@ -369,7 +374,7 @@ export const FinanceView: React.FC = () => {
           <form
             className="dp-row"
             style={{ borderTop: '1px dashed var(--dp-border)', paddingTop: 10 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-5', async (e) => {
               e.preventDefault();
               if (!wishItem.trim()) return;
               await createRecord('wishlist_item', wishItem.trim(), {
@@ -379,7 +384,7 @@ export const FinanceView: React.FC = () => {
               });
               setWishItem('');
               pushToast('Added to Wishlist with 30-day cool-off');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} placeholder="Wishlist item (30-day cool-off)…" value={wishItem} onChange={(e) => setWishItem(e.target.value)} />
             <label className="dp-row" style={{ gap: 4 }}>

@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, CalendarPlus, GripVertical, Pause, Play, Plus, Star, Timer, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -72,6 +73,8 @@ const CHECKLIST_TEMPLATES: Record<string, string[]> = {
 
 export const TasksView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, logicalToday, pushToast, setActiveView } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
   const [title, setTitle] = useState('');
   const [doDate, setDoDate] = useState(activeDate);
   const [dueDate, setDueDate] = useState('');
@@ -108,6 +111,8 @@ export const TasksView: React.FC = () => {
     [records]
   );
 
+  const taskById = useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const activePinnedCount = useMemo(() => tasks.filter(x => x.payload.pinnedTop3Date === activeDate && x.status === 'active').length, [tasks, activeDate]);
   const learnedDurations = useMemo(() => computeLearnedTaskDurations(tasks), [tasks]);
   const durationStats = useMemo(() => computeDurationAnalytics(tasks, []), [tasks]);
 
@@ -322,10 +327,10 @@ export const TasksView: React.FC = () => {
     const age = computeTaskAgeMetadata(t, logicalToday);
     const isTimed = activeTimerTask?.taskId === t.id;
     const blockers = (t.payload.blockedByIds ?? [])
-      .map((id) => tasks.find((x) => x.id === id))
+      .map((id) => taskById.get(id))
       .filter((x): x is LifeRecord<TaskPayload> => Boolean(x && x.status !== 'done'));
     const expanded = expandedTaskId === t.id;
-    const pinnedCount = tasks.filter((x) => x.payload.pinnedTop3Date === activeDate && x.status === 'active').length;
+    const pinnedCount = activePinnedCount;
 
     return (
       <div
@@ -768,7 +773,7 @@ export const TasksView: React.FC = () => {
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('task_calendar')}>
             ⚡ Task Calendar
           </button>
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleCarryForwardPast()}>
+          <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('action-1', () => handleCarryForwardPast())}>
             Carry Forward Past
           </button>
           <select
@@ -793,7 +798,7 @@ export const TasksView: React.FC = () => {
       </div>
 
       {/* Add Task Form (Progressive Disclosure) */}
-      <form className="dp-card dp-stack" style={{ padding: 12 }} onSubmit={handleCreate}>
+      <form className="dp-card dp-stack" style={{ padding: 12 }} onSubmit={guardForm('form-1', handleCreate)}>
         <div className="dp-row">
           <input
             className="dp-input"
@@ -1018,7 +1023,7 @@ export const TasksView: React.FC = () => {
               </span>
               <div className="dp-row" style={{ gap: 6 }}>
                 <button type="button" className="dp-btn" onClick={() => setCompletingTask(null)}>Cancel</button>
-                <button type="button" className="dp-btn dp-btn-primary" onClick={() => void confirmCompleteWithDuration()}>
+                <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('action-2', () => confirmCompleteWithDuration())}>
                   Save &amp; Mark Complete
                 </button>
               </div>

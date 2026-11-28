@@ -36,10 +36,13 @@ export async function scheduleActionOnCalendar(
   milestoneId?: string
 ): Promise<LifeRecord<CalendarEventPayload> | null> {
   const source = await db.records.get(sourceRecordId);
-  if (!source) return null;
+  if (!source || source.deletedAt) return null;
   const settings = await getOrInitSettings();
-  const dur = Math.max(15, durationMin ?? source.estimateMin ?? 30);
-  const endTime = minutesToTime(timeToMinutes(startTime) + dur);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) throw new Error("Invalid start time");
+  const requested = durationMin ?? source.estimateMin ?? 30;
+  const dur = Math.max(15, Number.isFinite(requested) ? Math.round(requested) : 30);
+  const endMinutes = timeToMinutes(startTime) + dur;
+  const endTime = minutesToTime(endMinutes);
 
   let label = source.title;
   if (milestoneId && source.type === 'goal') {
@@ -52,7 +55,7 @@ export async function scheduleActionOnCalendar(
     label,
     {
       startDate: dateIso,
-      endDate: dateIso,
+      endDate: addDaysIso(dateIso, Math.floor(endMinutes / 1440)),
       startTime,
       endTime,
       allDay: false,
@@ -94,7 +97,7 @@ export async function completeActionAtomically(
 
   await batchApplyChanges(`Completed action`, async () => {
     const rec = await db.records.get(recordId);
-    if (!rec) return [];
+    if (!rec || rec.deletedAt) return [];
 
     // If clicked from a linked Calendar timeblock, resolve to the authoritative ActionItem
     let target = rec;
@@ -102,7 +105,7 @@ export async function completeActionAtomically(
       const linkedId = (rec.payload as unknown as CalendarEventPayload).linkedActionId;
       if (linkedId) {
         const linked = await db.records.get(linkedId);
-        if (linked) target = linked;
+        if (linked && !linked.deletedAt) target = linked;
       }
     }
 
@@ -228,7 +231,7 @@ export async function applyRecurringEventEdit(
 
   await batchApplyChanges(`Updated recurring event (${scope})`, async () => {
     const master = (await db.records.get(masterEventId)) as LifeRecord<CalendarEventPayload> | undefined;
-    if (!master) return [];
+    if (!master || master.deletedAt || master.type !== 'event') return [];
     const changes: UndoEntry['changes'] = [];
 
     if (scope === 'series' || !master.recurrence) {

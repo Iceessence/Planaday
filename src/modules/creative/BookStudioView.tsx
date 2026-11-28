@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -56,6 +57,9 @@ function countWords(text: string): number {
 
 export const BookStudioView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const books = useMemo(
     () => records.filter((r) => r.type === 'book_project' && !r.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records]
@@ -111,13 +115,13 @@ export const BookStudioView: React.FC = () => {
     const chars = bookEntities.filter((e) => (e.payload as BookEntityPayload).kind === 'character');
     const arcs = bookEntities.filter((e) => (e.payload as BookEntityPayload).kind === 'arc');
 
+    const chapterText = chapters.map(chap => ({ chap, text: ((chap.payload as BookChapterPayload).content ?? '').toLowerCase() }));
     for (const ch of chars) {
       const cp = ch.payload as BookEntityPayload;
       if (cp.deathChapterOrder && cp.deathChapterOrder > 0) {
         const nameLower = ch.title.toLowerCase();
-        for (const chap of chapters) {
+        for (const { chap, text: txt } of chapterText) {
           const ord = (chap.payload as BookChapterPayload).order;
-          const txt = ((chap.payload as BookChapterPayload).content ?? '').toLowerCase();
           if (ord > cp.deathChapterOrder && nameLower.length >= 2 && txt.includes(nameLower)) {
             alerts.push({
               severity: 'warn',
@@ -138,7 +142,7 @@ export const BookStudioView: React.FC = () => {
     }
     for (const chap of chapters) {
       const cp = chap.payload as BookChapterPayload;
-      if (!cp.povCharacter.trim()) {
+      if (!(cp.povCharacter ?? '').trim()) {
         alerts.push({ severity: 'info', message: `Chapter ${cp.order} ("${chap.title}") has no POV character assigned.` });
       }
       if (countWords(cp.content ?? '') === 0) {
@@ -202,7 +206,7 @@ export const BookStudioView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const title = newBookTitle.trim() || `Untitled Novel ${books.length + 1}`;
               const book = await createRecord<BookProjectPayload>('book_project', title, {
                 seriesName: newSeriesName.trim(),
@@ -226,7 +230,7 @@ export const BookStudioView: React.FC = () => {
               setSelectedBookId(book.id);
               setSelectedChapId(ch1.id);
               pushToast(`Created book "${title}"`, { tone: 'ok' });
-            }}
+            })}
           >
             <Plus size={14} /> New Book
           </button>
@@ -235,7 +239,7 @@ export const BookStudioView: React.FC = () => {
               <button type="button" className="dp-btn" onClick={() => exportManuscript('md')}><Download size={13} /> .MD</button>
               <button type="button" className="dp-btn" onClick={() => exportManuscript('doc')}><Download size={13} /> .DOC</button>
               <button type="button" className="dp-btn" onClick={() => window.print()}><Printer size={13} /> PDF</button>
-              <button type="button" className="dp-btn" onClick={async () => { await softDeleteRecord(activeBook.id); setSelectedBookId(null); }}><Trash2 size={13} /></button>
+              <button type="button" className="dp-btn" onClick={guardAction('action-2', async () => { await softDeleteRecord(activeBook.id); setSelectedBookId(null); })}><Trash2 size={13} /></button>
             </>
           )}
         </div>
@@ -274,7 +278,7 @@ export const BookStudioView: React.FC = () => {
                     <button
                       type="button"
                       className="dp-btn"
-                      onClick={async () => {
+                      onClick={guardAction('action-3', async () => {
                         const ch = await createRecord<BookChapterPayload>('book_chapter', `Chapter ${chapters.length + 1}`, {
                           bookId: activeBook.id,
                           order: chapters.length + 1,
@@ -285,7 +289,7 @@ export const BookStudioView: React.FC = () => {
                           content: '',
                         });
                         setSelectedChapId(ch.id);
-                      }}
+                      })}
                     >
                       <Plus size={13} />
                     </button>
@@ -391,7 +395,7 @@ export const BookStudioView: React.FC = () => {
                   <button
                     type="button"
                     className="dp-btn dp-btn-primary"
-                    onClick={async () => {
+                    onClick={guardAction('action-4', async () => {
                       const title = entTitle.trim() || `New ${kind}`;
                       await createRecord<BookEntityPayload>('book_entity', title, {
                         bookId: activeBook.id,
@@ -407,7 +411,7 @@ export const BookStudioView: React.FC = () => {
                       setEntAge('');
                       setEntDeathChap('');
                       setEntDetails('');
-                    }}
+                    })}
                   >
                     <Plus size={13} /> Add
                   </button>

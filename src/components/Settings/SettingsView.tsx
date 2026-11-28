@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Plus, Trash2, Users, Volume2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import {
@@ -102,6 +102,18 @@ const MODULE_META: Array<{ id: ModuleId; label: string; group: string; optional?
   { id: 'ai', label: 'Optional Local / BYOK AI Assistant', group: 'Optional Life-OS', optional: true },
 ];
 
+/** Keep slider drag events local; persist once when the gesture ends. */
+function CommitRange({ value, onCommit, ...props }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> & { value: number; onCommit: (value: number) => void }) {
+  const [draft, setDraft] = useState(value);
+  const pending = useRef<number | null>(null);
+  const commitRef = useRef(onCommit);
+  commitRef.current = onCommit;
+  useEffect(() => { if (pending.current === null) setDraft(value); }, [value]);
+  const flush = () => { if (pending.current !== null) { const next = pending.current; pending.current = null; commitRef.current(next); } };
+  useEffect(() => () => { if (pending.current !== null) { const next = pending.current; pending.current = null; commitRef.current(next); } }, []);
+  return <span className="dp-row" style={{ gap: 6, flex: 1 }}><input {...props} type="range" value={draft} onChange={(e) => { const next = Number(e.currentTarget.value); pending.current = next; setDraft(next); }} onPointerUp={flush} onPointerCancel={flush} onKeyUp={flush} onBlur={flush} /><output className="dp-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>{draft}</output></span>;
+}
+
 export const SettingsView: React.FC = () => {
   const {
     settings,
@@ -131,6 +143,11 @@ export const SettingsView: React.FC = () => {
   const [syncFallbackDraft, setSyncFallbackDraft] = useState(settings.syncFallbackUrl || '');
   const [syncTestOutput, setSyncTestOutput] = useState('');
   const [syncTesting, setSyncTesting] = useState(false);
+  const syncLock = useRef(false);
+  const authLock = useRef(false);
+  const backupLock = useRef(false);
+  const [localBackupBusy, setLocalBackupBusy] = useState(false);
+  const [moduleQuery, setModuleQuery] = useState('');
   const [serverStorage, setServerStorage] = useState<ServerStorageInfo | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [gpuStatus, setGpuStatus] = useState<Record<string, unknown> | null>(null);
@@ -153,47 +170,80 @@ export const SettingsView: React.FC = () => {
   >([]);
   const [authBusy, setAuthBusy] = useState(false);
 
-  const activeSyncBase = () => normalizeServerUrl(settings.syncServerUrl || syncPrimaryDraft || '');
-
-  const refreshAuthStatus = async () => {
-    const base = activeSyncBase();
+  // Auth requests must use the saved server, never an untested address draft.
+  const savedBase = normalizeServerUrl(settings.syncServerUrl || '');
+  const activeSyncBase = () => savedBase;
+  const authRequest = useRef<AbortController | null>(null);
+  const authScope = useRef({ base: savedBase, token: settings.syncAuthToken });
+  authScope.current = { base: savedBase, token: settings.syncAuthToken };
+  const refreshAuthStatus = useCallback(async (tokenOverride?: string) => {
+    authRequest.current?.abort();
+    const controller = new AbortController(); authRequest.current = controller;
+    const { base, token: savedToken } = authScope.current;
+    const token = tokenOverride ?? savedToken;
     const headers: Record<string, string> = {};
-    if (settings.syncAuthToken) headers.Authorization = `Bearer ${settings.syncAuthToken}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    const current = () => authRequest.current === controller && authScope.current.base === base;
     try {
-      const res = await fetch(`${base}/api/auth/status`, { headers });
-      if (!res.ok) return;
+      const res = await fetch(`${base}/api/auth/status`, { headers, signal: controller.signal });
+      if (!res.ok) throw new Error('Auth status unavailable');
       const data = await res.json();
-      setAuthStatus(data);
+      if (!current()) return;
+      setAuthStatus(data); setPairedDevices([]);
       if (data.authenticated && data.principal?.role === 'owner') {
-        const dRes = await fetch(`${base}/api/auth/devices`, { headers });
+        const dRes = await fetch(`${base}/api/auth/devices`, { headers, signal: controller.signal });
         if (dRes.ok) {
           const dJson = await dRes.json();
-          if (Array.isArray(dJson.devices)) setPairedDevices(dJson.devices);
+          if (current() && Array.isArray(dJson.devices)) setPairedDevices(dJson.devices);
         }
       }
     } catch {
-      setAuthStatus(null);
-    }
-  };
-
+      if (current()) { setAuthStatus(null); setPairedDevices([]); }
+    } finally { window.clearTimeout(timeout); }
+  }, []);
   useEffect(() => {
     if (tab !== 'sync') return;
-    let cancelled = false;
-    void fetchServerStorageInfo().then((info) => {
-      if (!cancelled) setServerStorage(info);
-    });
+    setAuthStatus(null); setPairedDevices([]); setGeneratedPairCode(null);
     void refreshAuthStatus();
-    return () => {
-      cancelled = true;
+    return () => { authRequest.current?.abort(); authRequest.current = null; };
+  }, [tab, savedBase, settings.syncAuthToken, refreshAuthStatus]);
+  useEffect(() => {
+    if (tab !== 'sync') return;
+    let cancelled = false, pending = false;
+    setServerStorage(null);
+    const refresh = async () => {
+      if (cancelled || pending || document.hidden) return;
+      pending = true;
+      try { const info = await fetchServerStorageInfo(); if (!cancelled) setServerStorage(info); }
+      catch { if (!cancelled) setServerStorage(null); }
+      finally { pending = false; }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, syncState.lastSyncAt, settings.syncServerUrl, settings.syncAuthToken]);
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 60_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { cancelled = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [tab, settings.syncServerUrl, settings.syncFallbackUrl, settings.syncAuthToken]);
+  // Reflect saved addresses changed in the top bar without overwriting ongoing edits on unrelated renders.
+  useEffect(() => { setSyncPrimaryDraft(settings.syncServerUrl || ''); }, [settings.syncServerUrl]);
+  useEffect(() => { setSyncFallbackDraft(settings.syncFallbackUrl || ''); }, [settings.syncFallbackUrl]);
+  const runLocalBackup = async (action: () => Promise<void>) => {
+    if (backupLock.current) return;
+    backupLock.current = true; setLocalBackupBusy(true);
+    try { await action(); }
+    catch (err) { pushToast(err instanceof Error ? err.message : 'Backup operation failed.', { tone: 'warn' }); }
+    finally { backupLock.current = false; setLocalBackupBusy(false); }
+  };
+  const visibleModules = useMemo(() => {
+    const words = moduleQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return MODULE_META.filter((m) => words.every((w) => `${m.label} ${m.group} ${m.id}`.toLowerCase().includes(w)));
+  }, [moduleQuery]);
 
   const importBackupRef = useRef<HTMLInputElement | null>(null);
   const importThemeRef = useRef<HTMLInputElement | null>(null);
 
-  const guarded = computeGuardedTheme(settings.customTokens, settings.contrastLevel === 'AAA' ? 7.0 : 4.5);
-  const runtimeInfo = detectRuntimePlatform();
+  const guarded = useMemo(() => tab === 'theme' ? computeGuardedTheme(settings.customTokens, settings.contrastLevel === 'AAA' ? 7.0 : 4.5) : null, [tab, settings.customTokens, settings.contrastLevel]);
+  const runtimeInfo = useMemo(() => detectRuntimePlatform(), []);
   const np = settings.notificationPrefs;
 
   const updateNotif = (patch: Partial<typeof np>) => {
@@ -208,7 +258,7 @@ export const SettingsView: React.FC = () => {
 
   const handleBackupImport = async (file: File) => {
     try {
-      if (file.name.endsWith('.zip')) {
+      if (/\.zip$/i.test(file.name)) {
         const res = await importZipBackup(file);
         pushToast(`Imported ${res.importedRecords} records & ${res.importedBlobs} binary blobs from ZIP.`);
       } else {
@@ -237,14 +287,14 @@ export const SettingsView: React.FC = () => {
 
   return (
     <div className="dp-paper-sheet" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-5)' }}>
-      <div className="dp-between" style={{ marginBottom: 16 }}>
+      <div className="dp-between" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h2>Settings, Notifications, Family Profiles &amp; Personalization</h2>
           <p className="dp-muted" style={{ margin: '4px 0 0', fontSize: '0.88rem' }}>
-            Zero localStorage · Unlimited IndexedDB + Blob storage · Automatic OKLCH WCAG contrast guard
+            Local IndexedDB + blob storage (subject to device quota) · Automatic OKLCH contrast guard
           </p>
         </div>
-        <div className="dp-row" style={{ gap: 5 }}>
+        <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap' }}>
           {(
             [
               ['theme', 'Theme & Style'],
@@ -260,6 +310,7 @@ export const SettingsView: React.FC = () => {
               key={id}
               type="button"
               className={`dp-btn dp-btn-sm ${tab === id ? 'dp-btn-primary' : ''}`}
+              aria-pressed={tab === id}
               onClick={() => setTab(id)}
             >
               {label}
@@ -347,7 +398,7 @@ export const SettingsView: React.FC = () => {
                 type="button"
                 className="dp-btn dp-btn-sm"
                 onClick={() => {
-                  audioEngine.playChime(np.chimeStyle, Math.max(0.05, np.volume / 100));
+                  if (np.volume > 0) audioEngine.playChime(np.chimeStyle, np.volume / 100);
                   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                     try {
                       new Notification('Planaday Test Alert', { body: 'Notifications and sound are working on this device!' });
@@ -365,15 +416,15 @@ export const SettingsView: React.FC = () => {
             <div className="dp-grid-2" style={{ gap: 12 }}>
               <label className="dp-stack" style={{ gap: 4 }}>
                 <span className="dp-muted">
-                  <Volume2 size={14} style={{ verticalAlign: '-2px' }} /> Alarm &amp; Notification Loudness: <strong>{np.volume}%</strong>
+                  <Volume2 size={14} style={{ verticalAlign: '-2px' }} /> Alarm &amp; Notification Loudness (%)
                 </span>
-                <input
-                  type="range"
+                <CommitRange
+                  
                   min={0}
                   max={100}
                   step={5}
                   value={np.volume}
-                  onChange={(e) => updateNotif({ volume: Number(e.target.value) })}
+                  onCommit={(next) => updateNotif({ volume: next })}
                 />
               </label>
 
@@ -394,7 +445,7 @@ export const SettingsView: React.FC = () => {
                   <button
                     type="button"
                     className="dp-btn dp-btn-sm"
-                    onClick={() => audioEngine.playChime(np.chimeStyle, Math.max(0.05, np.volume / 100))}
+                    onClick={() => { if (np.volume > 0) audioEngine.playChime(np.chimeStyle, np.volume / 100); }}
                   >
                     ▶ Preview ({np.volume}%)
                   </button>
@@ -469,7 +520,7 @@ export const SettingsView: React.FC = () => {
                     className="dp-input"
                     style={{ width: 72 }}
                     value={np.stopwatchIntervalMin}
-                    onChange={(e) => updateNotif({ stopwatchIntervalMin: Math.max(0, Number(e.target.value) || 0) })}
+                    onChange={(e) => updateNotif({ stopwatchIntervalMin: Math.max(0, Math.min(240, Number(e.target.value) || 0)) })}
                   />
                   <span>min (0 = off)</span>
                 </label>
@@ -681,6 +732,7 @@ export const SettingsView: React.FC = () => {
                       key={col}
                       type="button"
                       aria-label={`Set accent ${col}`}
+                      aria-pressed={settings.customTokens.primaryAccent === col}
                       onClick={() => updateToken('primaryAccent', col)}
                       style={{
                         width: 22,
@@ -706,8 +758,8 @@ export const SettingsView: React.FC = () => {
           <div className="dp-section-title">
             <span>Theme Studio Presets (8 Built-in + OKLCH Contrast Guard)</span>
             <div className="dp-row">
-              <span className="dp-pill">Paper Contrast: {guarded.paperContrast.toFixed(1)}:1</span>
-              <span className="dp-pill">Button Contrast: {guarded.accentContrast.toFixed(1)}:1</span>
+              <span className="dp-pill">Paper Contrast: {guarded?.paperContrast.toFixed(1)}:1</span>
+              <span className="dp-pill">Button Contrast: {guarded?.accentContrast.toFixed(1)}:1</span>
               <select
                 aria-label="WCAG contrast target"
                 className="dp-select"
@@ -775,6 +827,7 @@ export const SettingsView: React.FC = () => {
                     key={p.id}
                     type="button"
                     className={`dp-btn dp-btn-sm ${settings.paperMaterial === p.id ? 'dp-btn-primary' : ''}`}
+                    aria-pressed={settings.paperMaterial === p.id}
                     onClick={() => void patchSettings({ paperMaterial: p.id })}
                   >
                     {p.label}
@@ -824,8 +877,8 @@ export const SettingsView: React.FC = () => {
                 </select>
               </label>
               <label className="dp-stack" style={{ gap: 4 }}>
-                <span className="dp-muted">Global Font Scale: {settings.fontSizePx} px (12–24 px)</span>
-                <input type="range" min={12} max={24} value={settings.fontSizePx} onChange={(e) => void patchSettings({ fontSizePx: Number(e.target.value) })} />
+                <span className="dp-muted">Global Font Scale (12–24 px)</span>
+                <CommitRange  min={12} max={24} value={settings.fontSizePx} onCommit={(next) => void patchSettings({ fontSizePx: next })} />
               </label>
               <label className="dp-stack" style={{ gap: 4 }}>
                 <span className="dp-muted">Density Mode</span>
@@ -988,8 +1041,13 @@ export const SettingsView: React.FC = () => {
           <p className="dp-muted" style={{ margin: 0 }}>
             Hide any module in 1 click without deleting underlying data. Active timers or alarms remain running in the mini-bar.
           </p>
+          <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <input className="dp-input" aria-label="Search modules" placeholder="Find a module…" value={moduleQuery} onChange={(e) => setModuleQuery(e.target.value)} style={{ flex: '1 1 180px' }} />
+            <span className="dp-muted" role="status">{visibleModules.length} modules · {MODULE_META.filter((m) => settings.enabledModules[m.id] !== false).length} enabled</span>
+            {moduleQuery && <button type="button" className="dp-btn dp-btn-sm" onClick={() => setModuleQuery('')}>Clear</button>}
+          </div>
           <div className="dp-grid-2">
-            {MODULE_META.map((m) => (
+            {visibleModules.map((m) => (
               <label key={m.id} className="dp-card dp-between" style={{ padding: 12, cursor: 'pointer' }}>
                 <div>
                   <strong>{m.label}</strong>
@@ -1047,15 +1105,15 @@ export const SettingsView: React.FC = () => {
               ))}
             </div>
             <label className="dp-row" style={{ gap: 10, fontSize: '0.84rem', marginTop: 4 }}>
-              <span className="dp-muted">Interface Scale: <strong>{settings.uiScalePct ?? 100}%</strong></span>
-              <input
-                type="range"
+              <span className="dp-muted">Interface Scale (%)</span>
+              <CommitRange
+                
                 min={80}
                 max={130}
                 step={5}
                 style={{ flex: 1, maxWidth: 240 }}
                 value={settings.uiScalePct ?? 100}
-                onChange={(e) => void patchSettings({ uiScalePct: Number(e.target.value) })}
+                onCommit={(next) => void patchSettings({ uiScalePct: next })}
               />
               <button type="button" className="dp-btn dp-btn-sm" onClick={() => void patchSettings({ uiScalePct: 100 })}>
                 Reset 100%
@@ -1279,6 +1337,7 @@ export const SettingsView: React.FC = () => {
               <input
                 className="dp-input"
                 placeholder="http://192.168.88.31:3000"
+                disabled={syncTesting || authBusy} inputMode="url" autoCapitalize="none" spellCheck={false}
                 value={syncPrimaryDraft}
                 onChange={(e) => setSyncPrimaryDraft(e.target.value)}
               />
@@ -1290,6 +1349,7 @@ export const SettingsView: React.FC = () => {
               <input
                 className="dp-input"
                 placeholder="http://100.x.y.z:3000 or https://your-host.ts.net"
+                disabled={syncTesting || authBusy} inputMode="url" autoCapitalize="none" spellCheck={false}
                 value={syncFallbackDraft}
                 onChange={(e) => setSyncFallbackDraft(e.target.value)}
               />
@@ -1298,42 +1358,33 @@ export const SettingsView: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn dp-btn-primary"
-                disabled={syncTesting}
+                disabled={syncTesting || authBusy}
                 onClick={async () => {
-                  setSyncTesting(true);
-                  setSyncTestOutput('');
-                  const normP = normalizeServerUrl(syncPrimaryDraft);
-                  const normF = normalizeServerUrl(syncFallbackDraft);
-                  setSyncPrimaryDraft(normP);
-                  setSyncFallbackDraft(normF);
-                  await patchSettings({
-                    operatingMode: 'docker-sync',
-                    syncServerUrl: normP,
-                    syncFallbackUrl: normF,
-                  });
-                  const urls = [normP, normF].filter(Boolean);
-                  const report: string[] = [];
-                  if (urls.length === 0) {
-                    const r = await testServerConnection('');
-                    report.push(r.ok ? `✓ Same-origin connected (${r.latencyMs}ms)` : `✕ ${r.error}`);
-                  } else {
-                    for (const u of urls) {
-                      const r = await testServerConnection(u);
-                      report.push(
-                        r.ok
-                          ? `✓ ${r.normalizedUrl} — Connected (${r.latencyMs}ms · ${r.recordCount ?? 0} records)`
-                          : `✕ ${r.normalizedUrl} — ${r.error}`
-                      );
+                  if (syncLock.current) return;
+                  syncLock.current = true; setSyncTesting(true); setSyncTestOutput('');
+                  try {
+                    const normP = normalizeServerUrl(syncPrimaryDraft), normF = normalizeServerUrl(syncFallbackDraft);
+                    for (const url of [normP, normF].filter(Boolean)) {
+                      const parsed = new URL(url);
+                      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Use an HTTP(S) server URL without credentials, query or fragment.');
                     }
-                  }
-                  setSyncTestOutput(report.join('\n'));
-                  await triggerSyncNow();
-                  setSyncTesting(false);
+                    setSyncPrimaryDraft(normP); setSyncFallbackDraft(normF);
+                    const urls = Array.from(new Set([normP, normF].filter(Boolean)));
+                    const results = await Promise.all((urls.length ? urls : ['']).map((url) => testServerConnection(url)));
+                    const report = results.map((r) => r.ok ? `✓ ${r.normalizedUrl || 'Same origin'} — Connected (${r.latencyMs}ms · ${r.recordCount ?? 0} records)` : `✕ ${r.normalizedUrl || 'Same origin'} — ${r.error}`);
+                    setSyncTestOutput(report.join('\n'));
+                    if (!results.some((r) => r.ok)) { setSyncTestOutput((msg) => `${msg}\nExisting settings retained.`); return; }
+                    const changed = normP !== savedBase || normF !== normalizeServerUrl(settings.syncFallbackUrl || '');
+                    await patchSettings({ operatingMode: 'docker-sync', syncServerUrl: normP, syncFallbackUrl: normF, ...(changed ? { syncAuthToken: '' } : {}) });
+                    if (changed && settings.syncAuthToken) pushToast('Server changed. Pair this device again if required.');
+                    await triggerSyncNow();
+                  } catch (err) { setSyncTestOutput(err instanceof Error ? err.message : 'Connection setup failed.'); }
+                  finally { syncLock.current = false; setSyncTesting(false); }
                 }}
               >
                 {syncTesting ? 'Testing…' : 'Save & Test Connection'}
               </button>
-              <button type="button" className="dp-btn" onClick={() => void triggerSyncNow()}>
+              <button type="button" className="dp-btn" disabled={syncTesting || syncState.status === 'syncing'} onClick={() => void triggerSyncNow().catch(() => pushToast('Sync request failed.', { tone: 'warn' }))}>
                 Sync Now
               </button>
               <button
@@ -1397,7 +1448,7 @@ export const SettingsView: React.FC = () => {
               </details>
             )}
             {syncTestOutput && (
-              <pre className="dp-card" style={{ margin: 0, padding: 10, whiteSpace: 'pre-wrap', fontSize: '0.8rem', background: 'var(--dp-surface-2)' }}>
+              <pre role="status" className="dp-card" style={{ margin: 0, padding: 10, whiteSpace: 'pre-wrap', fontSize: '0.8rem', background: 'var(--dp-surface-2)' }}>
                 {syncTestOutput}
               </pre>
             )}
@@ -1713,6 +1764,7 @@ export const SettingsView: React.FC = () => {
                 <input
                   type="password"
                   className="dp-input"
+                  autoComplete="current-password" aria-label="Owner passphrase"
                   placeholder="Owner passphrase (min 8 characters)"
                   value={authPassphrase}
                   onChange={(e) => setAuthPassphrase(e.target.value)}
@@ -1721,13 +1773,15 @@ export const SettingsView: React.FC = () => {
                   <button
                     type="button"
                     className="dp-btn dp-btn-primary dp-btn-sm"
-                    disabled={authBusy || authPassphrase.length < 8}
+                    disabled={authBusy || syncTesting || !authStatus || authPassphrase.length < 8}
                     onClick={async () => {
-                      setAuthBusy(true);
+                      if (authLock.current || syncLock.current) return;
+                      authLock.current = true; setAuthBusy(true);
                       try {
                         const endpoint = authStatus?.ownerInitialized ? '/api/auth/signin' : '/api/auth/setup';
                         const res = await fetch(`${activeSyncBase()}${endpoint}`, {
                           method: 'POST',
+                          signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined,
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             passphrase: authPassphrase,
@@ -1739,16 +1793,17 @@ export const SettingsView: React.FC = () => {
                         if (!res.ok || !data.token) {
                           pushToast(data.error || 'Authentication failed', { tone: 'danger' });
                         } else {
+                          if (authScope.current.base !== savedBase) throw new Error('Server changed during authentication.');
                           await patchSettings({ syncAuthToken: data.token });
                           setAuthPassphrase('');
                           pushToast(authStatus?.ownerInitialized ? 'Signed in and saved device token!' : 'Server protection enabled & device paired!', { tone: 'ok' });
-                          await refreshAuthStatus();
+                          await refreshAuthStatus(data.token);
                           await triggerSyncNow();
                         }
                       } catch {
                         pushToast('Could not reach sync server for authentication.', { tone: 'warn' });
                       } finally {
-                        setAuthBusy(false);
+                        authLock.current = false; setAuthBusy(false);
                       }
                     }}
                   >
@@ -1757,12 +1812,15 @@ export const SettingsView: React.FC = () => {
                   {settings.syncAuthToken && (
                     <button
                       type="button"
-                      className="dp-btn dp-btn-sm"
+                      className="dp-btn dp-btn-sm" disabled={authBusy || syncTesting}
                       onClick={async () => {
-                        await patchSettings({ syncAuthToken: '' });
+                        if (authLock.current || syncLock.current) return;
+                        authLock.current = true; setAuthBusy(true);
+                        try { await patchSettings({ syncAuthToken: '' });
                         setPairedDevices([]);
                         pushToast('Cleared saved device token locally.');
-                        await refreshAuthStatus();
+                        await refreshAuthStatus('');
+                        } catch { pushToast('Could not clear local token.', { tone: 'warn' }); } finally { authLock.current = false; setAuthBusy(false); }
                       }}
                     >
                       Clear Local Token
@@ -1777,6 +1835,7 @@ export const SettingsView: React.FC = () => {
                   <input
                     className="dp-input"
                     style={{ flex: 1, minWidth: 0 }}
+                    aria-label="Pairing code" autoComplete="one-time-code"
                     placeholder="Enter pairing code from owner device…"
                     value={pairCodeInput}
                     onChange={(e) => setPairCodeInput(e.target.value)}
@@ -1784,12 +1843,14 @@ export const SettingsView: React.FC = () => {
                   <button
                     type="button"
                     className="dp-btn dp-btn-sm"
-                    disabled={authBusy || !pairCodeInput.trim()}
+                    disabled={authBusy || syncTesting || !pairCodeInput.trim()}
                     onClick={async () => {
-                      setAuthBusy(true);
+                      if (authLock.current || syncLock.current) return;
+                      authLock.current = true; setAuthBusy(true);
                       try {
                         const res = await fetch(`${activeSyncBase()}/api/auth/pair`, {
                           method: 'POST',
+                          signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined,
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             code: pairCodeInput.trim(),
@@ -1801,16 +1862,17 @@ export const SettingsView: React.FC = () => {
                         if (!res.ok || !data.token) {
                           pushToast(data.error || 'Invalid or expired pairing code', { tone: 'danger' });
                         } else {
+                          if (authScope.current.base !== savedBase) throw new Error('Server changed during authentication.');
                           await patchSettings({ syncAuthToken: data.token });
                           setPairCodeInput('');
                           pushToast('Device paired successfully!', { tone: 'ok' });
-                          await refreshAuthStatus();
+                          await refreshAuthStatus(data.token);
                           await triggerSyncNow();
                         }
                       } catch {
                         pushToast('Failed to reach server for pairing.', { tone: 'warn' });
                       } finally {
-                        setAuthBusy(false);
+                        authLock.current = false; setAuthBusy(false);
                       }
                     }}
                   >
@@ -1821,10 +1883,14 @@ export const SettingsView: React.FC = () => {
                   <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      className="dp-btn dp-btn-sm"
+                      className="dp-btn dp-btn-sm" disabled={authBusy || syncTesting}
                       onClick={async () => {
+                        if (authLock.current || syncLock.current) return;
+                        authLock.current = true; setAuthBusy(true);
+                        try {
                         const res = await fetch(`${activeSyncBase()}/api/auth/pair-code`, {
                           method: 'POST',
+                          signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined,
                           headers: {
                             'Content-Type': 'application/json',
                             ...(settings.syncAuthToken ? { Authorization: `Bearer ${settings.syncAuthToken}` } : {}),
@@ -1834,10 +1900,11 @@ export const SettingsView: React.FC = () => {
                         const data = await res.json();
                         if (res.ok && data.code) {
                           setGeneratedPairCode({ code: data.code, expiresAt: data.expiresAt });
-                          pushToast(`Pairing code generated: ${data.code}`);
+                          pushToast('Pairing code generated. Share it only with a trusted device.');
                         } else {
                           pushToast(data.error || 'Could not generate pairing code', { tone: 'warn' });
                         }
+                        } catch { pushToast('Server authorization action failed.', { tone: 'warn' }); } finally { authLock.current = false; setAuthBusy(false); }
                       }}
                     >
                       Generate Pairing Code
@@ -1865,10 +1932,14 @@ export const SettingsView: React.FC = () => {
                     {!dev.revokedAt && (
                       <button
                         type="button"
-                        className="dp-btn dp-btn-danger dp-btn-sm"
+                        className="dp-btn dp-btn-danger dp-btn-sm" disabled={authBusy || syncTesting}
                         onClick={async () => {
+                          if (authLock.current || syncLock.current) return;
+                          authLock.current = true; setAuthBusy(true);
+                          try {
                           const res = await fetch(`${activeSyncBase()}/api/auth/revoke`, {
                             method: 'POST',
+                          signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined,
                             headers: {
                               'Content-Type': 'application/json',
                               ...(settings.syncAuthToken ? { Authorization: `Bearer ${settings.syncAuthToken}` } : {}),
@@ -1878,7 +1949,8 @@ export const SettingsView: React.FC = () => {
                           if (res.ok) {
                             pushToast(`Revoked access for "${dev.label}"`);
                             await refreshAuthStatus();
-                          }
+                          } else pushToast('Could not revoke device access.', { tone: 'warn' });
+                          } catch { pushToast('Server authorization action failed.', { tone: 'warn' }); } finally { authLock.current = false; setAuthBusy(false); }
                         }}
                       >
                         Revoke
@@ -1912,15 +1984,17 @@ export const SettingsView: React.FC = () => {
                   className="dp-btn dp-btn-primary dp-btn-sm"
                   disabled={backupBusy || !serverStorage}
                   onClick={async () => {
-                    setBackupBusy(true);
+                    if (backupLock.current) return;
+                    backupLock.current = true; setBackupBusy(true);
+                    try {
                     const res = await triggerServerSqliteBackup();
-                    setBackupBusy(false);
                     if (res.ok) {
                       pushToast(`Backed up SQLite snapshot (${((res.sizeBytes ?? 0) / 1024).toFixed(1)} KB) to TrueNAS blobs/db-backups!`);
                       void fetchServerStorageInfo().then(setServerStorage);
                     } else {
                       pushToast(res.error || 'Backup failed', { tone: 'warn' });
                     }
+                    } catch { pushToast('Server backup failed.', { tone: 'warn' }); } finally { backupLock.current = false; setBackupBusy(false); }
                   }}
                 >
                   {backupBusy ? 'Backing up…' : 'Backup SQLite to TrueNAS Now'}
@@ -2005,10 +2079,10 @@ export const SettingsView: React.FC = () => {
                 <div className="dp-muted" style={{ fontSize: '0.82rem' }}>
                   Persistent Storage: {storageHealth.persisted ? 'Granted' : 'Best-Effort'} · Used:{' '}
                   {(storageHealth.usageBytes / (1024 * 1024)).toFixed(2)} MB /{' '}
-                  {storageHealth.quotaBytes > 0 ? `${(storageHealth.quotaBytes / (1024 * 1024)).toFixed(0)} MB` : 'Unlimited'}
+                  {storageHealth.quotaBytes > 0 ? `${(storageHealth.quotaBytes / (1024 * 1024)).toFixed(0)} MB` : 'Quota unavailable'}
                 </div>
               </div>
-              <span className="dp-pill">Zero localStorage verified</span>
+              <span className="dp-pill">Local database</span>
             </div>
           )}
         </div>
@@ -2033,8 +2107,8 @@ export const SettingsView: React.FC = () => {
               </select>
             </label>
             <label className="dp-stack" style={{ gap: 4 }}>
-              <span>Daily Capacity Warning Threshold: {settings.dailyCapacityHours} hrs</span>
-              <input type="range" min={3} max={14} value={settings.dailyCapacityHours} onChange={(e) => void patchSettings({ dailyCapacityHours: Number(e.target.value) })} />
+              <span>Daily Capacity Warning Threshold (hours)</span>
+              <CommitRange  min={3} max={14} value={settings.dailyCapacityHours} onCommit={(next) => void patchSettings({ dailyCapacityHours: next })} />
             </label>
           </div>
 
@@ -2073,47 +2147,52 @@ export const SettingsView: React.FC = () => {
         <div className="dp-stack">
           <div className="dp-card dp-stack">
             <h4>Portable Export Center (Works Across All 3 Operating Modes)</h4>
+            {localBackupBusy && <p role="status" className="dp-muted">Working on backup…</p>}
             <p className="dp-muted" style={{ margin: 0, fontSize: '0.86rem' }}>
-              Export or restore your entire database—including unlimited long notes, revisions, time logs, and binary blobs.
+              Export or restore your entire database—including long notes, revisions, time logs, and binary blobs.
             </p>
             <div className="dp-row">
               <button
                 type="button"
                 className="dp-btn dp-btn-primary"
-                onClick={async () => {
+                disabled={localBackupBusy}
+                onClick={() => void runLocalBackup(async () => {
                   const zip = await exportFullZipBackup();
                   triggerBrowserDownload(zip, `planaday-full-backup-${logicalToday}.zip`, 'application/zip');
                   pushToast('Downloaded full ZIP backup (records + blobs).');
-                }}
+                })}
               >
                 1-Click Full ZIP Backup (with Blobs)
               </button>
               <button
                 type="button"
                 className="dp-btn"
-                onClick={async () => {
+                disabled={localBackupBusy}
+                onClick={() => void runLocalBackup(async () => {
                   const json = await exportFullJsonBackup();
                   triggerBrowserDownload(json, `planaday-backup-${logicalToday}.json`, 'application/json');
                   pushToast('Downloaded JSON backup.');
-                }}
+                })}
               >
                 1-Click JSON Export
               </button>
               <button
                 type="button"
                 className="dp-btn"
-                onClick={async () => {
+                disabled={localBackupBusy}
+                onClick={() => void runLocalBackup(async () => {
                   try {
                     const res = await saveDirectToDiskFolder();
                     pushToast(`Saved ${res.filename} (${res.method})`);
-                  } catch {
-                    pushToast('Folder selection canceled');
+                  } catch (err) {
+                    if (err instanceof DOMException && err.name === 'AbortError') pushToast('Folder selection canceled');
+                    else throw err;
                   }
-                }}
+                })}
               >
                 Direct Disk Folder Backup (Desktop)
               </button>
-              <button type="button" className="dp-btn" onClick={() => importBackupRef.current?.click()}>
+              <button type="button" className="dp-btn" disabled={localBackupBusy} onClick={() => importBackupRef.current?.click()}>
                 Import JSON / ZIP Backup
               </button>
               <input
@@ -2123,7 +2202,7 @@ export const SettingsView: React.FC = () => {
                 hidden
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) void handleBackupImport(f);
+                  if (f) void runLocalBackup(() => handleBackupImport(f));
                   e.target.value = '';
                 }}
               />

@@ -137,7 +137,7 @@ export const ReportsView: React.FC = () => {
   };
 
   const cur = useMemo(() => computePeriodMetrics(range.start, range.end), [range, tasks, chores, diaries, foods, records, categoryFilter, logicalToday]);
-  const prev = useMemo(() => computePeriodMetrics(range.prevStart, range.prevEnd), [range, tasks, chores, diaries, foods, records, categoryFilter, logicalToday]);
+  const prev = useMemo(() => comparePrev ? computePeriodMetrics(range.prevStart, range.prevEnd) : cur, [comparePrev, cur, range, tasks, chores, diaries, foods, records, categoryFilter, logicalToday]);
 
   const deltaBadge = (a: number, b: number) => {
     if (!comparePrev || period === 'all') return null;

@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bookmark,
@@ -93,6 +94,9 @@ export const PdfStudioView: React.FC = () => {
     setSelectedNoteId,
     setActiveView,
   } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   const pdfDocs = useMemo(
     () =>
@@ -142,91 +146,91 @@ export const PdfStudioView: React.FC = () => {
     }
   }, [activeDoc, openTabIds]);
 
+  const activeHash = activeDoc?.payload.activeBlobHash;
   const loadActiveBytes = useCallback(async (): Promise<Uint8Array | null> => {
-    if (!activeDoc) return null;
-    const blobRec = await db.blobs.get(activeDoc.payload.activeBlobHash);
-    if (!blobRec?.data) return null;
-    return new Uint8Array(blobRec.data);
-  }, [activeDoc]);
+    if (!activeHash) return null;
+    const blobRec = await db.blobs.get(activeHash);
+    if (!blobRec) return null;
+    const data = blobRec.data ?? blobRec.blob;
+    if (!data) return null;
+    return new Uint8Array(data instanceof Blob ? await data.arrayBuffer() : data);
+  }, [activeHash]);
 
-  // Render active pages via pdfjs-dist into bounded page data URLs (max 12 cached pages!)
+  // Metadata is independent of zoom/page changes. Do not overwrite in-progress form edits.
   useEffect(() => {
     let cancelled = false;
-    if (!activeDoc) {
-      setRenderedPages({});
-      setMetaInfo(null);
-      return;
-    }
-
-    (async () => {
-      const bytes = await loadActiveBytes();
-      if (!bytes || cancelled) return;
+    setMetaInfo(null);
+    setFormDraft({});
+    if (!activeDoc) return;
+    const savedForm = { ...(activeDoc.payload.formValues ?? {}) };
+    void (async () => {
       try {
+        const bytes = await loadActiveBytes();
+        if (!bytes || cancelled) return;
         const info = await inspectPdfBytes(bytes);
-        if (!cancelled) {
-          setMetaInfo(info);
-          const fMap: Record<string, string | boolean> = { ...(activeDoc.payload.formValues ?? {}) };
-          for (const f of info.formFields) {
-            if (!(f.name in fMap)) fMap[f.name] = f.value;
-          }
-          setFormDraft(fMap);
-        }
-      } catch {
-        // Non-fatal metadata error
-      }
+        if (cancelled) return;
+        setMetaInfo(info);
+        for (const f of info.formFields) if (!(f.name in savedForm)) savedForm[f.name] = f.value;
+        setFormDraft(savedForm);
+      } catch (err) { if (!cancelled) console.warn('PDF metadata unavailable', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [activeDoc?.id, activeHash, loadActiveBytes]);
 
+  // Render a bounded window. Dispose cancelled PDF.js workers and their canvases.
+  useEffect(() => {
+    let cancelled = false;
+    let dispose: (() => Promise<void>) | undefined;
+    let cancelRender: (() => void) | undefined;
+    const urls: string[] = [];
+    setRenderedPages({});
+    if (!activeDoc) return;
+    void (async () => {
       try {
+        const bytes = await loadActiveBytes();
+        if (!bytes || cancelled) return;
         const pdfjs = await loadPdfJs();
-        const task = pdfjs.getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false });
+        if (cancelled) return;
+        const task = pdfjs.getDocument({ data: bytes, useWorkerFetch: false });
+        let destroyed = false;
+        dispose = async () => { if (!destroyed) { destroyed = true; await task.destroy(); } };
         const pdf = await task.promise;
-        const zoom = activeDoc.payload.zoom || 1.15;
+        if (cancelled) return;
+        const zoom = Math.max(0.1, Math.min(8, activeDoc.payload.zoom || 1.15));
         const cur = Math.max(1, Math.min(pdf.numPages, activeDoc.payload.currentPage || 1));
-
-        // Determine bounded set of pages to render (keeps memory low on phones!)
-        const toRender = new Set<number>();
-        if (activeDoc.payload.viewMode === 'continuous') {
-          const start = Math.max(1, cur - 3);
-          const end = Math.min(pdf.numPages, cur + 5);
-          for (let p = start; p <= end; p++) toRender.add(p);
-        } else if (activeDoc.payload.viewMode === 'spread') {
-          toRender.add(cur);
-          if (cur + 1 <= pdf.numPages) toRender.add(cur + 1);
-        } else {
-          toRender.add(cur);
-        }
-
+        const from = activeDoc.payload.viewMode === 'continuous' ? Math.max(1, cur - 3) : cur;
+        const to = activeDoc.payload.viewMode === 'continuous' ? Math.min(pdf.numPages, cur + 5) : activeDoc.payload.viewMode === 'spread' ? Math.min(pdf.numPages, cur + 1) : cur;
         const nextUrls: Record<number, string> = {};
-        for (const pageNum of toRender) {
-          if (cancelled) break;
+        for (let pageNum = from; pageNum <= to && !cancelled; pageNum++) {
           const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: zoom * 1.25 });
+          if (cancelled) break;
+          const natural = page.getViewport({ scale: zoom * 1.25 });
+          const limit = Math.min(1, Math.sqrt(8_000_000 / Math.max(1, natural.width * natural.height)), 4096 / Math.max(1, natural.width, natural.height));
+          const viewport = page.getViewport({ scale: zoom * 1.25 * limit });
           const canvas = document.createElement('canvas');
           canvas.width = Math.max(1, Math.round(viewport.width));
           canvas.height = Math.max(1, Math.round(viewport.height));
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-            nextUrls[pageNum] = canvas.toDataURL('image/png');
-          }
+          try {
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+            const render = page.render({ canvasContext: ctx, viewport, canvas });
+            cancelRender = () => render.cancel();
+            await render.promise;
+            cancelRender = undefined;
+            if (cancelled) break;
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (blob && !cancelled) {
+              const url = URL.createObjectURL(blob);
+              urls.push(url); nextUrls[pageNum] = url;
+              setRenderedPages({ ...nextUrls });
+            }
+          } finally { canvas.width = 0; canvas.height = 0; page.cleanup(); }
         }
-        await task.destroy();
-        if (!cancelled) setRenderedPages(nextUrls);
-      } catch {
-        if (!cancelled) setRenderedPages({});
-      }
+      } catch (err) { if (!cancelled) console.warn('PDF rendering failed', err); }
+      finally { if (dispose) await dispose().catch(() => {}); }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeDoc?.id,
-    activeDoc?.payload.activeBlobHash,
-    activeDoc?.payload.currentPage,
-    activeDoc?.payload.zoom,
-    activeDoc?.payload.viewMode,
-    loadActiveBytes,
-  ]);
+    return () => { cancelled = true; cancelRender?.(); if (dispose) void dispose().catch(() => {}); urls.forEach(url => URL.revokeObjectURL(url)); };
+  }, [activeDoc?.id, activeHash, activeDoc?.payload.currentPage, activeDoc?.payload.zoom, activeDoc?.payload.viewMode, loadActiveBytes]);
 
   const importPdfFile = async (file: File) => {
     setBusyMsg(`Importing "${file.name}"…`);
@@ -720,7 +724,7 @@ export const PdfStudioView: React.FC = () => {
           <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => importPdfRef.current?.click()}>
             <Upload size={14} /> Open / Import PDF
           </button>
-          <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleCreateBlankPdf()}>
+          <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('pdf-write', () => handleCreateBlankPdf())}>
             <FilePlus size={14} /> New Blank PDF
           </button>
           {activeDoc && (
@@ -784,7 +788,7 @@ export const PdfStudioView: React.FC = () => {
             <button type="button" className="dp-btn dp-btn-primary" onClick={() => importPdfRef.current?.click()}>
               <Upload size={15} /> Import PDF Document
             </button>
-            <button type="button" className="dp-btn" onClick={() => void handleCreateBlankPdf()}>
+            <button type="button" className="dp-btn" onClick={guardAction('pdf-write', () => handleCreateBlankPdf())}>
               <FilePlus size={15} /> Create Blank PDF
             </button>
           </div>
@@ -884,11 +888,11 @@ export const PdfStudioView: React.FC = () => {
                 <button
                   type="button"
                   className="dp-btn dp-btn-danger dp-btn-sm"
-                  onClick={async () => {
+                  onClick={guardAction('action-1', async () => {
                     await softDeleteRecord(activeDoc.id);
                     setSelectedPdfId(null);
                     pushToast('Moved PDF to Trash', { canUndo: true });
-                  }}
+                  })}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -932,10 +936,10 @@ export const PdfStudioView: React.FC = () => {
                   onChange={(e) => setToolText(e.target.value)}
                 />
               )}
-              <button type="button" className="dp-btn dp-btn-sm" disabled={undoStack.length === 0} onClick={() => void handleUndoAnnotation()} title="Undo annotation">
+              <button type="button" className="dp-btn dp-btn-sm" disabled={undoStack.length === 0} onClick={guardAction('pdf-write', () => handleUndoAnnotation())} title="Undo annotation">
                 <Undo2 size={12} />
               </button>
-              <button type="button" className="dp-btn dp-btn-sm" disabled={redoStack.length === 0} onClick={() => void handleRedoAnnotation()} title="Redo annotation">
+              <button type="button" className="dp-btn dp-btn-sm" disabled={redoStack.length === 0} onClick={guardAction('pdf-write', () => handleRedoAnnotation())} title="Redo annotation">
                 <Redo2 size={12} />
               </button>
             </div>
@@ -949,11 +953,11 @@ export const PdfStudioView: React.FC = () => {
                   <strong>{activeDoc.payload.pendingRedactions?.length ?? 0} pending redaction(s)</strong>. Click below to write a <strong>true structural PDF binary</strong> (redacted pages are permanently flattened so underlying text bytes are destroyed!).
                 </span>
                 <div className="dp-row" style={{ gap: 6 }}>
-                  <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleCommitAnnotationsAndRedactions(false)}>
+                  <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={guardAction('pdf-write', () => handleCommitAnnotationsAndRedactions(false))}>
                     <Save size={13} /> Embed Edits &amp; Permanently Redact PDF
                   </button>
                   {(activeDoc.payload.pendingRedactions?.length ?? 0) > 0 && (
-                    <button type="button" className="dp-btn dp-btn-danger dp-btn-sm" onClick={() => void handleCommitAnnotationsAndRedactions(true)}>
+                    <button type="button" className="dp-btn dp-btn-danger dp-btn-sm" onClick={guardAction('pdf-write', () => handleCommitAnnotationsAndRedactions(true))}>
                       Redact &amp; Purge Original Copy
                     </button>
                   )}
@@ -963,13 +967,13 @@ export const PdfStudioView: React.FC = () => {
 
             {/* Page-Level Extraction & Planaday Integration Strip */}
             <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap', fontSize: '0.78rem' }}>
-              <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleRunOcrOnCurrentPage()}>
+              <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('pdf-write', () => handleRunOcrOnCurrentPage())}>
                 <ScanLine size={12} /> OCR Scanned Page #{activeDoc.payload.currentPage}
               </button>
               <button
                 type="button"
                 className="dp-btn dp-btn-sm"
-                onClick={async () => {
+                onClick={guardAction('action-2', async () => {
                   const pNum = activeDoc.payload.currentPage;
                   const txt = activeDoc.payload.extractedTextByPage?.[pNum] || '';
                   const note = await createRecord<NotePayload>(
@@ -990,14 +994,14 @@ export const PdfStudioView: React.FC = () => {
                   setSelectedNoteId(note.id);
                   setActiveView('notes');
                   pushToast(`Extracted Page ${pNum} to Note with #page=${pNum} backlink!`);
-                }}
+                })}
               >
                 <FileText size={12} /> Extract Page → Note
               </button>
               <button
                 type="button"
                 className="dp-btn dp-btn-sm"
-                onClick={async () => {
+                onClick={guardAction('action-3', async () => {
                   const pNum = activeDoc.payload.currentPage;
                   const txt = activeDoc.payload.extractedTextByPage?.[pNum] || '';
                   await createRecord<TaskPayload>(
@@ -1010,14 +1014,14 @@ export const PdfStudioView: React.FC = () => {
                     }
                   );
                   pushToast(`Created Task linked to ${activeDoc.title}#page=${pNum}`);
-                }}
+                })}
               >
                 <CheckSquare size={12} /> Page → Task
               </button>
               <button
                 type="button"
                 className="dp-btn dp-btn-sm"
-                onClick={async () => {
+                onClick={guardAction('action-4', async () => {
                   const pNum = activeDoc.payload.currentPage;
                   const txt = activeDoc.payload.extractedTextByPage?.[pNum] || '';
                   const tbl = extractTableFromOcrText(txt);
@@ -1035,7 +1039,7 @@ export const PdfStudioView: React.FC = () => {
                     { links: [{ targetId: activeDoc.id, targetType: 'pdf_doc', relation: 'pdf_page', label: `${activeDoc.title}#page=${pNum}` }] }
                   );
                   pushToast(`Extracted Page ${pNum} table to Spreadsheets!`);
-                }}
+                })}
               >
                 <FileSpreadsheet size={12} /> Table → Spreadsheet
               </button>
@@ -1192,7 +1196,7 @@ export const PdfStudioView: React.FC = () => {
                     <button
                       type="button"
                       className="dp-btn dp-btn-sm"
-                      onClick={async () => {
+                      onClick={guardAction('action-5', async () => {
                         const bytes = await loadActiveBytes();
                         if (!bytes) return;
                         const indices = splitPagesInput
@@ -1227,7 +1231,7 @@ export const PdfStudioView: React.FC = () => {
                         );
                         setSelectedPdfId(created.id);
                         pushToast(`Created split PDF (${indices.length} page(s))`);
-                      }}
+                      })}
                     >
                       <Scissors size={12} /> Split
                     </button>

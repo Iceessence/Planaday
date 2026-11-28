@@ -1,3 +1,4 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -19,6 +20,7 @@ function fmtNum(v: number | null, decimals = 3): string {
  */
 export const LabWetNirView: React.FC = () => {
   const { records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
 
   const [sampleId, setSampleId] = useState('');
   const [commodity, setCommodity] = useState('Corn');
@@ -38,6 +40,8 @@ export const LabWetNirView: React.FC = () => {
   const [fAnalysis, setFAnalysis] = useState('all');
   const [fInstrument, setFInstrument] = useState('all');
   const [fModel, setFModel] = useState('all');
+  const [resultPage, setResultPage] = useState(0);
+  const [fUnit, setFUnit] = useState('all');
   const [fFrom, setFFrom] = useState('');
   const [fTo, setFTo] = useState('');
 
@@ -61,22 +65,27 @@ export const LabWetNirView: React.FC = () => {
         if (fAnalysis !== 'all' && p.analysis !== fAnalysis) return false;
         if (fInstrument !== 'all' && p.instrumentId !== fInstrument) return false;
         if (fModel !== 'all' && p.calibrationModel !== fModel) return false;
+        if (fUnit !== 'all' && p.unit !== fUnit) return false;
         if (fFrom && p.dateTested < fFrom) return false;
         if (fTo && p.dateTested > fTo) return false;
         return true;
       }),
-    [pairs, fCommodity, fAnalysis, fInstrument, fModel, fFrom, fTo]
+    [pairs, fCommodity, fAnalysis, fInstrument, fModel, fUnit, fFrom, fTo]
   );
 
   const stats = useMemo(() => computeWetNirComparison(filteredPairs), [filteredPairs]);
+  const tablePoints = useMemo(() => [...stats.points, ...stats.excludedPoints], [stats]);
+  const lastPage = Math.max(0, Math.ceil(tablePoints.length / 100) - 1);
+  const currentPage = Math.min(resultPage, lastPage);
+  const mixedAnalyses = new Set(stats.points.map(p => (p.record.analysis || '').trim().toLowerCase())).size > 1;
 
   const parseReplicates = (raw: string): { mean: number; reps: number[] } | null => {
-    const nums = raw
-      .split(/[,\s;]+/)
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isFinite(n));
-    if (nums.length === 0) return null;
-    return { mean: nums.reduce((a, b) => a + b, 0) / nums.length, reps: nums };
+    const tokens = raw.trim().split(/[,\s;]+/).filter(Boolean);
+    if (!tokens.length || tokens.some(t => !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(t))) return null;
+    const nums = tokens.map(Number);
+    if (nums.some(n => !Number.isFinite(n))) return null;
+    const mean = nums.reduce((a, b) => a + b / nums.length, 0);
+    return Number.isFinite(mean) ? { mean, reps: nums } : null;
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -129,7 +138,7 @@ export const LabWetNirView: React.FC = () => {
         pt.record.instrumentId,
         pt.record.calibrationModel,
         pt.record.analyst,
-        pt.record.excluded ? 'YES' : 'NO',
+        pt.record.excluded || !Number.isFinite(pt.wetMean) || !Number.isFinite(pt.nirMean) ? 'YES' : 'NO',
         pt.record.notes || '',
       ])
     );
@@ -154,7 +163,7 @@ export const LabWetNirView: React.FC = () => {
       </div>
 
       {/* Add Pair Form */}
-      <form className="dp-card dp-stack" style={{ padding: 12, gap: 8 }} onSubmit={handleAdd}>
+      <form className="dp-card dp-stack" style={{ padding: 12, gap: 8 }} onSubmit={guardForm('form-1', handleAdd)}>
         <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
           <input className="dp-input" style={{ width: 130 }} placeholder="Sample ID *" value={sampleId} onChange={(e) => setSampleId(e.target.value)} />
           <input className="dp-input" style={{ width: 120 }} placeholder="Commodity" value={commodity} onChange={(e) => setCommodity(e.target.value)} />
@@ -199,6 +208,8 @@ export const LabWetNirView: React.FC = () => {
         <input type="date" className="dp-input" style={{ width: 'auto' }} value={fTo} onChange={(e) => setFTo(e.target.value)} />
       </div>
 
+      <label className="dp-row">Unit <select className="dp-select" value={fUnit} onChange={e => setFUnit(e.target.value)}><option value="all">All units</option>{uniqueOf(p => p.unit).map(u => <option key={u} value={u}>{u}</option>)}</select></label>
+      {mixedAnalyses && <div role="alert" className="dp-card">Multiple analytes selected. Filter to a single analysis before interpreting aggregate statistics.</div>}
       {stats.mixedUnitsWarning && (
         <div className="dp-banner danger" style={{ margin: 0 }}>
           Mixed units detected ({stats.units.join(', ')}) — filter to one analysis/unit for meaningful Bias/RMSE statistics!
@@ -213,19 +224,19 @@ export const LabWetNirView: React.FC = () => {
         </div>
         <div className="dp-card dp-stack" style={{ padding: 10, gap: 2 }}>
           <span className="dp-muted" style={{ fontSize: '0.74rem' }}>Average Bias (NIR − Wet)</span>
-          <strong>{fmtNum(stats.bias)} {stats.units[0] ?? ''}</strong>
+          <strong>{fmtNum(mixedAnalyses ? null : stats.bias)} {!mixedAnalyses && !stats.mixedUnitsWarning ? stats.units[0] ?? '' : ''}</strong>
         </div>
         <div className="dp-card dp-stack" style={{ padding: 10, gap: 2 }}>
           <span className="dp-muted" style={{ fontSize: '0.74rem' }}>SD of Diff (SEP) / RMSE</span>
-          <strong>{fmtNum(stats.sdDiff)} / {fmtNum(stats.rmse)}</strong>
+          <strong>{fmtNum(mixedAnalyses ? null : stats.sdDiff)} / {fmtNum(mixedAnalyses ? null : stats.rmse)}</strong>
         </div>
         <div className="dp-card dp-stack" style={{ padding: 10, gap: 2 }}>
           <span className="dp-muted" style={{ fontSize: '0.74rem' }}>Correlation r / R²</span>
-          <strong>r = {fmtNum(stats.pearsonR, 4)} · R² = {fmtNum(stats.rSquared, 4)}</strong>
+          <strong>r = {fmtNum(mixedAnalyses ? null : stats.pearsonR, 4)} · R² = {fmtNum(mixedAnalyses ? null : stats.rSquared, 4)}</strong>
         </div>
       </div>
 
-      {stats.slope !== null && stats.intercept !== null && (
+      {!mixedAnalyses && stats.slope !== null && stats.intercept !== null && (
         <div className="dp-card" style={{ padding: 10, fontSize: '0.8rem' }}>
           <strong>OLS Regression:</strong>{' '}
           <code>NIR = {stats.slope.toFixed(4)} × Wet {stats.intercept >= 0 ? '+' : '−'} {Math.abs(stats.intercept).toFixed(4)}</code>{' '}
@@ -235,10 +246,11 @@ export const LabWetNirView: React.FC = () => {
       )}
 
       {/* Scatter Plot + Residual Plot + Bias Trend SVG Charts */}
-      {stats.points.length >= 2 && (() => {
-        const allVals = stats.points.flatMap((p) => [p.wetMean, p.nirMean]);
-        const minV = Math.min(...allVals);
-        const maxV = Math.max(...allVals);
+      {!mixedAnalyses && !stats.mixedUnitsWarning && stats.points.length >= 2 && (() => {
+        let minV = Infinity, maxV = -Infinity, maxAbsRes = 0.01;
+        for (const pt of stats.points) { minV = Math.min(minV, pt.wetMean, pt.nirMean); maxV = Math.max(maxV, pt.wetMean, pt.nirMean); maxAbsRes = Math.max(maxAbsRes, Math.abs(pt.signedDiff)); }
+        const stride = Math.max(1, Math.ceil(stats.points.length / 1000));
+        const plotPoints = stats.points.filter((_, i) => i % stride === 0);
         const span = Math.max(0.001, maxV - minV);
         const pad = span * 0.1;
         const lo = minV - pad;
@@ -246,12 +258,13 @@ export const LabWetNirView: React.FC = () => {
         const mapX = (v: number) => 36 + ((v - lo) / (hi - lo)) * 244;
         const mapY = (v: number) => 174 - ((v - lo) / (hi - lo)) * 154;
 
-        const maxAbsRes = Math.max(0.01, ...stats.points.map((p) => Math.abs(p.signedDiff)), (stats.sdDiff ?? 0) * 2.2);
+        maxAbsRes = Math.max(maxAbsRes, Math.abs(stats.bias ?? 0) + (stats.sdDiff ?? 0) * 2.2);
         const mapResY = (d: number) => 95 - (d / maxAbsRes) * 75;
-        const sortedByDate = [...stats.points].sort((a, b) => a.record.dateTested.localeCompare(b.record.dateTested));
+        const sortedByDate = [...stats.points].sort((a, b) => a.record.dateTested.localeCompare(b.record.dateTested)).filter((_, i) => i % stride === 0);
 
         return (
           <div className="dp-grid-3" style={{ gap: 10 }}>
+            {stride > 1 && <p className="dp-muted" style={{ gridColumn: '1 / -1' }}>Charts display every {stride}th included pair; calculations and CSV use all pairs.</p>}
             {/* 1. Scatter Plot */}
             <div className="dp-card dp-stack" style={{ padding: 10, gap: 4 }}>
               <strong style={{ fontSize: '0.82rem' }}>Wet Chem vs. NIR Scatter (1:1 dashed + OLS)</strong>
@@ -261,7 +274,7 @@ export const LabWetNirView: React.FC = () => {
                 {/* 1:1 Identity line */}
                 <line x1={mapX(lo)} y1={mapY(lo)} x2={mapX(hi)} y2={mapY(hi)} stroke="#888" strokeDasharray="4 4" strokeWidth={1.2} />
                 {/* OLS regression line */}
-                {stats.slope !== null && stats.intercept !== null && (
+                {!mixedAnalyses && stats.slope !== null && stats.intercept !== null && (
                   <line
                     x1={mapX(lo)}
                     y1={mapY(stats.slope * lo + stats.intercept)}
@@ -271,7 +284,7 @@ export const LabWetNirView: React.FC = () => {
                     strokeWidth={2}
                   />
                 )}
-                {stats.points.map((pt) => (
+                {plotPoints.map((pt) => (
                   <circle key={pt.record.id} cx={mapX(pt.wetMean)} cy={mapY(pt.nirMean)} r={4} fill="#a97434">
                     <title>{`${pt.record.sampleId}: Wet=${pt.wetMean.toFixed(2)}, NIR=${pt.nirMean.toFixed(2)}`}</title>
                   </circle>
@@ -291,7 +304,7 @@ export const LabWetNirView: React.FC = () => {
                     <line x1={36} y1={mapResY(stats.bias - 2 * stats.sdDiff)} x2={280} y2={mapResY(stats.bias - 2 * stats.sdDiff)} stroke="#b5453a" strokeDasharray="3 3" />
                   </>
                 )}
-                {stats.points.map((pt) => (
+                {plotPoints.map((pt) => (
                   <circle key={pt.record.id} cx={mapX(pt.wetMean)} cy={mapResY(pt.signedDiff)} r={4} fill="#2f7a78">
                     <title>{`${pt.record.sampleId}: Diff=${pt.signedDiff.toFixed(3)}`}</title>
                   </circle>
@@ -349,14 +362,14 @@ export const LabWetNirView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {[...stats.points, ...stats.excludedPoints].map((pt) => (
+            {tablePoints.slice(currentPage * 100, (currentPage + 1) * 100).map((pt) => (
               <tr key={pt.record.id} style={{ borderBottom: '1px dashed var(--dp-border)', opacity: pt.record.excluded ? 0.5 : 1 }}>
                 <td><strong>{pt.record.sampleId}</strong></td>
                 <td>{pt.record.dateTested}</td>
                 <td>{pt.record.commodity} · {pt.record.analysis}</td>
                 <td>{pt.wetMean.toFixed(3)}</td>
                 <td>{pt.nirMean.toFixed(3)}</td>
-                <td style={{ color: Math.abs(pt.signedDiff) > (stats.sdDiff ?? 999) * 2 ? 'var(--dp-danger)' : undefined }}>
+                <td style={{ color: !mixedAnalyses && stats.sdDiff !== null && stats.bias !== null && Math.abs(pt.signedDiff - stats.bias) > stats.sdDiff * 2 ? 'var(--dp-danger)' : undefined }}>
                   {pt.signedDiff >= 0 ? '+' : ''}{pt.signedDiff.toFixed(3)} {pt.record.unit}
                 </td>
                 <td>{pt.pctDiff !== null ? `${pt.pctDiff.toFixed(1)}%` : '—'}</td>
@@ -386,6 +399,7 @@ export const LabWetNirView: React.FC = () => {
           </tbody>
         </table>
       </div>
+      {lastPage > 0 && <div className="dp-row" style={{ flexWrap: 'wrap' }}><button type="button" className="dp-btn dp-btn-sm" disabled={currentPage === 0} onClick={() => setResultPage(currentPage - 1)}>Previous</button><span>Page {currentPage + 1} of {lastPage + 1} · {tablePoints.length} pairs</span><button type="button" className="dp-btn dp-btn-sm" disabled={currentPage === lastPage} onClick={() => setResultPage(currentPage + 1)}>Next</button></div>}
     </div>
   );
 };

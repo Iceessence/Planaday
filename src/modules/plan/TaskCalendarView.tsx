@@ -1,3 +1,7 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
+import { useMinuteClock } from '../../components/Common/viewSafety';
+import { expandRecurrenceDates } from '../../core/recurrence';
+import { diffDaysIso } from '../../core/temporal';
 import React, { useMemo, useState } from 'react';
 import { CalendarPlus, Check, Clock, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -27,6 +31,8 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  */
 export const TaskCalendarView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
   const [contextFilterId, setContextFilterId] = useState<string>('all');
   const [newCtxName, setNewCtxName] = useState('');
   const [newCtxEmoji, setNewCtxEmoji] = useState('🧭');
@@ -37,7 +43,9 @@ export const TaskCalendarView: React.FC = () => {
   const [quickTaskMin, setQuickTaskMin] = useState(30);
   const [quickTaskPri, setQuickTaskPri] = useState<'low' | 'medium' | 'high' | 'urgent'>('high');
   const [quickTaskCtx, setQuickTaskCtx] = useState('');
-  const [tickNow, setTickNow] = useState(() => new Date());
+  const minuteNow = useMinuteClock(activeDate === logicalToday);
+  const [refreshNow, setRefreshNow] = useState(0);
+  const tickNow = refreshNow > minuteNow.getTime() ? new Date(refreshNow) : minuteNow;
 
   const contexts: SchedulingContextDef[] = settings.schedulingContexts ?? [];
   const preferredEndTime = settings.preferredDailyEndTime || '21:00';
@@ -50,9 +58,11 @@ export const TaskCalendarView: React.FC = () => {
 
   const dayEvents = useMemo(
     () =>
-      (records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>).filter(
-        (ev) => ev.payload.startDate <= activeDate && (ev.payload.endDate || ev.payload.startDate) >= activeDate
-      ),
+      (records.filter((r) => r.type === 'event' && r.status === 'active') as Array<LifeRecord<CalendarEventPayload>>).flatMap(ev => {
+        if (!ev.recurrence) return ev.payload.startDate <= activeDate && (ev.payload.endDate || ev.payload.startDate) >= activeDate ? [ev] : [];
+        const span = Math.max(0, diffDaysIso(ev.payload.startDate, ev.payload.endDate || ev.payload.startDate));
+        return expandRecurrenceDates(ev.payload.startDate, ev.recurrence, { rangeStart: addDaysIso(activeDate, -span), rangeEnd: activeDate }).map(date => ({ ...ev, payload: { ...ev.payload, startDate: date, endDate: addDaysIso(date, span) } }));
+      }),
     [records, activeDate]
   );
 
@@ -66,7 +76,7 @@ export const TaskCalendarView: React.FC = () => {
       return tickNow.getHours() * 60 + tickNow.getMinutes();
     }
     return 8 * 60; // Future/past planning day starts at 8:00 AM
-  }, [activeDate, logicalToday, tickNow]);
+  }, [activeDate, logicalToday, tickNow.getHours(), tickNow.getMinutes()]);
 
   const schedule = useMemo(
     () =>
@@ -146,13 +156,13 @@ export const TaskCalendarView: React.FC = () => {
             type="button"
             className="dp-btn dp-btn-sm"
             onClick={() => {
-              setTickNow(new Date());
+              setRefreshNow(Date.now());
               pushToast('Refreshed schedule from current time');
             }}
           >
             <RefreshCw size={13} /> Recalculate Now
           </button>
-          <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleCarryForward()}>
+          <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={guardAction('action-1', () => handleCarryForward())}>
             Carry Forward Unfinished
           </button>
         </div>
@@ -215,7 +225,7 @@ export const TaskCalendarView: React.FC = () => {
                 </div>
               ))}
             </div>
-            <form className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }} onSubmit={addContext}>
+            <form className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }} onSubmit={guardForm('form-1', addContext)}>
               <input
                 className="dp-input"
                 style={{ width: 46 }}
@@ -285,7 +295,7 @@ export const TaskCalendarView: React.FC = () => {
       <form
         className="dp-card dp-row"
         style={{ padding: 10, flexWrap: 'wrap', gap: 8 }}
-        onSubmit={async (e) => {
+        onSubmit={guardForm('form-2', async (e) => {
           e.preventDefault();
           if (!quickTaskTitle.trim()) return;
           await createRecord<TaskPayload>(
@@ -296,7 +306,7 @@ export const TaskCalendarView: React.FC = () => {
           );
           setQuickTaskTitle('');
           pushToast('Task added & dynamically placed on Task Calendar!');
-        }}
+        })}
       >
         <input
           className="dp-input"

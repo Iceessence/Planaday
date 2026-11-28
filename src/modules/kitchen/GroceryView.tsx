@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { CheckCheck, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -15,6 +16,8 @@ const STORES = ['All Stores', 'Local Market', 'Costco', 'Farmers Market', 'Hardw
 
 export const GroceryView: React.FC = () => {
   const { settings, records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
   const [storeFilter, setStoreFilter] = useState('All Stores');
   const [grocSearch, setGrocSearch] = useState('');
   const [grocStatusFilter, setGrocStatusFilter] = useState<'all' | 'unchecked' | 'checked'>('all');
@@ -34,6 +37,7 @@ export const GroceryView: React.FC = () => {
     [records]
   );
 
+  const storeOptions = useMemo(() => Array.from(new Set([...STORES, ...allActiveItems.map(i => i.payload.store).filter(Boolean)])), [allActiveItems]);
   const items = useMemo(() => {
     const q = grocSearch.trim().toLowerCase();
     const list = allActiveItems.filter((i) => {
@@ -84,14 +88,14 @@ export const GroceryView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-sm"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const n = await generateNetGroceryItems({
                 includeParDrops: true,
                 includeChoreSupplies: true,
                 todayIso: logicalToday,
               });
               pushToast(`Added ${n} par-level & chore supply item(s)`);
-            }}
+            })}
           >
             + Par Drops & Chore Supplies
           </button>
@@ -99,18 +103,19 @@ export const GroceryView: React.FC = () => {
             type="button"
             className="dp-btn dp-btn-primary"
             disabled={checkedCount === 0}
-            onClick={async () => {
+            onClick={guardAction('action-2', async () => {
               const res = await reconcileFinishedShopping({
                 todayIso: logicalToday,
                 createExpense: logExpenseOnCheckout,
+                itemIds: items.filter(i => i.payload.checked).map(i => i.id),
               });
               pushToast(
                 `Finished Shopping! Added ${res.lotsCreated} lot(s) to Pantry${res.totalSpent > 0 ? ` ($${res.totalSpent.toFixed(2)} logged)` : ''}`,
                 { canUndo: true }
               );
-            }}
+            })}
           >
-            <CheckCheck size={15} /> Finished Shopping ({checkedCount}) → Pantry
+            <CheckCheck size={15} /> Finish Visible Checked Items ({checkedCount}) → Pantry
           </button>
         </div>
       </div>
@@ -118,9 +123,10 @@ export const GroceryView: React.FC = () => {
       {/* Add Item + Store Filter */}
       <form
         className="dp-row"
-        onSubmit={async (e) => {
+        onSubmit={guardForm('form-1', async (e) => {
           e.preventDefault();
           if (!newItemName.trim()) return;
+          if (!Number.isFinite(newItemQty) || newItemQty <= 0) { pushToast('Enter a positive quantity.', { tone: 'warn' }); return; }
           const aisle = inferAisle(newItemName);
           await createRecord<GroceryItemPayload>('grocery_item', newItemName.trim(), {
             canonicalName: canonicalizeIngredientName(newItemName),
@@ -134,7 +140,7 @@ export const GroceryView: React.FC = () => {
           });
           setNewItemName('');
           pushToast('Added to grocery list', { canUndo: true });
-        }}
+        })}
       >
         <input className="dp-input" style={{ flex: 2 }} placeholder="Add grocery item…" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
         <label className="dp-row" style={{ gap: 4 }}>
@@ -149,7 +155,7 @@ export const GroceryView: React.FC = () => {
         </datalist>
         <input list="dp-groc-stores" aria-label="Store" className="dp-input" style={{ width: 145 }} value={newItemStore} onChange={(e) => setNewItemStore(e.target.value)} placeholder="Store (pick or type)…" />
         <datalist id="dp-groc-stores">
-          {STORES.slice(1).map((s) => <option key={s} value={s} />)}
+          {storeOptions.slice(1).map((s) => <option key={s} value={s} />)}
         </datalist>
         <button type="submit" className="dp-btn dp-btn-primary">
           <Plus size={14} /> Add
@@ -158,7 +164,7 @@ export const GroceryView: React.FC = () => {
 
       <div className="dp-between">
         <div className="dp-row">
-          {STORES.map((s) => (
+          {storeOptions.map((s) => (
             <button key={s} type="button" className={`dp-btn dp-btn-sm ${storeFilter === s ? 'dp-btn-primary' : ''}`} onClick={() => setStoreFilter(s)}>
               {s}
             </button>
@@ -202,7 +208,7 @@ export const GroceryView: React.FC = () => {
 
       {groupedByAisle.length === 0 ? (
         <div className="dp-empty">
-          <strong>Grocery list is clear</strong>
+          <strong>No groceries match these filters</strong>
           <span className="dp-muted">Add items manually or generate directly from Recipes or your Weekly Meal Plan.</span>
         </div>
       ) : (
@@ -216,12 +222,7 @@ export const GroceryView: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={item.payload.checked}
-                      onChange={(e) =>
-                        void updateRecord<GroceryItemPayload>(item.id, (c) => ({
-                          ...c,
-                          payload: { ...c.payload, checked: e.target.checked },
-                        }))
-                      }
+                      onChange={(e) => { const checked = e.target.checked; void updateRecord<GroceryItemPayload>(item.id, c => ({ ...c, payload: { ...c.payload, checked } })).catch(error => pushToast(String(error), { tone: 'warn' })); }}
                     />
                     <span style={{ textDecoration: item.payload.checked ? 'line-through' : undefined }}>
                       <strong>{item.payload.quantity} {item.payload.unit}</strong> {item.title}
@@ -240,13 +241,7 @@ export const GroceryView: React.FC = () => {
                       style={{ width: 78, padding: '3px 6px', fontSize: '0.82rem' }}
                       placeholder="$ price"
                       value={item.payload.price ?? ''}
-                      onChange={(e) =>
-                        void updateRecord<GroceryItemPayload>(
-                          item.id,
-                          (c) => ({ ...c, payload: { ...c.payload, price: Number(e.target.value) || 0 } }),
-                          { skipUndo: true }
-                        )
-                      }
+                      onChange={(e) => { const price = e.target.value === '' ? undefined : Number(e.target.value); if (price !== undefined && (!Number.isFinite(price) || price < 0)) return; void updateRecord<GroceryItemPayload>(item.id, c => ({ ...c, payload: { ...c.payload, price } }), { skipUndo: true }).catch(error => pushToast(String(error), { tone: 'warn' })); }}
                     />
                     <input
                       aria-label={`Expiry date for ${item.title}`}
@@ -254,13 +249,7 @@ export const GroceryView: React.FC = () => {
                       className="dp-input"
                       style={{ width: 130, padding: '3px 6px', fontSize: '0.8rem' }}
                       value={item.payload.expiryDate ?? ''}
-                      onChange={(e) =>
-                        void updateRecord<GroceryItemPayload>(
-                          item.id,
-                          (c) => ({ ...c, payload: { ...c.payload, expiryDate: e.target.value } }),
-                          { skipUndo: true }
-                        )
-                      }
+                      onChange={(e) => { const expiryDate = e.target.value; void updateRecord<GroceryItemPayload>(item.id, c => ({ ...c, payload: { ...c.payload, expiryDate } }), { skipUndo: true }).catch(error => pushToast(String(error), { tone: 'warn' })); }}
                     />
                     <button type="button" className="dp-icon-btn" onClick={() => void softDeleteRecord(item.id)}>
                       <Trash2 size={14} />

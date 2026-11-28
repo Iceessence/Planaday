@@ -45,23 +45,30 @@ export function factorial(n: number): number {
 }
 
 export function nPr(n: number, r: number): number {
-  if (r < 0 || n < 0 || r > n) return NaN;
-  return factorial(Math.floor(n)) / factorial(Math.floor(n - r));
+  if (!Number.isSafeInteger(n) || !Number.isSafeInteger(r) || r < 0 || n < 0 || r > n) return NaN;
+  let value = 1;
+  for (let i = 0; i < r; i++) { value *= n - i; if (!Number.isFinite(value)) break; }
+  return value;
 }
 
 export function nCr(n: number, r: number): number {
-  if (r < 0 || n < 0 || r > n) return NaN;
-  return factorial(Math.floor(n)) / (factorial(Math.floor(r)) * factorial(Math.floor(n - r)));
+  if (!Number.isSafeInteger(n) || !Number.isSafeInteger(r) || r < 0 || n < 0 || r > n) return NaN;
+  const k = Math.min(r, n - r);
+  let value = 1;
+  for (let i = 1; i <= k; i++) { value *= (n - k + i) / i; if (!Number.isFinite(value)) break; }
+  return value <= Number.MAX_SAFE_INTEGER ? Math.round(value) : value;
 }
 
 export function formatSigFigs(value: number, sigFigs: number): string {
   if (!Number.isFinite(value)) return String(value);
   const sf = Math.max(1, Math.min(15, Math.floor(sigFigs)));
-  return Number(value.toPrecision(sf)).toString();
+  return value.toPrecision(sf);
 }
 
 export function toEngineeringNotation(value: number, decimals = 3): string {
-  if (!Number.isFinite(value) || value === 0) return '0';
+  if (!Number.isFinite(value)) return String(value);
+  if (value === 0) return '0';
+  decimals = Number.isFinite(decimals) ? Math.max(0, Math.min(15, Math.floor(decimals))) : 3;
   const exp = Math.floor(Math.log10(Math.abs(value)));
   const engExp = Math.floor(exp / 3) * 3;
   const mantissa = value / Math.pow(10, engExp);
@@ -150,10 +157,23 @@ function tokenizeMath(expr: string): Token[] {
   return out;
 }
 
+const tokenCache = new Map<string, Token[]>();
 export function evaluateMathExpression(expr: string, ctx: EvalContext = {}): number {
+  return evaluateBounded(expr, ctx, { remaining: 100_000 }, 0);
+}
+function evaluateBounded(expr: string, ctx: EvalContext, budget: { remaining: number }, depth: number): number {
+  if (depth > 32 || expr.length > 16_384) throw new Error('Expression complexity limit exceeded');
   const trimmed = expr.trim();
   if (!trimmed) return NaN;
-  const tokens = tokenizeMath(trimmed);
+  let tokens = tokenCache.get(trimmed);
+  if (!tokens) {
+    tokens = tokenizeMath(trimmed);
+    if (tokens.length > 1024) throw new Error("Too many expression tokens");
+    if (tokenCache.size >= 64) tokenCache.delete(tokenCache.keys().next().value!);
+    tokenCache.set(trimmed, tokens);
+  }
+  budget.remaining -= tokens.length;
+  if (budget.remaining < 0) throw new Error("Expression evaluation budget exceeded");
   let pos = 0;
   const angleUnit = ctx.angleUnit ?? 'rad';
   const toRad = (v: number) => (angleUnit === 'deg' ? (v * Math.PI) / 180 : angleUnit === 'grad' ? (v * Math.PI) / 200 : v);
@@ -202,12 +222,12 @@ export function evaluateMathExpression(expr: string, ctx: EvalContext = {}): num
       case 'ncr': return nCr(a, b);
       case 'sign': return Math.sign(a);
       default: {
-        const uf = ctx.userFns?.[name] ?? ctx.userFns?.[name.toLowerCase()];
+        const uf = ctx.userFns && (Object.prototype.hasOwnProperty.call(ctx.userFns, name) ? ctx.userFns[name] : Object.prototype.hasOwnProperty.call(ctx.userFns, name.toLowerCase()) ? ctx.userFns[name.toLowerCase()] : undefined);
         if (uf) {
-          return evaluateMathExpression(uf.expr, {
+          return evaluateBounded(uf.expr, {
             ...ctx,
             vars: { ...(ctx.vars ?? {}), [uf.param]: a },
-          });
+          }, budget, depth + 1);
         }
         throw new Error(`Unknown function "${name}"`);
       }
@@ -269,7 +289,9 @@ export function evaluateMathExpression(expr: string, ctx: EvalContext = {}): num
     if (!t) throw new Error('Unexpected end of expression');
     if (t.type === 'num') {
       consume();
-      return Number(t.val);
+      const number = Number(t.val);
+      if (Number.isNaN(number)) throw new Error(`Invalid number: ${t.val}`);
+      return number;
     }
     if (t.type === 'lparen') {
       consume();
@@ -294,9 +316,9 @@ export function evaluateMathExpression(expr: string, ctx: EvalContext = {}): num
         consume();
         return callFn(t.val, args);
       }
-      if (ctx.vars && t.val in ctx.vars) return ctx.vars[t.val];
-      if (t.val in MATH_CONSTANTS) return MATH_CONSTANTS[t.val];
-      if (t.val.toLowerCase() in MATH_CONSTANTS) return MATH_CONSTANTS[t.val.toLowerCase()];
+      if (ctx.vars && Object.prototype.hasOwnProperty.call(ctx.vars, t.val)) return ctx.vars[t.val];
+      if (Object.prototype.hasOwnProperty.call(MATH_CONSTANTS, t.val)) return MATH_CONSTANTS[t.val];
+      if (Object.prototype.hasOwnProperty.call(MATH_CONSTANTS, t.val.toLowerCase())) return MATH_CONSTANTS[t.val.toLowerCase()];
       throw new Error(`Unknown variable "${t.val}"`);
     }
     throw new Error(`Unexpected token "${t.val}"`);
@@ -315,6 +337,7 @@ export function numericalDerivative(expr: string, x: number, ctx: EvalContext = 
 }
 
 export function numericalIntegral(expr: string, a: number, b: number, ctx: EvalContext = {}, steps = 200): number {
+  steps = Number.isFinite(steps) ? Math.max(2, Math.min(100_000, Math.floor(steps))) : 200;
   const n = steps % 2 === 0 ? steps : steps + 1;
   const h = (b - a) / n;
   const f = (x: number) => evaluateMathExpression(expr, { ...ctx, vars: { ...(ctx.vars ?? {}), x } });
@@ -358,6 +381,7 @@ export function findNumericalRoots(
   const candidates: number[] = [];
   const xs: number[] = [];
   const ys: number[] = [];
+  samples = Number.isFinite(samples) ? Math.max(2, Math.min(50_000, Math.floor(samples))) : 400;
   const dx = (xMax - xMin) / samples;
   for (let i = 0; i <= samples; i++) {
     const x = xMin + i * dx;

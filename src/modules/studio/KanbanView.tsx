@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -46,6 +47,9 @@ const LIVE_TASK_COLS: KanbanColumn[] = [
 
 export const KanbanView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const customBoards = useMemo(
     () => records.filter((r) => r.type === 'kanban_board' && !r.deletedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records]
@@ -135,6 +139,12 @@ export const KanbanView: React.FC = () => {
       });
   }, [isLiveMode, liveTasks, customCards, activeBoardId]);
 
+  const cardsByColumn = useMemo(() => {
+    const map = new Map<string, typeof boardItems>();
+    for (const card of boardItems) { const list = map.get(card.columnId) ?? []; list.push(card); map.set(card.columnId, list); }
+    return map;
+  }, [boardItems]);
+
   const handleAddCard = async () => {
     const title = newCardTitle.trim();
     if (!title) return;
@@ -174,7 +184,7 @@ export const KanbanView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const title = newBoardName.trim() || `Board ${customBoards.length + 1}`;
               const rec = await createRecord<KanbanBoardPayload>('kanban_board', title, {
                 wipEnabled: false,
@@ -188,7 +198,7 @@ export const KanbanView: React.FC = () => {
               setNewBoardName('');
               setActiveBoardId(rec.id);
               pushToast(`Created board "${title}"`, { tone: 'ok' });
-            }}
+            })}
           >
             <Plus size={14} /> New Board
           </button>
@@ -196,11 +206,11 @@ export const KanbanView: React.FC = () => {
             <button
               type="button"
               className="dp-btn"
-              onClick={async () => {
+              onClick={guardAction('action-2', async () => {
                 await softDeleteRecord(activeBoard.id);
                 setActiveBoardId('live_tasks');
                 pushToast('Moved board to Trash', { tone: 'info' });
-              }}
+              })}
             >
               <Trash2 size={14} />
             </button>
@@ -222,7 +232,7 @@ export const KanbanView: React.FC = () => {
           <select className="dp-select" value={newCardCol || columns[0]?.id || ''} onChange={(e) => setNewCardCol(e.target.value)}>
             {columns.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
           </select>
-          <button type="button" className="dp-btn dp-btn-primary" onClick={() => void handleAddCard()}>
+          <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('add-card', () => handleAddCard())}>
             <Plus size={13} /> Add Card
           </button>
         </div>
@@ -270,7 +280,7 @@ export const KanbanView: React.FC = () => {
       {viewMode === 'kanban' && (
         <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem', alignItems: 'flex-start' }}>
           {columns.map((col, colIdx) => {
-            const colItems = boardItems.filter((it) => it.columnId === col.id);
+            const colItems = cardsByColumn.get(col.id) ?? [];
             const overWip = wipEnabled && col.wipLimit && colItems.length > col.wipLimit;
             return (
               <div

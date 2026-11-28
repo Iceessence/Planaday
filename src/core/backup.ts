@@ -1,5 +1,6 @@
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { blobToArrayBuffer, createId, db, getOrInitSettings, sha256Hex } from './db';
+import { strFromU8, strToU8, unzipSync, zip, zipSync } from 'fflate';
+import { PLANADAY_RELEASE } from './releaseInfo';
+import { blobToArrayBuffer, createId, db, getOrInitSettings, legacyBlobHash, mergeSettingsObject, sha256Hex } from './db';
 import type { AppSettings, LifeRecord, RevisionRecord, TimeLedgerEntry } from './types';
 
 export interface DayplanaBackupPayload {
@@ -26,21 +27,23 @@ export interface BackupIntegrityManifest {
   blobChecksums: Record<string, { size: number; mimeType: string; name: string }>;
 }
 
-export async function exportFullJsonBackup(): Promise<string> {
-  const [settings, records, revisions, timeLedger, blobs] = await Promise.all([
-    getOrInitSettings(),
+async function readBackupSnapshot() {
+  const initialized = await getOrInitSettings();
+  const [settings, records, revisions, timeLedger, blobs] = await db.transaction('r', [db.settings, db.records, db.revisions, db.timeLedger, db.blobs], () => Promise.all([
+    db.settings.get('app-settings'),
     db.records.toArray(),
     db.revisions.toArray(),
     db.timeLedger.toArray(),
     db.blobs.toArray(),
-  ]);
+  ]));
+  if (!settings) throw new Error('Settings unavailable during backup');
 
   const payload: DayplanaBackupPayload = {
     format: 'dayplana-backup-v2',
-    appVersion: '4.1.0',
-    schemaVersion: 2,
+    appVersion: PLANADAY_RELEASE.version,
+    schemaVersion: PLANADAY_RELEASE.indexedDbSchemaVersion,
     exportedAt: new Date().toISOString(),
-    settings,
+    settings: { ...mergeSettingsObject(initialized, settings), syncAuthToken: undefined },
     records,
     revisions,
     timeLedger,
@@ -53,7 +56,11 @@ export async function exportFullJsonBackup(): Promise<string> {
     })),
   };
 
-  return JSON.stringify(payload, null, 2);
+  return { payload, blobs };
+}
+
+export async function exportFullJsonBackup(): Promise<string> {
+  return JSON.stringify((await readBackupSnapshot()).payload, null, 2);
 }
 
 /**
@@ -61,13 +68,12 @@ export async function exportFullJsonBackup(): Promise<string> {
  * binary blobs, AND a verified SHA-256 integrity manifest (Phase 1 / PF-42).
  */
 export async function exportFullZipBackup(): Promise<Blob> {
-  const jsonText = await exportFullJsonBackup();
+  const { payload: parsed, blobs } = await readBackupSnapshot();
+  const jsonText = JSON.stringify(parsed, null, 2);
   const dataBytes = strToU8(jsonText);
   const dataSha256 = await sha256Hex(
     dataBytes.buffer.slice(dataBytes.byteOffset, dataBytes.byteOffset + dataBytes.byteLength) as ArrayBuffer
   );
-  const parsed = JSON.parse(jsonText) as DayplanaBackupPayload;
-  const blobs = await db.blobs.toArray();
 
   const files: Record<string, Uint8Array> = {
     'dayplana-data.json': dataBytes,
@@ -86,8 +92,8 @@ export async function exportFullZipBackup(): Promise<Blob> {
 
   const manifest: BackupIntegrityManifest = {
     formatVersion: 3,
-    appVersion: '4.1.0',
-    schemaVersion: 2,
+    appVersion: PLANADAY_RELEASE.version,
+    schemaVersion: PLANADAY_RELEASE.indexedDbSchemaVersion,
     exportedAt: parsed.exportedAt,
     recordCount: parsed.records.length,
     revisionCount: parsed.revisions.length,
@@ -97,7 +103,9 @@ export async function exportFullZipBackup(): Promise<Blob> {
   };
   files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
 
-  const zipped = zipSync(files, { level: 6 });
+  const zipped = typeof Worker === 'undefined'
+    ? zipSync(files, { level: 6 })
+    : await new Promise<Uint8Array>((resolve, reject) => zip(files, { level: 6 }, (error, bytes) => error ? reject(error) : resolve(bytes)));
   return new Blob([zipped.slice()], { type: 'application/zip' });
 }
 
@@ -123,6 +131,7 @@ export async function importJsonBackup(
         ...parsed.settings,
         id: 'app-settings',
         deviceId: current.deviceId,
+        syncAuthToken: undefined,
         lastSyncServerId: undefined,
         lastSyncEpoch: undefined,
         restoredFromBackupAt: now,
@@ -147,30 +156,40 @@ export async function importJsonBackup(
 }
 
 export async function importZipBackup(
-  zipFile: Blob
+  zipFile: Blob,
+  options: { maxExpandedBytes?: number } = {}
 ): Promise<{ importedRecords: number; importedBlobs: number; verifiedIntegrity: boolean; missingBlobs: string[] }> {
   const ab = await blobToArrayBuffer(zipFile);
-  const extracted = unzipSync(new Uint8Array(ab));
+  let expandedBytes = 0;
+  const maxExpandedBytes = options.maxExpandedBytes ?? 1024 * 1024 * 1024;
+  if (!Number.isFinite(maxExpandedBytes) || maxExpandedBytes <= 0) throw new Error('Invalid backup expansion limit.');
+  const extracted = unzipSync(new Uint8Array(ab), { filter: file => {
+    expandedBytes += file.originalSize;
+    if (expandedBytes > maxExpandedBytes) throw new Error('Backup exceeds the configured expanded-size safety limit.');
+    return file.name === 'dayplana-data.json' || file.name === 'manifest.json' || /^blobs\/[a-f0-9]{16,64}$/i.test(file.name);
+  } });
   const dataBytes = extracted['dayplana-data.json'];
   if (!dataBytes) {
     throw new Error('Backup ZIP is missing dayplana-data.json');
   }
 
   // Verify manifest data digest when manifest.json is present
-  let verifiedIntegrity = true;
+  let verifiedIntegrity = Boolean(extracted['manifest.json']);
   if (extracted['manifest.json']) {
     const manifest = JSON.parse(strFromU8(extracted['manifest.json'])) as BackupIntegrityManifest;
     const actualDataHash = await sha256Hex(
       dataBytes.buffer.slice(dataBytes.byteOffset, dataBytes.byteOffset + dataBytes.byteLength) as ArrayBuffer
     );
-    if (manifest.dataSha256 && actualDataHash !== manifest.dataSha256) {
+    if (manifest.dataSha256?.length !== 64) verifiedIntegrity = false;
+    const legacyMatches = !verifiedIntegrity && manifest.dataSha256 === legacyBlobHash(dataBytes.buffer.slice(dataBytes.byteOffset, dataBytes.byteOffset + dataBytes.byteLength) as ArrayBuffer);
+    if (!manifest.dataSha256 || (actualDataHash !== manifest.dataSha256 && !legacyMatches)) {
       throw new Error('Backup integrity check failed: dayplana-data.json SHA-256 mismatch.');
     }
   }
 
   const jsonText = strFromU8(dataBytes);
   const parsed = JSON.parse(jsonText) as DayplanaBackupPayload;
-  const { importedRecords } = await importJsonBackup(jsonText);
+  const stagedBlobs: Array<import('./types').BlobRecord> = [];
 
   let importedBlobs = 0;
   const missingBlobs: string[] = [];
@@ -190,7 +209,12 @@ export async function importZipBackup(
         );
       }
     }
-    await db.blobs.put({
+    if (meta.hash.length !== 64) {
+      verifiedIntegrity = false;
+      if (legacyBlobHash(buf) !== meta.hash.toLowerCase()) throw new Error(`Legacy backup blob checksum mismatch: ${meta.name}`);
+    }
+    if (buf.byteLength !== meta.size) throw new Error(`Backup blob size mismatch: ${meta.name}`);
+    stagedBlobs.push({
       hash: meta.hash,
       mimeType: meta.mimeType,
       name: meta.name,
@@ -201,6 +225,11 @@ export async function importZipBackup(
     });
     importedBlobs++;
   }
+  const { importedRecords } = await db.transaction('rw', [db.records, db.revisions, db.timeLedger, db.settings, db.outbox, db.blobs], async () => {
+    const result = await importJsonBackup(jsonText);
+    if (stagedBlobs.length) await db.blobs.bulkPut(stagedBlobs);
+    return result;
+  });
   return { importedRecords, importedBlobs, verifiedIntegrity, missingBlobs };
 }
 

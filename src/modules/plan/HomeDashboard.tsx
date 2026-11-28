@@ -1,3 +1,6 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
+import { computeNextAlarmTrigger } from '../../core/alarmSchedule';
+import { useMinuteClock } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   AlarmClock,
@@ -47,10 +50,11 @@ export const HomeDashboard: React.FC = () => {
     startCountdownTimer,
     pushToast,
   } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
 
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
 
-  const now = new Date();
+  const now = useMinuteClock();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const greeting =
     now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -60,20 +64,20 @@ export const HomeDashboard: React.FC = () => {
       ? null
       : settings.familyProfiles.find((p) => p.id === settings.activeProfileId) ?? null;
 
-  const allTasks = records.filter((r) => r.type === 'task') as Array<LifeRecord<TaskPayload>>;
+  const allTasks = useMemo(() => records.filter((r) => r.type === 'task') as Array<LifeRecord<TaskPayload>>, [records]);
   const activeTasks = allTasks.filter((t) => t.status === 'active');
   const todayTasks = allTasks.filter((t) => t.doDate === activeDate);
   const todayTasksDone = todayTasks.filter((t) => t.status === 'done').length;
 
-  const chores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<LifeRecord<ChorePayload>>;
-  const events = records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>;
-  const habits = records.filter((r) => r.type === 'habit' && r.status === 'active') as Array<LifeRecord<HabitPayload>>;
-  const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
-  const mealsToday = records.filter(
+  const chores = useMemo(() => records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<LifeRecord<ChorePayload>>, [records]);
+  const events = useMemo(() => records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>, [records]);
+  const habits = useMemo(() => records.filter((r) => r.type === 'habit' && r.status === 'active') as Array<LifeRecord<HabitPayload>>, [records]);
+  const alarms = useMemo(() => records.filter((r) => r.type === 'alarm' && r.status === 'active'), [records]);
+  const mealsToday = useMemo(() => records.filter(
     (r) => r.type === 'meal_plan' && (r.payload as unknown as MealPlanPayload).date === activeDate
-  );
-  const pantryLots = records.filter((r) => r.type === 'pantry_lot') as Array<LifeRecord<PantryLotPayload>>;
-  const countdowns = records.filter((r) => r.type === 'countdown' || r.type === 'life_event');
+  ), [records, activeDate]);
+  const pantryLots = useMemo(() => records.filter((r) => r.type === 'pantry_lot') as Array<LifeRecord<PantryLotPayload>>, [records]);
+  const countdowns = useMemo(() => records.filter((r) => r.type === 'countdown' || r.type === 'life_event'), [records]);
 
   // Shared Important Family Notices across profiles (next 14 days!)
   const twoWeeksEnd = addDaysIso(logicalToday, 14);
@@ -103,6 +107,7 @@ export const HomeDashboard: React.FC = () => {
   const weekEnd = addDaysIso(activeDate, 6);
   const upcomingEvents = useMemo(() => {
     return events
+      .filter(ev => ev.status === 'active' && ev.payload.eventStatus !== 'canceled')
       .flatMap((ev) => {
         const dates = expandRecurrenceDates(ev.payload.startDate, ev.recurrence, {
           rangeStart: activeDate,
@@ -134,8 +139,11 @@ export const HomeDashboard: React.FC = () => {
   }, [upcomingEvents, logicalToday, nowMin]);
 
   const overdueTasks = activeTasks.filter((t) => t.dueDate && t.dueDate < logicalToday);
-  const overdueChores = chores.filter((c) => computeChoreFreshnessAtDate(c.payload, activeDate).status === 'overdue');
-  const dueChores = chores.filter((c) => computeChoreFreshnessAtDate(c.payload, activeDate).status === 'due_today');
+  const { overdueChores, dueChores } = useMemo(() => {
+    const overdueChores: typeof chores = [], dueChores: typeof chores = [];
+    for (const c of chores) { const status = computeChoreFreshnessAtDate(c.payload, activeDate).status; if (status === 'overdue') overdueChores.push(c); else if (status === 'due_today') dueChores.push(c); }
+    return { overdueChores, dueChores };
+  }, [chores, activeDate]);
   const actionableChores = [...overdueChores, ...dueChores];
 
   const habitsDoneToday = habits.filter((h) => (h.payload.logs?.[activeDate]?.value ?? 0) > 0).length;
@@ -143,9 +151,7 @@ export const HomeDashboard: React.FC = () => {
   const completedDayTargets = todayTasksDone + habitsDoneToday;
   const dayProgressPct = totalDayTargets > 0 ? Math.min(100, Math.round((completedDayTargets / totalDayTargets) * 100)) : 0;
 
-  const nextAlarm = alarms
-    .filter((a) => (a.payload as { enabled?: boolean; skipNext?: boolean }).enabled && !(a.payload as { skipNext?: boolean }).skipNext)
-    .sort((a, b) => String((a.payload as { time?: string }).time || '').localeCompare(String((b.payload as { time?: string }).time || '')))[0];
+  const nextAlarm = useMemo(() => alarms.map(a => ({ alarm: a, trigger: computeNextAlarmTrigger(a.payload, now) })).filter(a => a.trigger !== null).sort((a,b) => a.trigger!.nextFireMs - b.trigger!.nextFireMs)[0]?.alarm, [alarms, nowMin, logicalToday]);
 
   const pantryAlerts = pantryLots
     .map((lot) => {
@@ -331,13 +337,13 @@ export const HomeDashboard: React.FC = () => {
           </div>
           <form
             className="dp-row"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-1', async (e) => {
               e.preventDefault();
               if (!quickTaskTitle.trim()) return;
               await createRecord<TaskPayload>('task', quickTaskTitle.trim(), { subtasks: [], boardColumn: 'next' }, { doDate: activeDate, estimateMin: 20 });
               setQuickTaskTitle('');
               pushToast('Added task to Today', { canUndo: true });
-            }}
+            })}
           >
             <input
               className="dp-input"

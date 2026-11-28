@@ -1,4 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useViewActionGuard } from '../../components/Common/viewSafety';
+import { ModalDialog } from '../../components/Common/ModalDialog';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
   Database,
@@ -12,6 +14,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { flushSync } from 'react-dom';
 import { useApp } from '../../core/AppContext';
 import { createId } from '../../core/db';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
@@ -20,6 +23,7 @@ import {
   SPREADSHEET_FORMULA_DOCS,
   cellKey,
   colIndexToLetter,
+  parseCellRef,
   evaluateWorkbook,
   exportSheetToDelimited,
   importDelimitedToSheet,
@@ -173,8 +177,20 @@ function exportWorkbookSpreadsheetMl(title: string, sheets: WorksheetDef[], eval
 </Workbook>`;
 }
 
+/** Clamp the visible grid to existing rows/columns, retaining absolute coordinates. */
+export function getSheetGridWindow(size: number, page: number, pageSize: number, full = false) {
+  const count = Math.max(0, Math.floor(Number.isFinite(size) ? size : 0));
+  const step = Math.max(1, Math.floor(Number.isFinite(pageSize) ? pageSize : 1));
+  const requested = Math.max(0, Math.floor(Number.isFinite(page) ? page : 0));
+  const start = full ? 0 : Math.min(requested * step, Math.max(0, Math.floor((count - 1) / step) * step));
+  return { start, length: full ? count : Math.min(step, count - start) };
+}
+
 export const SpreadsheetView: React.FC = () => {
   const { records, pushToast } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const workbooks = useMemo(
     () =>
       records
@@ -195,6 +211,29 @@ export const SpreadsheetView: React.FC = () => {
   );
 
   const [selectedCell, setSelectedCell] = useState<string>('A1');
+  const [gridPage, setGridPage] = useState({ row: 0, col: 0 });
+  const [printFull, setPrintFull] = useState(false);
+  const [confirmLargePrint, setConfirmLargePrint] = useState(false);
+  const executeFullSheetPrint = () => {
+    flushSync(() => setPrintFull(true));
+    try {
+      window.print();
+    } catch (error) {
+      setPrintFull(false);
+      pushToast(String(error), { tone: 'danger' });
+    }
+  };
+  useEffect(() => { const reset = () => setPrintFull(false); window.addEventListener('afterprint', reset); return () => window.removeEventListener('afterprint', reset); }, []);
+  useEffect(() => { setGridPage({ row: 0, col: 0 }); setSelectedCell('A1'); }, [activeRec?.id, activeSheet?.id]);
+  const rowWindow = getSheetGridWindow(activeSheet?.rows ?? 0, gridPage.row, 50, printFull);
+  const rowStart = rowWindow.start;
+  const colWindow = getSheetGridWindow(activeSheet?.cols ?? 0, gridPage.col, 20, printFull);
+  const colStart = colWindow.start;
+  const selectGridPage = (row: number, col: number) => {
+    const r = Math.max(0, row), c = Math.max(0, col);
+    setGridPage({ row: r, col: c });
+    setSelectedCell(cellKey(c * 20, r * 50));
+  };
   const [showFormulaDocs, setShowFormulaDocs] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [newRangeName, setNewRangeName] = useState('');
@@ -362,7 +401,7 @@ export const SpreadsheetView: React.FC = () => {
           <select
             className="dp-select"
             value={activeRec?.id ?? ''}
-            onChange={(e) => setSelectedId(e.target.value)}
+            onChange={(e) => { setSelectedId(e.target.value); setGridPage({ row: 0, col: 0 }); setSelectedCell('A1'); }}
             style={{ minWidth: 180 }}
           >
             {workbooks.length === 0 && <option value="">No workbooks yet</option>}
@@ -406,11 +445,11 @@ export const SpreadsheetView: React.FC = () => {
             <button
               type="button"
               className="dp-btn"
-              onClick={async () => {
+              onClick={guardAction('action-1', async () => {
                 await softDeleteRecord(activeRec.id);
                 setSelectedId(null);
                 pushToast('Moved workbook to Trash', { tone: 'info' });
-              }}
+              })}
               title="Delete workbook"
             >
               <Trash2 size={14} />
@@ -440,13 +479,13 @@ export const SpreadsheetView: React.FC = () => {
         <div className="dp-card" style={{ textAlign: 'center', padding: '2rem' }}>
           <p className="dp-muted">Create a blank workbook, pick a built-in template, or pull live Planaday records above.</p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-            <button type="button" className="dp-btn dp-btn-primary" onClick={() => void handleCreateTemplate('personal_budget')}>
+            <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('sheet-create', () => handleCreateTemplate('personal_budget'))}>
               Start with Personal Budget
             </button>
-            <button type="button" className="dp-btn" onClick={() => void handleCreateTemplate('wet_nir')}>
+            <button type="button" className="dp-btn" onClick={guardAction('sheet-create', () => handleCreateTemplate('wet_nir'))}>
               Start with Wet vs NIR
             </button>
-            <button type="button" className="dp-btn" onClick={() => void handleCreateTemplate('game_balancing')}>
+            <button type="button" className="dp-btn" onClick={guardAction('sheet-create', () => handleCreateTemplate('game_balancing'))}>
               Start with Game Balancing
             </button>
           </div>
@@ -547,7 +586,17 @@ export const SpreadsheetView: React.FC = () => {
               >
                 <Download size={13} /> Excel (.xls)
               </button>
-              <button type="button" className="dp-btn" onClick={() => window.print()}>
+              <button
+                type="button"
+                className="dp-btn"
+                onClick={() => {
+                  if (activeSheet.rows * activeSheet.cols > 100000) {
+                    setConfirmLargePrint(true);
+                    return;
+                  }
+                  executeFullSheetPrint();
+                }}
+              >
                 <Printer size={13} /> Print / PDF
               </button>
             </div>
@@ -619,13 +668,21 @@ export const SpreadsheetView: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Spreadsheet Grid */}
-          <div className="dp-card" style={{ padding: 0, overflow: 'auto', maxHeight: 460 }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: activeSheet.cols * 96, fontSize: '0.82rem' }}>
+          {/* Interactive Spreadsheet Grid — bounded DOM, full workbook formulas */}
+          <div className="dp-row dp-no-print" style={{ flexWrap: 'wrap' }}>
+            <button type="button" className="dp-btn dp-btn-sm" disabled={rowStart === 0} onClick={() => selectGridPage(rowStart / 50 - 1, colStart / 20)}>Previous rows</button>
+            <button type="button" className="dp-btn dp-btn-sm" disabled={rowStart + 50 >= activeSheet.rows} onClick={() => selectGridPage(rowStart / 50 + 1, colStart / 20)}>Next rows</button>
+            <button type="button" className="dp-btn dp-btn-sm" disabled={colStart === 0} onClick={() => selectGridPage(rowStart / 50, colStart / 20 - 1)}>Previous columns</button>
+            <button type="button" className="dp-btn dp-btn-sm" disabled={colStart + 20 >= activeSheet.cols} onClick={() => selectGridPage(rowStart / 50, colStart / 20 + 1)}>Next columns</button>
+            <span className="dp-muted" role="status">Rows {rowStart + 1}–{Math.min(rowStart + 50, activeSheet.rows)} of {activeSheet.rows}; columns {colIndexToLetter(colStart)}–{colIndexToLetter(Math.min(colStart + 19, activeSheet.cols - 1))}</span>
+            <label>Go to cell <input className="dp-input" style={{ width: 85 }} placeholder="A1" onKeyDown={e => { if (e.key !== 'Enter') return; const ref = parseCellRef(e.currentTarget.value); if (ref && ref.row >= 0 && ref.col >= 0 && ref.row < activeSheet.rows && ref.col < activeSheet.cols) { setGridPage({ row: Math.floor(ref.row / 50), col: Math.floor(ref.col / 20) }); setSelectedCell(cellKey(ref.col, ref.row)); } }} /></label>
+          </div>
+          <div className="dp-card dp-sheet-grid" style={{ padding: 0, overflow: 'auto', maxHeight: 460 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: colWindow.length * 96, fontSize: '0.82rem' }}>
               <thead>
                 <tr>
                   <th style={{ width: 38, background: 'var(--dp-paper-alt)', border: '1px solid var(--dp-border)', position: 'sticky', left: 0, top: 0, zIndex: 3 }}>#</th>
-                  {Array.from({ length: activeSheet.cols }).map((_, c) => (
+                  {Array.from({ length: colWindow.length }, (_, i) => colStart + i).map((c) => (
                     <th
                       key={c}
                       style={{
@@ -645,7 +702,7 @@ export const SpreadsheetView: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {Array.from({ length: activeSheet.rows }).map((_, r) => (
+                {Array.from({ length: rowWindow.length }, (_, i) => rowStart + i).map((r) => (
                   <tr key={r}>
                     <td
                       style={{
@@ -660,11 +717,11 @@ export const SpreadsheetView: React.FC = () => {
                     >
                       {r + 1}
                     </td>
-                    {Array.from({ length: activeSheet.cols }).map((__, c) => {
+                    {Array.from({ length: colWindow.length }, (_, i) => colStart + i).map((c) => {
                       const k = cellKey(c, r);
                       const cell = activeSheet.cells[k];
                       const ev = evaluated[activeSheet.id]?.[k];
-                      const isSel = selectedCell === k;
+                      const isSel = !printFull && selectedCell === k;
                       const displayVal = isSel ? cell?.raw ?? '' : formatCellDisplay(ev?.value ?? '', cell?.format);
                       return (
                         <td
@@ -794,7 +851,7 @@ export const SpreadsheetView: React.FC = () => {
                     pts.push({ label: lbl, value: val });
                   }
                 }
-                const maxV = Math.max(1, ...pts.map((p) => Math.abs(p.value)));
+                const maxV = pts.reduce((max, p) => Math.max(max, Math.abs(p.value)), 1);
                 const sumV = Math.max(1, pts.reduce((s, p) => s + Math.max(0, p.value), 0));
                 const palette = ['#3b6ea5', '#c96f53', '#4f7a65', '#6b5ca5', '#b47438', '#2f7a78'];
 
@@ -892,6 +949,31 @@ export const SpreadsheetView: React.FC = () => {
           </div>
         </>
       )}
+      <ModalDialog
+        open={confirmLargePrint}
+        onClose={() => setConfirmLargePrint(false)}
+        title="Print Very Large Sheet?"
+        footer={
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button type="button" className="dp-btn" onClick={() => setConfirmLargePrint(false)}>Cancel</button>
+            <button
+              type="button"
+              className="dp-btn dp-btn-primary"
+              onClick={() => {
+                setConfirmLargePrint(false);
+                executeFullSheetPrint();
+              }}
+            >
+              Continue Printing
+            </button>
+          </div>
+        }
+      >
+        <p style={{ margin: 0 }}>
+          This sheet contains more than 100,000 cells ({activeSheet ? `${activeSheet.rows.toLocaleString()} × ${activeSheet.cols.toLocaleString()}` : ''}).
+          Mounting the full grid for printing may take extra time and memory. Continue?
+        </p>
+      </ModalDialog>
     </div>
   );
 };

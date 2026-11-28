@@ -63,6 +63,8 @@ export async function upsertCanonicalDailyNote(
     dailyCategory?: DailyNoteCategory;
     notebookId?: string;
     diaryRecordId?: string | null;
+    workspaceId?: string;
+    ownerProfileId?: string | null;
   }
 ): Promise<LifeRecord<NotePayload>> {
   const existing = findCanonicalDailyNote(records, dateIso);
@@ -121,6 +123,8 @@ export async function upsertCanonicalDailyNote(
     },
     {
       category: 'Daily Notes',
+      workspaceId: opts?.workspaceId,
+      ownerProfileId: opts?.ownerProfileId,
       tags: ['daily-note'],
       links: initialLinks,
     },

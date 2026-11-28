@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Settings, SlidersHorizontal } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 
@@ -15,6 +15,8 @@ interface TabSettingsDrawerProps {
 export const TabSettingsDrawer: React.FC<TabSettingsDrawerProps> = ({ title, subtitle, children }) => {
   const { setActiveView } = useApp();
   const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
 
   return (
     <div style={{ width: '100%' }}>
@@ -23,7 +25,9 @@ export const TabSettingsDrawer: React.FC<TabSettingsDrawerProps> = ({ title, sub
           type="button"
           className={`dp-btn dp-btn-sm ${open ? 'dp-btn-primary' : ''}`}
           onClick={() => setOpen((v) => !v)}
+          ref={buttonRef}
           aria-expanded={open}
+          aria-controls={panelId}
         >
           <SlidersHorizontal size={13} /> {title} {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </button>
@@ -31,6 +35,14 @@ export const TabSettingsDrawer: React.FC<TabSettingsDrawerProps> = ({ title, sub
 
       {open && (
         <div
+          id={panelId}
+          role="region"
+          aria-label={title}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !event.defaultPrevented) {
+              event.stopPropagation(); setOpen(false); buttonRef.current?.focus();
+            }
+          }}
           className="dp-card dp-stack"
           style={{
             marginTop: 8,

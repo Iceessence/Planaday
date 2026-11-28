@@ -1,3 +1,4 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -46,6 +47,8 @@ type LabSubTab =
   | 'hours'
   | 'qms';
 
+const EMPTY_LAB_RECORDS: LifeRecord[] = [];
+
 const EMAIL_TEMPLATES = [
   {
     name: 'Results Ready',
@@ -71,23 +74,29 @@ const EMAIL_TEMPLATES = [
  */
 export const LabWorkspaceView: React.FC = () => {
   const { settings, records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
   const [subTab, setSubTab] = useState<LabSubTab>('overview');
 
+  const labRecordsByType = useMemo(() => {
+    const map = new Map<string, LifeRecord[]>();
+    for (const r of records) { if (!r.type.startsWith('lab_')) continue; const group = map.get(r.type); if (group) group.push(r); else map.set(r.type, [r]); }
+    return map;
+  }, [records]);
   // Record partitions
-  const samples = useMemo(() => records.filter((r) => r.type === 'lab_sample'), [records]);
-  const subcontracts = useMemo(() => records.filter((r) => r.type === 'lab_subcontract'), [records]);
-  const inventory = useMemo(() => records.filter((r) => r.type === 'lab_inventory'), [records]);
-  const orders = useMemo(() => records.filter((r) => r.type === 'lab_order'), [records]);
-  const budgets = useMemo(() => records.filter((r) => r.type === 'lab_budget'), [records]);
-  const prices = useMemo(() => records.filter((r) => r.type === 'lab_price_entry'), [records]);
-  const priceTemplates = useMemo(() => records.filter((r) => r.type === 'lab_price_template'), [records]);
-  const research = useMemo(() => records.filter((r) => r.type === 'lab_research'), [records]);
-  const emails = useMemo(() => records.filter((r) => r.type === 'lab_email_draft'), [records]);
-  const labTasks = useMemo(() => records.filter((r) => r.type === 'lab_task'), [records]);
-  const meetings = useMemo(() => records.filter((r) => r.type === 'lab_meeting'), [records]);
-  const calibrations = useMemo(() => records.filter((r) => r.type === 'lab_calibration'), [records]);
-  const workHours = useMemo(() => records.filter((r) => r.type === 'lab_work_hour'), [records]);
-  const qmsItems = useMemo(() => records.filter((r) => r.type === 'lab_qms_item'), [records]);
+  const samples = labRecordsByType.get('lab_sample') ?? EMPTY_LAB_RECORDS;
+  const subcontracts = labRecordsByType.get('lab_subcontract') ?? EMPTY_LAB_RECORDS;
+  const inventory = labRecordsByType.get('lab_inventory') ?? EMPTY_LAB_RECORDS;
+  const orders = labRecordsByType.get('lab_order') ?? EMPTY_LAB_RECORDS;
+  const budgets = labRecordsByType.get('lab_budget') ?? EMPTY_LAB_RECORDS;
+  const prices = labRecordsByType.get('lab_price_entry') ?? EMPTY_LAB_RECORDS;
+  const priceTemplates = labRecordsByType.get('lab_price_template') ?? EMPTY_LAB_RECORDS;
+  const research = labRecordsByType.get('lab_research') ?? EMPTY_LAB_RECORDS;
+  const emails = labRecordsByType.get('lab_email_draft') ?? EMPTY_LAB_RECORDS;
+  const labTasks = labRecordsByType.get('lab_task') ?? EMPTY_LAB_RECORDS;
+  const meetings = labRecordsByType.get('lab_meeting') ?? EMPTY_LAB_RECORDS;
+  const calibrations = labRecordsByType.get('lab_calibration') ?? EMPTY_LAB_RECORDS;
+  const workHours = labRecordsByType.get('lab_work_hour') ?? EMPTY_LAB_RECORDS;
+  const qmsItems = labRecordsByType.get('lab_qms_item') ?? EMPTY_LAB_RECORDS;
 
   // --- Form states across sub-modules ---
   // Samples
@@ -341,7 +350,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-stack"
             style={{ padding: 12, gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-1', async (e) => {
               e.preventDefault();
               if (!smpId.trim()) return;
               await createRecord('lab_sample', `${smpId.trim()} — ${smpClient.trim() || 'Client'}`, {
@@ -364,7 +373,7 @@ export const LabWorkspaceView: React.FC = () => {
               setSmpId('');
               setSmpAnalyses('');
               pushToast('Logged laboratory sample!');
-            }}
+            })}
           >
             <strong>Log New Sample &amp; Required Analyses</strong>
             <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -464,7 +473,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-2', async (e) => {
               e.preventDefault();
               if (!subLab.trim() || !subSample.trim()) return;
               await createRecord('lab_subcontract', `${subSample.trim()} → ${subLab.trim()}`, {
@@ -481,7 +490,7 @@ export const LabWorkspaceView: React.FC = () => {
               setSubSample('');
               setSubTracking('');
               pushToast('Logged subcontracted sample!');
-            }}
+            })}
           >
             <input className="dp-input" style={{ width: 150 }} placeholder="Subcontract Lab *" value={subLab} onChange={(e) => setSubLab(e.target.value)} />
             <input className="dp-input" style={{ width: 120 }} placeholder="Sample ID *" value={subSample} onChange={(e) => setSubSample(e.target.value)} />
@@ -531,7 +540,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-stack"
             style={{ padding: 12, gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-3', async (e) => {
               e.preventDefault();
               if (!invName.trim()) return;
               await createRecord('lab_inventory', invName.trim(), {
@@ -551,7 +560,7 @@ export const LabWorkspaceView: React.FC = () => {
               setInvCatalog('');
               setInvLot('');
               pushToast('Added lab supply to inventory!');
-            }}
+            })}
           >
             <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
               <input className="dp-input" style={{ flex: 2, minWidth: 160 }} placeholder="Supply / reagent / consumable name *" value={invName} onChange={(e) => setInvName(e.target.value)} />
@@ -612,7 +621,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-4', async (e) => {
               e.preventDefault();
               if (!ordProd.trim()) return;
               const total = ordQty * ordUnitPrice + ordShip;
@@ -631,7 +640,7 @@ export const LabWorkspaceView: React.FC = () => {
               setOrdProd('');
               setOrdPo('');
               pushToast(`Order recorded ($${total.toFixed(2)}) — auto-linked to Lab Budget (${ordBudgetCat})!`);
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2, minWidth: 160 }} placeholder="Product purchased *" value={ordProd} onChange={(e) => setOrdProd(e.target.value)} />
             <input className="dp-input" style={{ width: 130 }} placeholder="Vendor" value={ordVendor} onChange={(e) => setOrdVendor(e.target.value)} />
@@ -697,11 +706,11 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-5', async (e) => {
               e.preventDefault();
               await createRecord('lab_budget', `${budCat} (${budPeriod})`, { category: budCat, period: budPeriod, limit: budLimit });
               pushToast(`Saved Lab Budget category "${budCat}"`);
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 1 }} value={budCat} onChange={(e) => setBudCat(e.target.value)} placeholder="Budget category" />
             <select className="dp-select" style={{ width: 'auto' }} value={budPeriod} onChange={(e) => setBudPeriod(e.target.value as typeof budPeriod)}>
@@ -745,7 +754,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-stack"
             style={{ padding: 12, gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-6', async (e) => {
               e.preventDefault();
               if (!prAnalysis.trim()) return;
               await createRecord('lab_price_entry', `${prClient.trim() || 'Standard'} — ${prAnalysis.trim()} (${prCommodity.trim()})`, {
@@ -760,7 +769,7 @@ export const LabWorkspaceView: React.FC = () => {
                 history: [],
               });
               pushToast('Added client price entry!');
-            }}
+            })}
           >
             <strong>Add Client / Commodity / Method Pricing Entry</strong>
             <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -901,7 +910,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-7', async (e) => {
               e.preventDefault();
               if (!resTitle.trim()) return;
               const rec = await createRecord('lab_research', resTitle.trim(), {
@@ -917,7 +926,7 @@ export const LabWorkspaceView: React.FC = () => {
               setResMethodNo('');
               setResObj('');
               pushToast('Created method research record!');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2, minWidth: 160 }} placeholder="Method / research project name *" value={resTitle} onChange={(e) => setResTitle(e.target.value)} />
             <input className="dp-input" style={{ width: 120 }} placeholder="Method #" value={resMethodNo} onChange={(e) => setResMethodNo(e.target.value)} />
@@ -1007,7 +1016,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-stack"
             style={{ padding: 12, gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-8', async (e) => {
               e.preventDefault();
               if (!emSubj.trim()) return;
               const rec = await createRecord('lab_email_draft', emSubj.trim(), {
@@ -1020,7 +1029,7 @@ export const LabWorkspaceView: React.FC = () => {
               setEmSubj('');
               setEmBody('');
               pushToast('Saved email draft locally!');
-            }}
+            })}
           >
             <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
               <select className="dp-select" style={{ width: 'auto' }} value={emCat} onChange={(e) => setEmCat(e.target.value)}>
@@ -1071,7 +1080,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-9', async (e) => {
               e.preventDefault();
               if (!ltTitle.trim()) return;
               await createRecord('lab_task', ltTitle.trim(), {
@@ -1081,7 +1090,7 @@ export const LabWorkspaceView: React.FC = () => {
               });
               setLtTitle('');
               pushToast('Added Laboratory Task!');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2, minWidth: 180 }} placeholder="Lab responsibility (e.g., Weekly timecard review, Safety meeting)…" value={ltTitle} onChange={(e) => setLtTitle(e.target.value)} />
             <select className="dp-select" style={{ width: 'auto' }} value={ltFreq} onChange={(e) => setLtFreq(e.target.value as typeof ltFreq)}>
@@ -1137,7 +1146,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-10', async (e) => {
               e.preventDefault();
               if (!mtTitle.trim()) return;
               const rec = await createRecord('lab_meeting', mtTitle.trim(), {
@@ -1153,7 +1162,7 @@ export const LabWorkspaceView: React.FC = () => {
               setSelectedMeetingId(rec.id);
               setMtTitle('');
               pushToast('Created Laboratory Meeting record!');
-            }}
+            })}
           >
             <input className="dp-input" style={{ flex: 2, minWidth: 160 }} placeholder="Meeting title *" value={mtTitle} onChange={(e) => setMtTitle(e.target.value)} />
             <select className="dp-select" style={{ width: 'auto' }} value={mtType} onChange={(e) => setMtType(e.target.value)}>
@@ -1252,7 +1261,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-stack"
             style={{ padding: 12, gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-11', async (e) => {
               e.preventDefault();
               if (!calEquip.trim()) return;
               await createRecord('lab_calibration', `${calEquip.trim()} (${calType})`, {
@@ -1269,7 +1278,7 @@ export const LabWorkspaceView: React.FC = () => {
               });
               setCalEquip('');
               pushToast('Scheduled Calibration / QC check!');
-            }}
+            })}
           >
             <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
               <input className="dp-input" style={{ width: 150 }} placeholder="Equipment ID *" value={calEquip} onChange={(e) => setCalEquip(e.target.value)} />
@@ -1368,11 +1377,12 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-12', async (e) => {
               e.preventDefault();
               const [ih, im] = whIn.split(':').map(Number);
               const [oh, om] = whOut.split(':').map(Number);
-              const grossMin = Math.max(0, (oh * 60 + om) - (ih * 60 + im));
+              const rawMinutes = (oh * 60 + om) - (ih * 60 + im);
+              const grossMin = rawMinutes < 0 ? rawMinutes + 1440 : rawMinutes;
               const netHrs = Math.max(0, (grossMin - whBreakMin) / 60);
               const overtimeHrs = Math.max(0, netHrs - whSchedHrs);
               await createRecord('lab_work_hour', `${whPerson} — ${whDate}`, {
@@ -1389,7 +1399,7 @@ export const LabWorkspaceView: React.FC = () => {
               });
               setWhBreakActivity('');
               pushToast(`Logged ${netHrs.toFixed(2)}h for ${whPerson}`);
-            }}
+            })}
           >
             <input className="dp-input" style={{ width: 150 }} placeholder="Person / Analyst" value={whPerson} onChange={(e) => setWhPerson(e.target.value)} />
             <input type="date" className="dp-input" style={{ width: 'auto' }} value={whDate} onChange={(e) => setWhDate(e.target.value)} />
@@ -1446,7 +1456,7 @@ export const LabWorkspaceView: React.FC = () => {
           <form
             className="dp-card dp-row"
             style={{ padding: 12, flexWrap: 'wrap', gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-13', async (e) => {
               e.preventDefault();
               if (!qmsTitle.trim()) return;
               await createRecord('lab_qms_item', qmsTitle.trim(), {
@@ -1459,7 +1469,7 @@ export const LabWorkspaceView: React.FC = () => {
               setQmsTitle('');
               setQmsNotes('');
               pushToast(`Added ${qmsKind} record!`);
-            }}
+            })}
           >
             <select className="dp-select" style={{ width: 'auto' }} value={qmsKind} onChange={(e) => setQmsKind(e.target.value)}>
               {[

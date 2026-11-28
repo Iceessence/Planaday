@@ -68,21 +68,22 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
   // Extract #tags
   const tags: string[] = [];
   text = text.replace(/#([a-zA-Z0-9_-]+)/g, (_m, tag) => {
-    tags.push(tag.toLowerCase());
+    if (!tags.includes(tag.toLowerCase())) tags.push(tag.toLowerCase());
     return '';
   });
 
   // Extract @location
   let location: string | undefined;
-  text = text.replace(/@([A-Za-z0-9_.'-]+(?:\s+[A-Z][A-Za-z0-9_-]+)?)/g, (_m, loc) => {
+  text = text.replace(/(^|\s)@([A-Za-z0-9_.'-]+(?:\s+[A-Z][A-Za-z0-9_-]+)?)/g, (_m, prefix, loc) => {
     location = loc.trim();
-    return '';
+    return prefix;
   });
 
   // Extract duration: supports hours, minutes, AND seconds (e.g. "timer 45s", "timer 1m 30s", "for 45m")
   let durationMin: number | undefined;
   let durationSec: number | undefined;
   const compoundTimerRegex = /\b(?:for\s+)?(?:(\d+)\s*(?:h|hr|hrs|hour|hours)\s*)?(?:(\d+)\s*(?:m|min|mins|minute|minutes)\s*)?(?:(\d+)\s*(?:s|sec|secs|second|seconds))\b/i;
+  const hmMatch = targetType === 'timer' ? text.match(/\b(\d+)\s*(?:h|hr|hrs|hours?)\s*(\d+)\s*(?:m|min|mins|minutes?)\b(?!\s*\d+\s*(?:s|sec|secs|seconds?)\b)/i) : null;
   const secMatch = targetType === 'timer' ? text.match(compoundTimerRegex) : null;
   if (secMatch && (secMatch[1] || secMatch[2] || secMatch[3])) {
     const h = Number(secMatch[1] || 0);
@@ -91,6 +92,10 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
     durationSec = h * 3600 + m * 60 + s;
     durationMin = Math.round(durationSec / 60);
     text = text.replace(secMatch[0], '');
+  } else if (hmMatch) {
+    durationSec = Number(hmMatch[1]) * 3600 + Number(hmMatch[2]) * 60;
+    durationMin = Math.round(durationSec / 60);
+    text = text.replace(hmMatch[0], '');
   } else {
     const durRegex =
       targetType === 'timer'
@@ -131,7 +136,7 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
 
   // Extract time: "6pm", "6:30 pm", "18:30", "at 9am"
   let startTime: string | undefined;
-  const timeMatch = text.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(?:at\s+)(\d{2}):(\d{2})\b/i);
+  const timeMatch = text.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(?:at\s+)?(\d{2}):(\d{2})\b/i);
   if (timeMatch) {
     if (timeMatch[1]) {
       let h = Number(timeMatch[1]);
@@ -143,7 +148,8 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
     } else if (timeMatch[4]) {
       startTime = `${timeMatch[4]}:${timeMatch[5]}`;
     }
-    text = text.replace(timeMatch[0], '');
+    if (startTime && /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) && (!timeMatch[1] || Number(timeMatch[1]) >= 1 && Number(timeMatch[1]) <= 12)) text = text.replace(timeMatch[0], '');
+    else { startTime = undefined; ambiguousNotes.push('Invalid clock time; please correct it.'); }
   }
 
   // Extract date: today, tomorrow, YYYY-MM-DD, or next weekday
@@ -157,8 +163,9 @@ export function parseQuickCapture(rawInput: string, logicalToday: string): Parse
   } else {
     const isoMatch = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
     if (isoMatch) {
-      date = isoMatch[1];
-      text = text.replace(isoMatch[0], '');
+      const parsed = new Date(isoMatch[1] + 'T00:00:00Z');
+      if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10) === isoMatch[1]) { date = isoMatch[1]; text = text.replace(isoMatch[0], ''); }
+      else ambiguousNotes.push('Invalid calendar date; please correct it.');
     } else if (recurrence?.byWeekday?.length) {
       // Next matching weekday from logicalToday
       const todayW = getWeekdayIso(logicalToday);

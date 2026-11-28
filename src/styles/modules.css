@@ -369,3 +369,7 @@
   font-size: 1.25rem;
   line-height: 1.65;
 }
+
+/* Allow studio grid children to shrink without forcing the full shell wider. */
+.dp-studio-split > *, .dp-studio-split-3 > * { min-width: 0; }
+.dp-fullscreen-overlay { overscroll-behavior: contain; }

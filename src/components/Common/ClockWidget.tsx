@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { ClockDesignId, ClockVisualConfig } from '../../core/types';
 
 export const CLOCK_DESIGN_OPTIONS: Array<{ id: ClockDesignId; label: string }> = [
@@ -12,36 +12,54 @@ export const CLOCK_DESIGN_OPTIONS: Array<{ id: ClockDesignId; label: string }> =
 
 const ROMAN = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
 
-export const ClockWidget: React.FC<{
+interface ClockWidgetProps {
   config: ClockVisualConfig;
   timeFormat: '12h' | '24h';
   timeZone?: string;
   label?: string;
-}> = ({ config, timeFormat, timeZone, label }) => {
+}
+
+export const ClockWidget = React.memo(function ClockWidget({ config, timeFormat, timeZone, label }: ClockWidgetProps) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
+    const period = config.showSeconds ? 1000 : 60_000;
+    let timer: number | undefined;
+    const tick = () => {
+      window.clearTimeout(timer);
+      if (document.hidden) return;
+      const current = Date.now();
+      setNow(new Date(current));
+      timer = window.setTimeout(tick, period - current % period + 10);
+    };
+    tick();
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [config.showSeconds]);
+
+  const formatter = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: timeZone || undefined, hourCycle: 'h23',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    } catch { return undefined; }
+  }, [timeZone]);
 
   // Extract hours/minutes/seconds in optional target timeZone
   const parts = React.useMemo(() => {
     try {
-      const fmt = new Intl.DateTimeFormat('en-US', {
-        timeZone: timeZone || undefined,
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-      const out = fmt.formatToParts(now);
+      if (!formatter) throw new Error('Invalid time zone');
+      const out = formatter.formatToParts(now);
       const get = (t: string) => Number(out.find((x) => x.type === t)?.value ?? 0);
       return { h: get('hour') % 24, m: get('minute'), s: get('second') };
     } catch {
       return { h: now.getHours(), m: now.getMinutes(), s: now.getSeconds() };
     }
-  }, [now, timeZone]);
+  }, [now, formatter]);
 
   const displayHour = timeFormat === '12h' ? parts.h % 12 || 12 : parts.h;
   const ampm = timeFormat === '12h' ? (parts.h >= 12 ? 'PM' : 'AM') : '';
@@ -59,7 +77,7 @@ export const ClockWidget: React.FC<{
 
   if (isAnalog) {
     const secDeg = parts.s * 6;
-    const minDeg = parts.m * 6 + parts.s * 0.1;
+    const minDeg = parts.m * 6 + (config.showSeconds ? parts.s * 0.1 : 0);
     const hrDeg = (parts.h % 12) * 30 + parts.m * 0.5;
     const isDecorative = config.design === 'decorative';
     const isMinimal = config.design === 'analog_minimal';
@@ -70,7 +88,7 @@ export const ClockWidget: React.FC<{
           height={size}
           viewBox="0 0 120 120"
           role="img"
-          aria-label={`Clock showing ${hh}:${mm}${config.showSeconds ? `:${ss}` : ''} ${ampm}`}
+          aria-label={`Clock showing ${hh}:${mm}${config.showSeconds ? `:${ss}` : ''} ${ampm}`.trim()}
         >
           <circle
             cx="60"
@@ -80,7 +98,7 @@ export const ClockWidget: React.FC<{
             stroke={accent}
             strokeWidth={config.borderStyle === 'none' ? 0 : isDecorative ? 4 : 2.5}
           />
-          {config.borderStyle === 'double' || isDecorative ? (
+          {config.borderStyle !== 'none' && (config.borderStyle === 'double' || isDecorative) ? (
             <circle cx="60" cy="60" r="49" fill="none" stroke={accent} strokeOpacity={0.4} strokeWidth={1.2} strokeDasharray={isDecorative ? '3 3' : undefined} />
           ) : null}
           {Array.from({ length: 12 }, (_, i) => {
@@ -136,7 +154,7 @@ export const ClockWidget: React.FC<{
           {config.showSeconds && (
             <line
               x1="60"
-              y1="66"
+              y1="60"
               x2={60 + Math.sin((secDeg * Math.PI) / 180) * 43}
               y2={60 - Math.cos((secDeg * Math.PI) / 180) * 43}
               stroke={accent}
@@ -162,8 +180,9 @@ export const ClockWidget: React.FC<{
           borderRadius: 10,
           background: '#161b18',
           color: '#7cff8e',
-          border: config.borderStyle === 'none' ? 'none' : `2px solid ${accent}`,
+          border: config.borderStyle === 'none' ? 'none' : `3px ${config.borderStyle === 'double' ? 'double' : 'solid'} ${accent}`,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontVariantNumeric: 'tabular-nums',
           letterSpacing: '0.08em',
           boxShadow: 'inset 0 0 12px rgba(0,0,0,0.45)',
         }}
@@ -186,12 +205,12 @@ export const ClockWidget: React.FC<{
           flexDirection: 'column',
           alignItems: 'flex-start',
           padding: '8px 14px',
-          borderInlineStart: `4px solid ${accent}`,
+          borderInlineStart: config.borderStyle === 'none' ? 'none' : `4px ${config.borderStyle === 'double' ? 'double' : 'solid'} ${accent}`,
           background: bg,
           borderRadius: 6,
         }}
       >
-        <div style={{ fontSize: Math.round(size * 0.24), fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.05 }}>
+        <div style={{ fontSize: Math.round(size * 0.24), fontWeight: 300, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', lineHeight: 1.05 }}>
           {hh}
           <span style={{ color: accent }}>:</span>
           {mm}
@@ -224,4 +243,4 @@ export const ClockWidget: React.FC<{
       {label && <span className="dp-muted" style={{ fontSize: '0.76rem' }}>{label}</span>}
     </div>
   );
-};
+});

@@ -1,3 +1,5 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
+import { db } from '../../core/db';
 import React, { useMemo, useRef, useState } from 'react';
 import { Copy, FileOutput, Plus, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -11,6 +13,7 @@ import type { LifeRecord, ThoughtPayload } from '../../core/types';
 
 export const ThoughtInboxView: React.FC = () => {
   const { settings, patchSettings, records, logicalToday, pushToast } = useApp();
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
   const [draft, setDraft] = useState('');
   const [draftTag, setDraftTag] = useState('');
   const [tagFilter, setTagFilter] = useState('All');
@@ -22,7 +25,7 @@ export const ThoughtInboxView: React.FC = () => {
   const [customThoughtPrompt, setCustomThoughtPrompt] = useState('');
   const [viewMode, setViewMode] = useState<'entries' | 'one_doc'>('entries');
   const [activeThoughtId, setActiveThoughtId] = useState<string | null>(null);
-  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; text: string } | null>(null);
+  const [selectionRange, setSelectionRange] = useState<{ thoughtId: string; start: number; end: number; text: string; fullText: string } | null>(null);
   const [fileMode, setFileMode] = useState<'move' | 'copy'>('move');
   const [fileTarget, setFileTarget] = useState<'note' | 'task' | 'event' | 'goal' | 'recipe'>('note');
   const [fileNotebook, setFileNotebook] = useState('nb_personal');
@@ -85,11 +88,11 @@ export const ThoughtInboxView: React.FC = () => {
 
   const oneDocumentText = useMemo(
     () =>
-      [...thoughts]
+      viewMode !== 'one_doc' ? '' : [...thoughts]
         .reverse()
         .map((t) => `## ${new Date(t.createdAt).toLocaleString()} — ${t.title}\n\n${t.payload.content}`)
         .join('\n\n---\n\n'),
-    [thoughts]
+    [thoughts, viewMode]
   );
 
   const handleAddThought = async () => {
@@ -121,16 +124,22 @@ export const ThoughtInboxView: React.FC = () => {
     const start = el.selectionStart;
     const end = el.selectionEnd;
     if (end > start) {
-      setSelectionRange({ start, end, text: (selectedThought.payload.content ?? '').slice(start, end) });
+      setSelectionRange({ thoughtId: selectedThought.id, start, end, text: el.value.slice(start, end), fullText: el.value });
     } else {
       setSelectionRange(null);
     }
   };
 
   const handleFilePassage = async () => {
-    if (!selectedThought || !selectionRange) return;
+    if (!selectedThought || !selectionRange || selectionRange.thoughtId !== selectedThought.id) return;
+    const latest = await db.records.get(selectedThought.id);
+    if (!latest || latest.deletedAt || latest.payload.content !== selectionRange.fullText || entryAreaRef.current?.value !== selectionRange.fullText) {
+      pushToast('Text changed or is still saving. Wait for the local save, then select the passage again.', { tone: 'warn' });
+      setSelectionRange(null); return;
+    }
     const res = await fileThoughtPassage(selectedThought.id, selectionRange.start, selectionRange.end, {
       mode: fileMode,
+      expectedContent: selectionRange.fullText,
       targetType: fileTarget,
       notebookId: fileNotebook,
       dateIso: logicalToday,
@@ -278,7 +287,7 @@ export const ThoughtInboxView: React.FC = () => {
               </button>
             ))}
           </div>
-          <button type="button" className="dp-btn dp-btn-primary" onClick={() => void handleAddThought()}>
+          <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('action-1', () => handleAddThought())}>
             <Plus size={15} /> Capture Entry
           </button>
         </div>
@@ -410,7 +419,7 @@ export const ThoughtInboxView: React.FC = () => {
                 <strong style={{ fontSize: '0.86rem' }}>
                   <FileOutput size={14} style={{ verticalAlign: '-2px' }} /> File a Selected Passage
                 </strong>
-                {selectionRange ? (
+                {selectionRange?.thoughtId === selectedThought.id ? (
                   <>
                     <div className="dp-muted" style={{ fontSize: '0.82rem' }}>
                       Selected ({selectionRange.text.length} chars): "{selectionRange.text.slice(0, 90)}"
@@ -434,7 +443,7 @@ export const ThoughtInboxView: React.FC = () => {
                           ))}
                         </select>
                       )}
-                      <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleFilePassage()}>
+                      <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={guardAction('action-2', () => handleFilePassage())}>
                         File Passage
                       </button>
                     </div>

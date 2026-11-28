@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   Beaker,
@@ -70,6 +71,9 @@ function toFractionApprox(val: number, maxDen = 1000): string {
 
 export const CalculatorView: React.FC = () => {
   const { records, pushToast, setActiveView, setSelectedNoteId } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
   const [tab, setTab] = useState<CalcTab>('standard');
 
   // --- Standard & Scientific Expression State ---
@@ -281,7 +285,7 @@ export const CalculatorView: React.FC = () => {
 
   const primarySeries = seriesList.find((s) => s.visible && s.mode === 'cartesian') ?? seriesList[0];
   const primaryAnalysis = useMemo(() => {
-    if (!primarySeries || primarySeries.mode !== 'cartesian') return null;
+    if (tab !== 'graph' || graphDim !== '2d' || !primarySeries || primarySeries.mode !== 'cartesian') return null;
     try {
       const ctx = { angleUnit: 'rad' as AngleUnit, vars: graphVars, userFns };
       const yAt = evaluateMathExpression(primarySeries.expr, { ...ctx, vars: { ...graphVars, x: inspectX } });
@@ -304,9 +308,10 @@ export const CalculatorView: React.FC = () => {
     } catch {
       return null;
     }
-  }, [primarySeries, graphVars, userFns, inspectX, intA, intB, xMin, xMax]);
+  }, [tab, graphDim, primarySeries, graphVars, userFns, inspectX, intA, intB, xMin, xMax]);
 
   const graphPaths = useMemo(() => {
+    if (tab !== 'graph' || graphDim !== '2d') return [];
     const ctxBase = { angleUnit: 'rad' as AngleUnit, vars: graphVars, userFns };
     return seriesList
       .filter((s) => s.visible)
@@ -351,11 +356,11 @@ export const CalculatorView: React.FC = () => {
         }
         return { series: s, d, shadeD };
       });
-  }, [seriesList, xMin, xMax, yMin, yMax, graphVars, userFns]);
+  }, [tab, graphDim, seriesList, xMin, xMax, yMin, yMax, graphVars, userFns]);
 
   // --- 3D Surface Wireframe Projection ---
   const surfaceLines = useMemo(() => {
-    if (graphDim !== '3d') return [];
+    if (tab !== 'graph' || graphDim !== '3d') return [];
     const N = 16;
     const range = 4;
     const az = (rotAz * Math.PI) / 180;
@@ -404,7 +409,7 @@ export const CalculatorView: React.FC = () => {
       if (d) paths.push(d);
     }
     return paths;
-  }, [graphDim, surfaceExpr, rotAz, rotEl, graphVars, userFns]);
+  }, [tab, graphDim, surfaceExpr, rotAz, rotEl, graphVars, userFns]);
 
   // --- Currency Refresh ---
   const fetchLiveFx = async () => {
@@ -674,7 +679,7 @@ export const CalculatorView: React.FC = () => {
               value={saveNotes}
               onChange={(e) => setSaveNotes(e.target.value)}
             />
-            <button type="button" className="dp-btn dp-btn-primary" onClick={() => void handleSaveCalculation()}>
+            <button type="button" className="dp-btn dp-btn-primary" onClick={guardAction('calc-save', () => handleSaveCalculation())}>
               <Bookmark size={14} /> Save to Planaday Library
             </button>
 
@@ -1116,7 +1121,7 @@ export const CalculatorView: React.FC = () => {
                 Status: <strong>{fxManualRate.trim() ? 'Manual Custom Rate' : fxSource === 'live' ? 'Live Rate' : 'Offline Fallback'}</strong> · Source: {fxUpdatedAt}
               </span>
             </div>
-            <button type="button" className="dp-btn dp-btn-primary" disabled={fxLoading} onClick={() => void fetchLiveFx()}>
+            <button type="button" className="dp-btn dp-btn-primary" disabled={fxLoading} onClick={guardAction('fx', () => fetchLiveFx())}>
               <RefreshCw size={14} /> {fxLoading ? 'Refreshing...' : 'Fetch Live Rates'}
             </button>
           </div>

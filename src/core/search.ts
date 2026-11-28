@@ -72,6 +72,18 @@ function findJumpDate(rec: LifeRecord): string | null {
   return resolveRecordJumpDate(rec);
 }
 
+// IndexedDB live-query records are immutable snapshots. Weak keys release old snapshots automatically.
+const searchCache = new WeakMap<LifeRecord, { corpus: string; lower: string; title: string; words?: string[] }>();
+function indexed(rec: LifeRecord) {
+  let hit = searchCache.get(rec);
+  if (!hit) {
+    const corpus = extractSearchableText(rec);
+    hit = { corpus, lower: corpus.toLowerCase(), title: rec.title.toLowerCase() };
+    searchCache.set(rec, hit);
+  }
+  return hit;
+}
+
 /**
  * Global fuzzy search across every module with NO arbitrary 100-hit cap (supports pagination).
  * Automatically accelerates large collections (>= 250 records) via an inverted trigram index
@@ -115,7 +127,8 @@ export function fuzzySearchRecords(
     const jumpDate = findJumpDate(rec);
     if (filter.date && jumpDate !== filter.date) continue;
 
-    const corpus = extractSearchableText(rec);
+    const entry = indexed(rec);
+    const corpus = entry.corpus;
     if (tokens.length === 0) {
       matched.push({
         record: rec,
@@ -126,9 +139,8 @@ export function fuzzySearchRecords(
       continue;
     }
 
-    const lowerTitle = rec.title.toLowerCase();
-    const lowerCorpus = corpus.toLowerCase();
-    const words = lowerCorpus.split(/[^a-z0-9#@-]+/).filter(Boolean);
+    const lowerTitle = entry.title;
+    const lowerCorpus = entry.lower;
 
     let score = 0;
     let allMatched = true;
@@ -137,7 +149,7 @@ export function fuzzySearchRecords(
         score += 10;
       } else if (lowerCorpus.includes(tok)) {
         score += 5;
-      } else if (tok.length >= 3 && words.some((w) => isWithinOneEdit(w, tok))) {
+      } else if (tok.length >= 3 && (entry.words ??= Array.from(new Set(lowerCorpus.split(/[^\p{L}\p{N}#@-]+/u).filter(Boolean)))).some((w) => isWithinOneEdit(w, tok))) {
         score += 2;
       } else {
         allMatched = false;
@@ -155,6 +167,8 @@ export function fuzzySearchRecords(
 
   matched.sort((a, b) => b.score - a.score || b.record.updatedAt.localeCompare(a.record.updatedAt));
 
+  pageSize = Number.isFinite(pageSize) ? Math.max(1, Math.floor(pageSize)) : 25;
+  page = Number.isFinite(page) ? Math.floor(page) : 1;
   const total = matched.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.max(1, Math.min(page, pageCount));

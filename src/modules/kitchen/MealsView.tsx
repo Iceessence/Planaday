@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { History, Plus, Search, ShoppingCart, Trash2, Utensils } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -14,6 +15,8 @@ const SLOTS: Array<MealPlanPayload['slot']> = ['breakfast', 'lunch', 'dinner', '
 
 export const MealsView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, setActiveView } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [customMealText, setCustomMealText] = useState('');
   const [addPrepReminder, setAddPrepReminder] = useState(true);
@@ -107,7 +110,7 @@ export const MealsView: React.FC = () => {
     const bySlot = new Map<string, Map<string, number>>();
     for (const it of unifiedFoodHistory) {
       const key = it.name.trim().toLowerCase();
-      if (it.date >= monthCutoff) {
+      if (it.date >= monthCutoff && it.date <= logicalToday) {
         const cur = freqMap.get(key) ?? { name: it.name, count: 0, lastDate: it.date };
         cur.count++;
         if (it.date > cur.lastDate) cur.lastDate = it.date;
@@ -148,6 +151,11 @@ export const MealsView: React.FC = () => {
     [records]
   );
 
+  const mealsByDate = useMemo(() => {
+    const map = new Map<string, typeof meals>();
+    for (const meal of meals) { const group = map.get(meal.payload.date); if (group) group.push(meal); else map.set(meal.payload.date, [meal]); }
+    return map;
+  }, [meals]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysIso(activeDate, i)), [activeDate]);
 
   const weekNutrition = useMemo(() => {
@@ -217,7 +225,7 @@ export const MealsView: React.FC = () => {
           <button
             type="button"
             className="dp-btn dp-btn-primary dp-btn-sm"
-            onClick={async () => {
+            onClick={guardAction('action-1', async () => {
               const count = await generateNetGroceryItems({
                 mealDateStart: weekDates[0],
                 mealDateEnd: weekDates[6],
@@ -226,7 +234,7 @@ export const MealsView: React.FC = () => {
               });
               pushToast(`Generated ${count} net grocery item(s) for ${weekDates[0]} → ${weekDates[6]}`, { canUndo: true });
               setActiveView('shopping');
-            }}
+            })}
           >
             <ShoppingCart size={14} /> Generate Week Groceries
           </button>
@@ -239,7 +247,7 @@ export const MealsView: React.FC = () => {
           <form
             className="dp-card dp-stack"
             style={{ padding: 12, gap: 8 }}
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-1', async (e) => {
               e.preventDefault();
               if (!logFoodName.trim()) return;
               await createRecord<FoodLogPayload>('food_log', logFoodName.trim(), {
@@ -257,7 +265,7 @@ export const MealsView: React.FC = () => {
               setLogIngredients('');
               setLogNotes('');
               pushToast(`Logged ${logMealCat} to Food History!`);
-            }}
+            })}
           >
             <strong>Log Meal or Drink for {activeDate}</strong>
             <div className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -459,7 +467,7 @@ export const MealsView: React.FC = () => {
       {/* 7-Day Drag-and-Drop Meal Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 10 }}>
         {weekDates.map((d) => {
-          const dayMeals = meals.filter((m) => m.payload.date === d);
+          const dayMeals = mealsByDate.get(d) ?? [];
           return (
             <div
               key={d}
@@ -486,7 +494,7 @@ export const MealsView: React.FC = () => {
                         type="button"
                         className="dp-btn dp-btn-ghost dp-btn-sm"
                         style={{ padding: '1px 5px' }}
-                        onClick={() => void handleAssignMeal(d, slot)}
+                        onClick={guardAction('action-2', () => handleAssignMeal(d, slot))}
                       >
                         +
                       </button>

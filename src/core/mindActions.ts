@@ -34,13 +34,15 @@ export async function fileThoughtPassage(
     notebookId?: string;
     dateIso: string;
     titleOverride?: string;
+    expectedContent?: string;
   }
 ): Promise<FilePassageResult | null> {
   const settings = await getOrInitSettings();
   const existing = (await db.records.get(thoughtId)) as LifeRecord<ThoughtPayload> | undefined;
-  if (!existing) return null;
+  if (!existing || existing.deletedAt || existing.type !== 'thought' || !Number.isFinite(startOffset) || !Number.isFinite(endOffset)) return null;
 
   const fullText = existing.payload.content ?? '';
+  if (options.expectedContent !== undefined && fullText !== options.expectedContent) throw new Error('Thought changed before filing. Select the passage again.');
   const safeStart = Math.max(0, Math.min(fullText.length, Math.min(startOffset, endOffset)));
   const safeEnd = Math.max(safeStart, Math.min(fullText.length, Math.max(startOffset, endOffset)));
   const excerpt = fullText.slice(safeStart, safeEnd).trim();
@@ -60,6 +62,9 @@ export async function fileThoughtPassage(
     createdRecord = {
       id: createId('note'),
       workspaceId: existing.workspaceId,
+      ownerProfileId: existing.ownerProfileId,
+      sharedWithAll: existing.sharedWithAll,
+      sharedWithProfileIds: existing.sharedWithProfileIds,
       type: 'note',
       title,
       status: 'active',
@@ -82,6 +87,9 @@ export async function fileThoughtPassage(
     createdRecord = {
       id: createId('task'),
       workspaceId: existing.workspaceId,
+      ownerProfileId: existing.ownerProfileId,
+      sharedWithAll: existing.sharedWithAll,
+      sharedWithProfileIds: existing.sharedWithProfileIds,
       type: 'task',
       title,
       status: 'active',
@@ -111,6 +119,9 @@ export async function fileThoughtPassage(
     createdRecord = {
       id: createId('ev'),
       workspaceId: existing.workspaceId,
+      ownerProfileId: existing.ownerProfileId,
+      sharedWithAll: existing.sharedWithAll,
+      sharedWithProfileIds: existing.sharedWithProfileIds,
       type: 'event',
       title,
       status: 'active',
@@ -131,6 +142,9 @@ export async function fileThoughtPassage(
     createdRecord = {
       id: createId('goal'),
       workspaceId: existing.workspaceId,
+      ownerProfileId: existing.ownerProfileId,
+      sharedWithAll: existing.sharedWithAll,
+      sharedWithProfileIds: existing.sharedWithProfileIds,
       type: 'goal',
       title,
       status: 'active',
@@ -165,6 +179,9 @@ export async function fileThoughtPassage(
     createdRecord = {
       id: createId('rcp'),
       workspaceId: existing.workspaceId,
+      ownerProfileId: existing.ownerProfileId,
+      sharedWithAll: existing.sharedWithAll,
+      sharedWithProfileIds: existing.sharedWithProfileIds,
       type: 'recipe',
       title,
       status: 'active',
@@ -182,7 +199,7 @@ export async function fileThoughtPassage(
   // If mode === 'move', remove ONLY the highlighted range while leaving surrounding text & original createdAt intact!
   const remainingContent =
     options.mode === 'move'
-      ? (fullText.slice(0, safeStart) + fullText.slice(safeEnd)).replace(/\n{3,}/g, '\n\n').trim()
+      ? fullText.slice(0, safeStart) + fullText.slice(safeEnd)
       : fullText;
 
   const updatedThought: LifeRecord<ThoughtPayload> = {

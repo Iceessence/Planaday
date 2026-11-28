@@ -1,5 +1,5 @@
 import { db } from './db';
-import { createRecord } from './repository';
+import { createRecord, updateRecord } from './repository';
 import { canonicalizeIngredientName, inferAisle } from './kitchenActions';
 import type { GroceryItemPayload, LifeRecord, TaskPayload } from './types';
 
@@ -44,7 +44,7 @@ const MAX_LOOP_DEPTH = 3;
  * - Loop guard (visited rule IDs + depth limit)
  * - Idempotency key deduplication
  */
-export async function evaluateAutomations(
+async function evaluateAutomationsInternal(
   trigger: AutomationTrigger,
   context: {
     subjectName?: string;
@@ -58,7 +58,7 @@ export async function evaluateAutomations(
 ): Promise<AutomationExecutionResult[]> {
   const depth = context._depth ?? 0;
   if (depth >= MAX_LOOP_DEPTH) return [];
-  const visited = context._visitedRuleIds ?? new Set<string>();
+  const visited = new Set(context._visitedRuleIds ?? []);
 
   const rules = (await db.records.where('type').equals('automation_rule').toArray()).filter(
     (r) => !r.deletedAt && (r.payload as AutomationRulePayload).enabled
@@ -83,8 +83,7 @@ export async function evaluateAutomations(
     // Condition threshold check (e.g., med drops <= 7 doses or pantry hits <= 0)
     if (
       rule.payload.conditionThreshold !== undefined &&
-      context.numericValue !== undefined &&
-      context.numericValue > rule.payload.conditionThreshold
+      (context.numericValue === undefined || !Number.isFinite(context.numericValue) || context.numericValue > rule.payload.conditionThreshold)
     ) {
       results.push({
         ruleId: rule.id,
@@ -151,13 +150,7 @@ export async function evaluateAutomations(
     }
 
     if (!context.dryRun) {
-      await db.records.update(rule.id, {
-        payload: {
-          ...rule.payload,
-          lastFiredKey: idemKey,
-          fireCount: (rule.payload.fireCount ?? 0) + 1,
-        },
-      });
+      await updateRecord<AutomationRulePayload>(rule.id, current => ({ ...current, payload: { ...current.payload, lastFiredKey: idemKey, fireCount: (current.payload.fireCount ?? 0) + 1 } }), { skipUndo: true });
     }
 
     results.push({
@@ -171,4 +164,13 @@ export async function evaluateAutomations(
   }
 
   return results;
+}
+
+// Serialize live evaluations in this runtime so duplicate triggers cannot interleave.
+let automationQueue: Promise<unknown> = Promise.resolve();
+export function evaluateAutomations(...args: Parameters<typeof evaluateAutomationsInternal>): ReturnType<typeof evaluateAutomationsInternal> {
+  if (args[1].dryRun) return evaluateAutomationsInternal(...args);
+  const run = automationQueue.then(() => evaluateAutomationsInternal(...args));
+  automationQueue = run.catch(() => undefined);
+  return run;
 }

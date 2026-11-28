@@ -17,6 +17,8 @@ import { globalSearchIndex } from './searchIndex';
 import { computeLogicalDateIso, ensureTemporal } from './temporal';
 import { computeGuardedTheme, THEME_PRESETS } from '../data/themes';
 import {
+  batchApplyChanges,
+  updateRecord,
   performRedo,
   performUndo,
   purgeExpiredTrash,
@@ -157,6 +159,8 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const EMPTY_RECORDS: LifeRecord[] = [];
+const EMPTY_CONFLICTS: SyncConflict[] = [];
 
 export function applySettingsToDocument(settings: AppSettings) {
   if (typeof document === 'undefined') return;
@@ -251,21 +255,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const liveSettings = useLiveQuery(() => db.settings.get('app-settings'), []);
   const [inFlightSettingsPatches, setInFlightSettingsPatches] = useState<Array<{ id: number; patch: Partial<AppSettings> }>>([]);
   const settingsPatchSeqRef = React.useRef(0);
-  const completedSettingsSeqRef = React.useRef(0);
+  const [completedSettingsSeq, setCompletedSettingsSeq] = useState(0);
 
   useEffect(() => {
     // Once Dexie emits a fresh liveSettings snapshot after completed writes, prune those optimistic patches cleanly.
-    const committed = completedSettingsSeqRef.current;
+    const committed = completedSettingsSeq;
     if (committed > 0) {
       setInFlightSettingsPatches((prev) => {
+        // A live query may have emitted before the write promise resolved. Compare the aggregate committed fields.
+        if (!liveSettings) return prev;
+        const patches = prev.filter(item => item.id <= committed);
+        if (!patches.length) return prev;
+        const expected = patches.reduce((acc, item) => mergeSettingsObject(acc, item.patch), liveSettings);
+        if (JSON.stringify(expected) !== JSON.stringify(liveSettings)) return prev;
         const next = prev.filter((item) => item.id > committed);
         return next.length === prev.length ? prev : next;
       });
     }
-  }, [liveSettings]);
+  }, [liveSettings, completedSettingsSeq]);
 
+  const [defaults] = useState(createDefaultSettings);
   const settings = useMemo<AppSettings>(() => {
-    const defaults = createDefaultSettings();
     const base: AppSettings = !liveSettings
       ? defaults
       : {
@@ -318,7 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
         };
     return inFlightSettingsPatches.reduce((acc, item) => mergeSettingsObject(acc, item.patch), base);
-  }, [liveSettings, inFlightSettingsPatches]);
+  }, [liveSettings, inFlightSettingsPatches, defaults]);
 
   const [logicalToday, setLogicalToday] = useState<string>(() =>
     computeLogicalDateIso(Date.now(), settings.dayBoundaryHour, settings.defaultTimeZone)
@@ -379,9 +389,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.dayBoundaryHour, settings.defaultTimeZone]);
 
   // Apply theme tokens & color scheme live
+  const documentSettingsKey = JSON.stringify([settings.themePresetId, settings.customTokens, settings.contrastLevel, settings.uiScalePct, settings.fontSizePx, settings.lineHeight, settings.cardRadius, settings.mobileLayoutMode, settings.colorScheme, settings.fontPairing, settings.density, settings.paperGrain, settings.bookSpineShadow, settings.binderTabs, settings.reducedMotion, settings.rtl, settings.plannerTitle]);
   useEffect(() => {
     applySettingsToDocument(settings);
-  }, [settings]);
+    // All document-affecting fields are represented in the signature above.
+  }, [documentSettingsKey]);
 
   // Subscribe to sync updates + online reconnect auto-flush + PWA install prompt
   useEffect(() => {
@@ -403,8 +415,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Live reactive queries from IndexedDB (Unified Life Graph)
-  const allRecordsIncludingTrash = useLiveQuery(() => db.records.toArray(), []) ?? [];
-  const openConflicts = useLiveQuery(() => db.syncConflicts.filter((c) => !c.resolved).toArray(), []) ?? [];
+  const allRecordsIncludingTrash = useLiveQuery(() => db.records.toArray(), []) ?? EMPTY_RECORDS;
+  const openConflicts = useLiveQuery(() => db.syncConflicts.filter((c) => !c.resolved).toArray(), []) ?? EMPTY_CONFLICTS;
 
   const allWorkspaceRecords = useMemo(
     () =>
@@ -486,9 +498,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const p = normalizeAlarmPayload(alarm.payload as Record<string, unknown>);
       const vol01 = Math.max(0.05, Math.min(1, ((p.volume ?? settings.notificationPrefs.volume ?? 85) / 100)));
       if (settings.notificationPrefs.soundEnabled !== false) {
-        audioEngine.startAlarmLoop(p.ringtone || 'sunrise_harp', vol01, p.volumeRampSec || 20);
+        audioEngine.startAlarmLoop(p.ringtone || 'sunrise_harp', vol01, p.volumeRampSec ?? 20);
       }
-      if (p.vibrate !== false && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      if (settings.notificationPrefs.vibrateEnabled !== false && p.vibrate !== false && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         try {
           navigator.vibrate?.([400, 200, 400, 200, 400]);
         } catch {
@@ -508,7 +520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     },
-    [settings.notificationPrefs.soundEnabled, settings.notificationPrefs.osPushEnabled, settings.notificationPrefs.volume]
+    [settings.notificationPrefs.soundEnabled, settings.notificationPrefs.osPushEnabled, settings.notificationPrefs.volume, settings.notificationPrefs.vibrateEnabled]
   );
 
   const dismissRingingAlarm = useCallback(
@@ -613,8 +625,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const opId = ++settingsPatchSeqRef.current;
     setInFlightSettingsPatches((prev) => [...prev, { id: opId, patch }]);
     try {
-      const next = await updateSettings(patch);
-      completedSettingsSeqRef.current = Math.max(completedSettingsSeqRef.current, opId);
+      await updateSettings(patch);
+      setCompletedSettingsSeq(prev => Math.max(prev, opId));
       if (
         patch.operatingMode !== undefined ||
         patch.syncServerUrl !== undefined ||
@@ -624,7 +636,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ) {
         await startSyncDaemon();
       }
-      applySettingsToDocument(next);
+
     } catch (err) {
       setInFlightSettingsPatches((prev) => prev.filter((item) => item.id !== opId));
       throw err;
@@ -686,6 +698,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       linkedRecordId: string | null = null,
       opts?: { customSound?: string; customVolume?: number | null }
     ) => {
+      if (!Number.isFinite(durationSec) || durationSec <= 0) throw new Error('Invalid timer duration');
       const safeSec = Math.max(1, Math.round(durationSec));
       const now = Date.now();
       const targetEndMs = now + safeSec * 1000;
@@ -715,16 +728,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rev: 1,
         deviceId: settings.deviceId,
       };
-      await db.records.put(rec);
-      await db.outbox.put({
-        opId: createId('op'),
-        recordId: id,
-        operation: 'upsert',
-        record: rec,
-        baseRev: 0,
-        createdAt: nowIso,
-        attempts: 0,
-      });
+      await batchApplyChanges('Started timer', async () => [{ recordId: id, before: null, after: rec }], { skipUndo: true });
       if (settings.notificationPrefs.enabled && settings.notificationPrefs.notifyTimers) {
         await scheduleNativeNotification(id, `Timer Done: ${label}`, `Your Planaday timer "${label}" finished!`, targetEndMs);
       }
@@ -738,88 +742,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   const toggleTimerPause = useCallback(async (timerId: string) => {
-    const rec = await db.records.get(timerId);
-    if (!rec) return;
-    const p = rec.payload as unknown as RunningTimer;
-    const now = Date.now();
-    if (p.targetEndMs !== null) {
-      const rem = Math.max(0, Math.round((p.targetEndMs - now) / 1000));
-      await cancelNativeNotification(timerId);
-      await db.records.put({
-        ...rec,
-        updatedAt: new Date(now).toISOString(),
-        payload: { ...p, targetEndMs: null, remainingSecWhenPaused: rem },
-      });
-    } else {
-      const nextEnd = now + Math.max(1, p.remainingSecWhenPaused || 60) * 1000;
-      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Planaday timer "${rec.title}" finished!`, nextEnd);
-      await db.records.put({
-        ...rec,
-        updatedAt: new Date(now).toISOString(),
-        payload: { ...p, targetEndMs: nextEnd },
-      });
+    const updated = await updateRecord<RunningTimer>(timerId, rec => {
+      if (rec.type !== 'timer' || rec.deletedAt || rec.status !== 'active') return rec;
+      const p = rec.payload;
+      const now = Date.now();
+      return { ...rec, payload: p.targetEndMs !== null
+        ? { ...p, targetEndMs: null, remainingSecWhenPaused: Math.max(0, Math.ceil((p.targetEndMs - now) / 1000)) }
+        : { ...p, targetEndMs: now + Math.max(1, p.remainingSecWhenPaused) * 1000 } };
+    }, { skipUndo: true });
+    if (!updated || updated.type !== 'timer' || updated.status !== 'active' || updated.deletedAt) return;
+    if (updated.payload.targetEndMs === null) await cancelNativeNotification(timerId);
+    else if (settings.notificationsEnabled && settings.notificationPrefs.enabled && settings.notificationPrefs.notifyTimers) {
+      await scheduleNativeNotification(timerId, `Timer Done: ${updated.title}`, `Your Planaday timer "${updated.title}" finished!`, updated.payload.targetEndMs);
     }
-  }, []);
+  }, [settings.notificationsEnabled, settings.notificationPrefs.enabled, settings.notificationPrefs.notifyTimers]);
 
   const extendTimer = useCallback(async (timerId: string, addSec: number) => {
-    const rec = await db.records.get(timerId);
-    if (!rec) return;
-    const p = rec.payload as unknown as RunningTimer;
-    const now = Date.now();
-    const nextEnd = p.targetEndMs !== null ? Math.max(now, p.targetEndMs) + addSec * 1000 : null;
-    if (nextEnd) {
-      await scheduleNativeNotification(timerId, `Timer Done: ${rec.title}`, `Your Planaday timer "${rec.title}" finished!`, nextEnd);
+    if (!Number.isFinite(addSec) || addSec <= 0) return;
+    const updated = await updateRecord<RunningTimer>(timerId, rec => {
+      if (rec.type !== 'timer' || rec.deletedAt || rec.status !== 'active') return rec;
+      const p = rec.payload;
+      return { ...rec, payload: { ...p, durationSec: p.durationSec + addSec,
+        targetEndMs: p.targetEndMs === null ? null : Math.max(Date.now(), p.targetEndMs) + addSec * 1000,
+        remainingSecWhenPaused: p.remainingSecWhenPaused + addSec } };
+    }, { skipUndo: true });
+    if (updated?.type === 'timer' && updated.status === 'active' && !updated.deletedAt && updated.payload.targetEndMs !== null && settings.notificationsEnabled && settings.notificationPrefs.enabled && settings.notificationPrefs.notifyTimers) {
+      await scheduleNativeNotification(timerId, `Timer Done: ${updated.title}`, `Your Planaday timer "${updated.title}" finished!`, updated.payload.targetEndMs);
     }
-    await db.records.put({
-      ...rec,
-      updatedAt: new Date(now).toISOString(),
-      payload: {
-        ...p,
-        durationSec: (p.durationSec || 0) + addSec,
-        targetEndMs: nextEnd,
-        remainingSecWhenPaused: (p.remainingSecWhenPaused || 0) + addSec,
-      },
-    });
-  }, []);
+  }, [settings.notificationsEnabled, settings.notificationPrefs.enabled, settings.notificationPrefs.notifyTimers]);
 
   const dismissTimer = useCallback(async (timerId: string) => {
-    const rec = await db.records.get(timerId);
-    if (!rec) return;
+    await batchApplyChanges('Finished timer', async () => {
+      const rec = await db.records.get(timerId);
+      if (!rec || rec.deletedAt || rec.type !== 'timer' || rec.status !== 'active') return [];
+      const p = rec.payload as unknown as RunningTimer;
+      const now = Date.now();
+      const remaining = p.targetEndMs === null ? p.remainingSecWhenPaused : Math.max(0, Math.ceil((p.targetEndMs - now) / 1000));
+      const activeSeconds = Math.max(0, Math.min(p.durationSec, p.durationSec - remaining));
+      const timestamp = new Date(now).toISOString();
+      await db.timeLedger.put({ id: createId('tlog'), workspaceId: rec.workspaceId,
+        sourceType: p.kind === 'pomodoro' ? 'pomodoro' : p.kind === 'interval' ? 'interval' : 'timer',
+        label: rec.title, linkedRecordId: p.linkedRecordId ?? null, startedAt: p.startedAtIso || rec.createdAt,
+        endedAt: timestamp, activeSeconds, date: logicalToday });
+      return [{ recordId: rec.id, before: rec, after: { ...rec, status: 'done', updatedAt: timestamp, rev: rec.rev + 1, deviceId: settings.deviceId } }];
+    }, { skipUndo: true });
     await cancelNativeNotification(timerId);
-    const p = rec.payload as unknown as RunningTimer;
-    const now = Date.now();
-    const activeSeconds = Math.max(
-      1,
-      p.targetEndMs !== null
-        ? Math.min(p.durationSec, Math.round((now - Date.parse(p.startedAtIso || rec.createdAt)) / 1000))
-        : Math.max(0, p.durationSec - p.remainingSecWhenPaused)
-    );
-    await db.timeLedger.put({
-      id: createId('tlog'),
-      workspaceId: rec.workspaceId,
-      sourceType: p.kind === 'pomodoro' ? 'pomodoro' : p.kind === 'interval' ? 'interval' : 'timer',
-      label: rec.title,
-      linkedRecordId: p.linkedRecordId ?? null,
-      startedAt: p.startedAtIso || rec.createdAt,
-      endedAt: new Date(now).toISOString(),
-      activeSeconds,
-      date: logicalToday,
-    });
-    await db.records.put({
-      ...rec,
-      status: 'done',
-      updatedAt: new Date(now).toISOString(),
-    });
-  }, [logicalToday]);
+  }, [logicalToday, settings.deviceId]);
 
-  // Live Notification Engine (v4.2.0 §2 optimized):
-  // - Uses pre-memoized slices (zero full-record scans per tick!)
-  // - Only runs 1s polling while countdown timers are actively running; otherwise wakes every 5s
-  // - Evaluates minute-level triggers (alarms, events, chores, meds) at most ONCE per minute transition!
+  // Timer deadlines tick every second; calendar and chore matching runs at most once per minute.
   useEffect(() => {
-    const hasRunningTimers = runningTimers.some((t) => t.targetEndMs !== null);
-    const intervalMs = hasRunningTimers ? 1000 : 5000;
-
+    const intervalMs = runningTimers.some(t => t.targetEndMs !== null) ? 1000 : 5000;
     const tick = () => {
       const prefs = settings.notificationPrefs;
       if (!settings.notificationsEnabled || !prefs.enabled) return;
@@ -857,6 +829,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         for (const a of activeAlarms) {
           const rawP = a.payload as Record<string, unknown>;
           const p = normalizeAlarmPayload(rawP);
+          if (p.skipNext && doesAlarmMatchMoment({ ...rawP, skipNext: false }, calDateIso, weekday, hhmm)) {
+            const key = `alm:${a.id}:${calDateIso}:${hhmm}`;
+            if (!firedAlertsRef.current.has(key)) {
+              firedAlertsRef.current.add(key);
+              void updateRecord(a.id, current => ({ ...current, payload: { ...current.payload, skipNext: false, ...(p.scheduleType === 'once' ? { enabled: false } : {}) } }), { skipUndo: true }).catch(console.error);
+            }
+            continue;
+          }
           if (doesAlarmMatchMoment(rawP, calDateIso, weekday, hhmm)) {
             const key = `alm:${a.id}:${calDateIso}:${hhmm}`;
             if (!firedAlertsRef.current.has(key)) {
@@ -864,10 +844,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               triggerAlarmRing(a);
               // Automatically turn off one-time alarms after they fire
               if (p.scheduleType === 'once') {
-                void db.records.update(a.id, {
-                  payload: { ...rawP, enabled: false },
-                  updatedAt: new Date().toISOString(),
-                });
+                void updateRecord(a.id, current => ({ ...current, payload: { ...current.payload, enabled: false } }), { skipUndo: true }).catch(console.error);
               }
             }
           }
@@ -975,8 +952,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
+    tick();
     const id = window.setInterval(tick, intervalMs);
-    return () => window.clearInterval(id);
+    document.addEventListener('visibilitychange', tick);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', tick); };
   }, [runningTimers, activeAlarms, activeEvents, activeChores, activeMeds, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser, triggerAlarmRing]);
 
   // Schedule native Capacitor alerts for ALL enabled Smart Alarms' next scheduled trigger
@@ -1063,6 +1042,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Global keyboard map — automatically disabled while typing in text inputs
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || e.repeat) return;
       const target = e.target as HTMLElement | null;
       const inInput =
         target &&

@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { BarChart3, Bot, Download, Layers, LayoutDashboard, Play, Plus, Sparkles, Trash2, Zap } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -25,6 +26,9 @@ const BUILTIN_CONTEXT_MODES = [
 
 export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights' | 'automations' }> = ({ mode }) => {
   const { settings, patchSettings, records, logicalToday, pushToast, setActiveView } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   // Custom Spaces state
   const [spaceTitle, setSpaceTitle] = useState('');
@@ -57,6 +61,7 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
 
   // Honest Insights queried directly from real IndexedDB records (zero modulo duplication; missing != zero!)
   const insightWindow = useMemo(() => {
+    if (mode !== 'insights') return [];
     const diaries = new Map(
       (records.filter((r) => r.type === 'diary') as Array<LifeRecord<DiaryPayload>>).map((d) => [d.payload.date, d.payload])
     );
@@ -77,7 +82,7 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
         tasksDone: tasksDone ?? 0,
       };
     });
-  }, [records, insightDays, logicalToday]);
+  }, [mode, records, insightDays, logicalToday]);
 
   if (mode === 'spaces') {
     return (
@@ -91,13 +96,13 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
 
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-1', async (e) => {
             e.preventDefault();
             if (!spaceTitle.trim()) return;
             await createRecord('custom_space', spaceTitle.trim(), { scope: spaceScope, notes: '', checklist: [] });
             setSpaceTitle('');
             pushToast('Created Custom Space');
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Space name (e.g., Q4 Garden Plan)" value={spaceTitle} onChange={(e) => setSpaceTitle(e.target.value)} />
           <select aria-label="Scope" className="dp-select" style={{ width: 'auto' }} value={spaceScope} onChange={(e) => setSpaceScope(e.target.value as typeof spaceScope)}>
@@ -119,10 +124,10 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
                       type="button"
                       className="dp-icon-btn"
                       title="Delete custom space"
-                      onClick={async () => {
+                      onClick={guardAction('action-1', async () => {
                         await softDeleteRecord(sp.id);
                         pushToast(`Moved "${sp.title}" to Trash`, { canUndo: true });
-                      }}
+                      })}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -352,7 +357,7 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
         <h4>No-Code When → If → Then Rules (Dry-Run, Loop Guard & Idempotency)</h4>
         <form
           className="dp-stack"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-2', async (e) => {
             e.preventDefault();
             if (!ruleTitle.trim()) return;
             await createRecord<AutomationRulePayload>('automation_rule', ruleTitle.trim(), {
@@ -363,7 +368,7 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
               fireCount: 0,
             });
             pushToast('Saved local automation rule');
-          }}
+          })}
         >
           <div className="dp-row">
             <input className="dp-input" style={{ flex: 2 }} value={ruleTitle} onChange={(e) => setRuleTitle(e.target.value)} placeholder="Rule name…" />
@@ -420,10 +425,10 @@ export const StudioExtrasView: React.FC<{ mode: 'spaces' | 'rituals' | 'insights
                 type="button"
                 className="dp-icon-btn"
                 title="Delete automation rule"
-                onClick={async () => {
+                onClick={guardAction('action-2', async () => {
                   await softDeleteRecord(r.id);
                   pushToast(`Moved rule "${r.title}" to Trash`, { canUndo: true });
-                }}
+                })}
               >
                 <Trash2 size={14} />
               </button>

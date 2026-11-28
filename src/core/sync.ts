@@ -100,6 +100,8 @@ let nextAutoSyncAtMs: number | null = null;
 let cachedBatteryCharging: boolean | null = null;
 let envOverride: { connectionType?: string | null; charging?: boolean | null } | null = null;
 let lastPointerMoveStamp = 0;
+let daemonGeneration = 0;
+let pendingCountTimer: number | null = null;
 
 const PUSH_BATCH_SIZE = 50;
 
@@ -255,8 +257,9 @@ export function evaluateSyncPolicy(
 }
 
 function emitSyncState(patch: Partial<SyncStateSnapshot>) {
+  if (Object.entries(patch).every(([key, value]) => Object.is(currentState[key as keyof SyncStateSnapshot], value))) return;
   currentState = { ...currentState, ...patch };
-  for (const fn of syncListeners) fn(currentState);
+  for (const fn of syncListeners) { try { fn(currentState); } catch (error) { console.error("Sync listener failed", error); } }
 }
 
 export function subscribeSyncState(fn: SyncListener): () => void {
@@ -287,6 +290,7 @@ export function extractReferencedBlobHashes(record: LifeRecord): string[] {
   const visit = (obj: unknown, keyHint = ''): void => {
     if (!obj) return;
     if (typeof obj === 'string') {
+      if (/^blob:[a-f0-9]{16,128}$/i.test(obj)) hashes.add(obj.slice(5).toLowerCase());
       if (/(blob|hash)/i.test(keyHint) && isHash(obj)) {
         hashes.add(obj.toLowerCase());
       }
@@ -339,15 +343,28 @@ export interface ServerTestResult {
 export async function testServerConnection(rawUrl: string, fetchImpl: typeof fetch = fetch): Promise<ServerTestResult> {
   const normalizedUrl = normalizeServerUrl(rawUrl);
   const started = Date.now();
+  const controller = new AbortController();
   let timerId: ReturnType<typeof setTimeout> | null = null;
   try {
+    const fetchWithSignalFallback = async (): Promise<Response> => {
+      try {
+        return await fetchImpl(`${normalizedUrl}/api/health`, { signal: controller.signal });
+      } catch (err) {
+        // Cross-realm AbortSignal mismatch (e.g., jsdom AbortController passed to Node fetch)
+        if (!controller.signal.aborted && err instanceof TypeError && /AbortSignal|signal/i.test(err.message)) {
+          return await fetchImpl(`${normalizedUrl}/api/health`);
+        }
+        throw err;
+      }
+    };
     const res = await Promise.race([
-      fetchImpl(`${normalizedUrl}/api/health`),
+      fetchWithSignalFallback(),
       new Promise<never>((_, reject) => {
         timerId = setTimeout(() => {
           const err = new Error('Connection timed out');
           err.name = 'TimeoutError';
           reject(err);
+          controller.abort();
         }, 5500);
       }),
     ]);
@@ -487,8 +504,7 @@ export function mergeRecordsSafely(
       typeof localPayload[tk] === 'string' &&
       typeof remotePayload[tk] === 'string' &&
       localPayload[tk] !== remotePayload[tk] &&
-      (localPayload[tk] as string).length > 0 &&
-      (remotePayload[tk] as string).length > 0
+      true
     ) {
       textConflict = true;
     }
@@ -543,6 +559,10 @@ export function mergeRecordsSafely(
     }
   }
   merged.payload = mergedPayload;
+  merged.fieldUpdatedAt = { ...localFields };
+  for (const [key, stamp] of Object.entries(remoteFields)) {
+    if (!merged.fieldUpdatedAt[key] || stamp > merged.fieldUpdatedAt[key]) merged.fieldUpdatedAt[key] = stamp;
+  }
   merged.rev = Math.max(local.rev, remote.rev) + 1;
   merged.updatedAt = new Date().toISOString();
 
@@ -561,16 +581,26 @@ interface SyncPassResult {
   yieldedBlobTransfers: number;
 }
 
+async function selectedBlobHashes(policy?: Partial<SyncPolicyConfig>): Promise<Set<string> | null> {
+  const ids = policy?.selectiveWorkspaceIds ?? [];
+  if (!ids.length) return null;
+  const records = await db.records.where('workspaceId').anyOf(ids).toArray();
+  const hashes = new Set<string>();
+  for (const rec of records) for (const hash of extractReferencedBlobHashes(rec)) hashes.add(hash);
+  return hashes;
+}
+
 async function uploadUnsyncedBlobs(
   base: string,
   authToken: string | undefined,
   fetchImpl: typeof fetch,
-  allowYieldOnActivity = false
+  allowYieldOnActivity = false,
+  scopeHashes: Set<string> | null = null
 ): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[]; yielded: number }> {
   const verified: BlobTransferReceipt[] = [];
   const failed: BlobTransferReceipt[] = [];
   let yielded = 0;
-  const unsyncedBlobs = await db.blobs.filter((b) => !b.synced).toArray();
+  const unsyncedBlobs = await db.blobs.filter((b) => !b.synced && (!scopeHashes || scopeHashes.has(b.hash.toLowerCase()))).toArray();
 
   for (let i = 0; i < unsyncedBlobs.length; i++) {
     // §3: Deprioritize/yield non-urgent heavy blob uploads if the user resumes active interaction
@@ -624,7 +654,8 @@ async function downloadMissingReferencedBlobs(
   base: string,
   authToken: string | undefined,
   fetchImpl: typeof fetch,
-  allowYieldOnActivity = false
+  allowYieldOnActivity = false,
+  scopeHashes: Set<string> | null = null
 ): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[]; yielded: number }> {
   const verified: BlobTransferReceipt[] = [];
   const failed: BlobTransferReceipt[] = [];
@@ -636,7 +667,7 @@ async function downloadMissingReferencedBlobs(
   for (const rec of allRecs) {
     if (rec.deletedAt) continue;
     for (const h of extractReferencedBlobHashes(rec)) {
-      neededHashes.add(h);
+      if (!scopeHashes || scopeHashes.has(h)) neededHashes.add(h);
     }
   }
 
@@ -707,6 +738,24 @@ async function downloadMissingReferencedBlobs(
   return { verified, failed, yielded };
 }
 
+async function applyRemoteConflict(local: LifeRecord, remote: LifeRecord, deviceId: string): Promise<void> {
+  const { merged, hasConflict } = mergeRecordsSafely(local, remote);
+  if (hasConflict) {
+    const prior = await db.syncConflicts.where('recordId').equals(local.id).toArray();
+    const existing = prior.find(c => !c.resolved);
+    await db.syncConflicts.put({ id: existing?.id ?? createId('conf'), recordId: local.id,
+      localRecord: local, remoteRecord: remote, createdAt: existing?.createdAt ?? new Date().toISOString(), resolved: false });
+    // Stop automatic retries for this conflict until the user chooses a resolution.
+    await db.outbox.where('recordId').equals(local.id).delete();
+    return;
+  }
+  const record = { ...merged, deviceId };
+  await db.records.put(record);
+  await db.outbox.where('recordId').equals(local.id).delete();
+  await db.outbox.put({ opId: createId('op'), recordId: local.id, operation: 'upsert', record,
+    baseRev: remote.rev, createdAt: new Date().toISOString(), attempts: 0 });
+}
+
 async function pushPendingOperations(
   base: string,
   settings: Awaited<ReturnType<typeof getOrInitSettings>>,
@@ -744,32 +793,16 @@ async function pushPendingOperations(
     serverId = pushJson.serverId ?? serverId;
     syncEpoch = pushJson.syncEpoch ?? syncEpoch;
 
-    if (pushJson.acceptedOpIds?.length) {
-      await db.outbox.bulkDelete(pushJson.acceptedOpIds);
-      pushedCount += pushJson.acceptedOpIds.length;
-    }
-
-    if (pushJson.conflicts?.length) {
-      for (const c of pushJson.conflicts) {
+    await db.transaction('rw', [db.records, db.outbox, db.syncConflicts], async () => {
+      const accepted = new Set(pushJson.acceptedOpIds ?? []);
+      const acknowledged = chunk.filter(op => accepted.has(op.opId)).map(op => op.opId);
+      if (acknowledged.length) await db.outbox.bulkDelete(acknowledged);
+      pushedCount += acknowledged.length;
+      for (const c of pushJson.conflicts ?? []) {
         const localRec = await db.records.get(c.recordId);
-        if (localRec) {
-          const { merged, hasConflict } = mergeRecordsSafely(localRec, c.serverRecord);
-          if (hasConflict) {
-            const conflict: SyncConflict = {
-              id: createId('conf'),
-              recordId: c.recordId,
-              localRecord: localRec,
-              remoteRecord: c.serverRecord,
-              createdAt: new Date().toISOString(),
-              resolved: false,
-            };
-            await db.syncConflicts.put(conflict);
-          } else {
-            await db.records.put(merged);
-          }
-        }
+        if (localRec) await applyRemoteConflict(localRec, c.serverRecord, settings.deviceId);
       }
-    }
+    });
   }
   return { pushedCount, serverId, syncEpoch };
 }
@@ -791,13 +824,14 @@ async function syncAgainstBase(
     : pendingOps;
 
   // 1. Upload unsynced binary blobs first & collect receipts (CONT-004 / PF-51 / §3 activity yield)
-  const up1 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity);
+  const scopedHashes = await selectedBlobHashes(settings.syncPolicy);
+  const up1 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity, scopedHashes);
 
   // 2. Push pending local delta operations in chunks
   const push1 = await pushPendingOperations(base, settings, filteredOps, fetchImpl);
 
   // 3. Pull remote deltas since lastSyncSeq
-  const pullRes = await fetchImpl(`${base}/api/sync/pull?since=${settings.lastSyncSeq}`, {
+  const pullRes = await fetchImpl(`${base}/api/sync/pull?since=${settings.lastSyncScopeKey === scopeKey(settings.syncPolicy) ? settings.lastSyncSeq : 0}`, {
     headers: buildAuthHeaders(settings.syncAuthToken),
   });
   if (!pullRes.ok) {
@@ -846,6 +880,7 @@ async function syncAgainstBase(
     const reconcileOps: OutboxOp[] = [];
 
     for (const loc of localRecords) {
+      if (selectiveSet && !selectiveSet.has(loc.workspaceId)) continue;
       const rem = remoteById.get(loc.id);
       if (!rem || loc.rev > rem.rev) {
         reconcileOps.push({
@@ -865,7 +900,7 @@ async function syncAgainstBase(
       const uploadedInPass1 = new Set(up1.verified.map((r) => r.hash));
       const localBlobs = await db.blobs.toArray();
       for (const b of localBlobs) {
-        if (b.synced && !uploadedInPass1.has(b.hash)) {
+        if (b.synced && !uploadedInPass1.has(b.hash) && (!scopedHashes || scopedHashes.has(b.hash.toLowerCase()))) {
           const buf = b.data
             ? await blobToArrayBuffer(b.data)
             : b.blob
@@ -874,7 +909,7 @@ async function syncAgainstBase(
           await db.blobs.put({ ...b, data: buf, synced: false });
         }
       }
-      const up2 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl);
+      const up2 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity, scopedHashes);
       verifiedReceipts.push(...up2.verified);
       failedUploads.push(...up2.failed);
 
@@ -892,36 +927,26 @@ async function syncAgainstBase(
   }
 
   // 5. Apply pulled remote records safely (honoring selective workspace filter if configured)
+  await db.transaction('rw', [db.records, db.outbox, db.syncConflicts], async () => {
   for (const remoteRec of pullJson.records ?? []) {
     if (remoteRec.deviceId === settings.deviceId) continue;
     if (selectiveSet && remoteRec.workspaceId && !selectiveSet.has(remoteRec.workspaceId)) continue;
     const localRec = await db.records.get(remoteRec.id);
-    if (!localRec) {
+    if (!localRec) { await db.records.put(remoteRec); continue; }
+    const conflicts = await db.syncConflicts.where('recordId').equals(remoteRec.id).toArray();
+    if (conflicts.some(c => !c.resolved)) continue;
+    const pending = await db.outbox.where('recordId').equals(remoteRec.id).toArray();
+    if (!pending.length && remoteRec.rev >= localRec.rev) {
       await db.records.put(remoteRec);
-    } else {
-      const pendingForRec = await db.outbox.where('recordId').equals(remoteRec.id).count();
-      if (pendingForRec === 0 && remoteRec.rev >= localRec.rev) {
-        await db.records.put(remoteRec);
-      } else if (pendingForRec > 0) {
-        const { merged, hasConflict } = mergeRecordsSafely(localRec, remoteRec);
-        if (hasConflict) {
-          await db.syncConflicts.put({
-            id: createId('conf'),
-            recordId: remoteRec.id,
-            localRecord: localRec,
-            remoteRecord: remoteRec,
-            createdAt: new Date().toISOString(),
-            resolved: false,
-          });
-        } else {
-          await db.records.put(merged);
-        }
-      }
+    } else if (pending.length && pending.some(op => op.baseRev < remoteRec.rev)) {
+      await applyRemoteConflict(localRec, remoteRec, settings.deviceId);
     }
   }
 
+  });
+
   // 6. PD-002: Download & SHA-256 verify every attachment referenced by pulled/local records!
-  const dl = await downloadMissingReferencedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity);
+  const dl = await downloadMissingReferencedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity, await selectedBlobHashes(settings.syncPolicy));
   verifiedReceipts.push(...dl.verified);
 
   return {
@@ -966,7 +991,8 @@ async function executeSyncCycle(fetchImpl: typeof fetch, opts: RunSyncOptions = 
   const settings = await getOrInitSettings();
   const policy: SyncPolicyConfig = { ...DEFAULT_SYNC_POLICY, ...(settings.syncPolicy ?? {}) };
   const pendingOps = await db.outbox.orderBy('createdAt').toArray();
-  const unsyncedBlobCount = await db.blobs.filter((b) => !b.synced).count();
+  const scopedHashes = await selectedBlobHashes(policy);
+  const unsyncedBlobCount = await db.blobs.filter((b) => !b.synced && (!scopedHashes || scopedHashes.has(b.hash.toLowerCase()))).count();
   const openConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   const queueBytesEstimate = estimateOpsBytes(pendingOps);
 
@@ -1076,7 +1102,7 @@ async function executeSyncCycle(fetchImpl: typeof fetch, opts: RunSyncOptions = 
       const res = await syncAgainstBase(base, settings, pendingOps, fetchImpl, !manual && policy.mode === 'smart');
       const now = new Date().toISOString();
       const remPendingOps = await db.outbox.toArray();
-      const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced).count();
+      const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced && (!scopedHashes || scopedHashes.has(b.hash.toLowerCase()))).count();
       const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
 
       const totalBlobFailures = res.failedUploads.length + res.failedDownloads.length;
@@ -1089,7 +1115,8 @@ async function executeSyncCycle(fetchImpl: typeof fetch, opts: RunSyncOptions = 
 
       // Update bound server identity & seq (use exact server seq when rebound to a replacement server!)
       await updateSettings({
-        lastSyncSeq: res.reboundReplacementServer ? res.seq : Math.max(settings.lastSyncSeq, res.seq),
+        lastSyncSeq: res.reboundReplacementServer || settings.lastSyncScopeKey !== scopeKey(settings.syncPolicy) ? res.seq : Math.max(settings.lastSyncSeq, res.seq),
+        lastSyncScopeKey: scopeKey(settings.syncPolicy),
         lastSyncServerId: res.serverId ?? settings.lastSyncServerId,
         lastSyncEpoch: res.syncEpoch ?? settings.lastSyncEpoch,
         restoredFromBackupAt: totalBlobFailures === 0 && remPendingOps.length === 0 ? null : settings.restoredFromBackupAt,
@@ -1156,6 +1183,7 @@ async function executeSyncCycle(fetchImpl: typeof fetch, opts: RunSyncOptions = 
       nextAutoSyncAtMs = null;
       emitSyncState({
         status: 'synced',
+        userActive: isUserActivelyInteracting(),
         syncMode: policy.mode,
         syncDeferredReason: undefined,
         nextAutoSyncAt: null,
@@ -1184,7 +1212,7 @@ async function executeSyncCycle(fetchImpl: typeof fetch, opts: RunSyncOptions = 
   }
 
   const remPendingOps = await db.outbox.toArray();
-  const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced).count();
+  const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced && (!scopedHashes || scopedHashes.has(b.hash.toLowerCase()))).count();
   const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   const isOfflineErr = lastErr instanceof TypeError;
   emitSyncState({
@@ -1212,7 +1240,10 @@ export async function runSyncCycle(
   opts: RunSyncOptions = {}
 ): Promise<SyncStateSnapshot> {
   if (syncInFlight) return syncInFlight;
-  syncInFlight = executeSyncCycle(fetchImpl, opts).finally(() => {
+  syncInFlight = executeSyncCycle(fetchImpl, opts).catch(error => {
+    emitSyncState({ status: 'error', errorMessage: error instanceof Error ? error.message : String(error) });
+    return currentState;
+  }).finally(() => {
     syncInFlight = null;
   });
   return syncInFlight;
@@ -1230,33 +1261,9 @@ export function scheduleDebouncedSync(delayMs = 10_000): void {
   }, delayMs);
 }
 
-async function flushKeepaliveOnBackground(): Promise<void> {
-  try {
-    const settings = await getOrInitSettings();
-    if (settings.operatingMode !== 'docker-sync') return;
-    await compactOutbox();
-    const ops = await db.outbox.orderBy('createdAt').limit(20).toArray();
-    if (ops.length === 0) return;
-    const candidates = getCandidateServerBases(settings.syncServerUrl, settings.syncFallbackUrl || '');
-    const base =
-      currentState.activeServerUrl && currentState.activeServerUrl !== 'Same-Origin Docker'
-        ? currentState.activeServerUrl
-        : candidates[0];
-    if (base === undefined) return;
-    const body = JSON.stringify({ deviceId: settings.deviceId, operations: ops });
-    if (body.length < 60_000) {
-      void fetch(`${base}/api/sync/push`, {
-        method: 'POST',
-        headers: buildAuthHeaders(settings.syncAuthToken, { 'Content-Type': 'application/json' }),
-        body,
-        keepalive: true,
-      }).catch(() => undefined);
-    } else {
-      void runSyncCycle();
-    }
-  } catch {
-    // Outbox remains safely persisted in IndexedDB
-  }
+// Background saves are durable in IndexedDB. Never bypass the regular policy/acknowledgement path.
+function scopeKey(policy?: Partial<SyncPolicyConfig>): string {
+  return JSON.stringify([...new Set(policy?.selectiveWorkspaceIds ?? [])].sort());
 }
 
 export async function resolveConflict(
@@ -1264,9 +1271,14 @@ export async function resolveConflict(
   choice: 'keep-local' | 'keep-remote' | 'keep-both' | 'custom',
   customMerged?: LifeRecord
 ): Promise<void> {
-  const conflict = await db.syncConflicts.get(conflictId);
-  if (!conflict) return;
+  if (choice === 'custom' && !customMerged) throw new Error('Custom merge is missing');
   const settings = await getOrInitSettings();
+  await db.transaction('rw', [db.records, db.outbox, db.syncConflicts], async () => {
+  const conflict = await db.syncConflicts.get(conflictId);
+  if (!conflict || conflict.resolved) return;
+  const latest = await db.records.get(conflict.recordId);
+  if (latest && JSON.stringify(latest) !== JSON.stringify(conflict.localRecord)) throw new Error('Local record changed after this conflict. Refresh the conflict before resolving.');
+  await db.outbox.where('recordId').equals(conflict.recordId).delete();
   const now = new Date().toISOString();
 
   if (choice === 'keep-local') {
@@ -1329,6 +1341,7 @@ export async function resolveConflict(
   }
 
   await db.syncConflicts.update(conflictId, { resolved: true });
+  });
   const remConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   emitSyncState({ conflictCount: remConflicts });
   scheduleDebouncedSync(400);
@@ -1336,24 +1349,30 @@ export async function resolveConflict(
 
 export async function startSyncDaemon(): Promise<void> {
   stopSyncDaemon();
+  const generation = daemonGeneration;
   const settings = await getOrInitSettings();
+  if (generation !== daemonGeneration) return;
   const policy: SyncPolicyConfig = { ...DEFAULT_SYNC_POLICY, ...(settings.syncPolicy ?? {}) };
 
+  let removeBatteryListener: (() => void) | undefined;
   // Monitor battery charging status opportunistically when browser exposes Battery API
-  if (typeof navigator !== 'undefined' && typeof (navigator as unknown as { getBattery?: () => Promise<{ charging: boolean; addEventListener?: (e: string, cb: () => void) => void }> }).getBattery === 'function') {
-    void (navigator as unknown as { getBattery: () => Promise<{ charging: boolean; addEventListener?: (e: string, cb: () => void) => void }> })
+  if (typeof navigator !== 'undefined' && typeof (navigator as unknown as { getBattery?: () => Promise<{ charging: boolean; addEventListener?: (e: string, cb: () => void) => void; removeEventListener?: (e: string, cb: () => void) => void }> }).getBattery === 'function') {
+    void (navigator as unknown as { getBattery: () => Promise<{ charging: boolean; addEventListener?: (e: string, cb: () => void) => void; removeEventListener?: (e: string, cb: () => void) => void }> })
       .getBattery()
       .then((bat) => {
-        cachedBatteryCharging = bat.charging;
-        bat.addEventListener?.('chargingchange', () => {
-          cachedBatteryCharging = bat.charging;
-        });
+        if (generation !== daemonGeneration) return;
+        const onCharging = () => { cachedBatteryCharging = bat.charging; };
+        onCharging();
+        bat.addEventListener?.('chargingchange', onCharging);
+        removeBatteryListener = () => bat.removeEventListener?.('chargingchange', onCharging);
       })
       .catch(() => undefined);
   }
 
+  activityCleanup = () => removeBatteryListener?.();
   if (settings.operatingMode !== 'docker-sync' || policy.mode === 'offline') {
     const pendingCount = await db.outbox.count();
+    if (generation !== daemonGeneration) return;
     emitSyncState({
       status: 'standalone',
       syncMode: policy.mode,
@@ -1390,6 +1409,7 @@ export async function startSyncDaemon(): Promise<void> {
     window.addEventListener('wheel', onActive, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     activityCleanup = () => {
+      removeBatteryListener?.();
       window.removeEventListener('keydown', onActive);
       window.removeEventListener('input', onActive);
       window.removeEventListener('pointerdown', onActive);
@@ -1402,12 +1422,14 @@ export async function startSyncDaemon(): Promise<void> {
   unsubRepo = subscribeRepository(() => {
     const nowMs = Date.now();
     if (firstPendingChangeAtMs === null) firstPendingChangeAtMs = nowMs;
-    markUserActivity(nowMs);
-    void db.outbox.count().then((cnt) => {
-      if (cnt !== currentState.pendingCount) {
-        emitSyncState({ pendingCount: cnt });
-      }
-    });
+    if (pendingCountTimer === null && typeof window !== 'undefined') {
+      pendingCountTimer = window.setTimeout(() => {
+        pendingCountTimer = null;
+        void db.outbox.count().then(cnt => {
+          if (generation === daemonGeneration) emitSyncState({ pendingCount: cnt + (currentState.pendingBlobUploads ?? 0) });
+        }).catch(() => undefined);
+      }, 250);
+    }
     if (policy.mode === 'continuous') {
       scheduleDebouncedSync(1200);
     } else if (policy.mode === 'smart') {
@@ -1418,7 +1440,8 @@ export async function startSyncDaemon(): Promise<void> {
         syncDeferredReason: `Saved locally ✓ — auto-syncing after ${policy.inactivityDelaySec ?? 10}s of inactivity.`,
         nextAutoSyncAt: new Date(nowMs + delayMs).toISOString(),
       });
-      scheduleDebouncedSync(delayMs);
+      const decision = evaluateSyncPolicy(policy, { manual: false, operatingMode: settings.operatingMode, nowMs });
+      scheduleDebouncedSync(decision.allowed ? 250 : decision.deferMs ?? delayMs);
     } else if (policy.mode === 'manual') {
       emitSyncState({
         status: 'deferred',
@@ -1431,6 +1454,7 @@ export async function startSyncDaemon(): Promise<void> {
 
   // Initial startup sync respects manual/offline policies
   const result = await runSyncCycle(fetch, { manual: false });
+  if (generation !== daemonGeneration) return;
 
   if (typeof window !== 'undefined') {
     const activeBase =
@@ -1453,11 +1477,7 @@ export async function startSyncDaemon(): Promise<void> {
     }
 
     visibilityHandler = () => {
-      if (document.visibilityState === 'hidden') {
-        if (policy.mode !== 'manual' && policy.mode !== 'offline') {
-          void flushKeepaliveOnBackground();
-        }
-      } else if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible') {
         void runSyncCycle(fetch, { manual: false });
       }
     };
@@ -1479,6 +1499,9 @@ export async function startSyncDaemon(): Promise<void> {
 }
 
 export function stopSyncDaemon(): void {
+  daemonGeneration++;
+  if (pendingCountTimer !== null) { window.clearTimeout(pendingCountTimer); pendingCountTimer = null; }
+  nextAutoSyncAtMs = null;
   if (eventSource) {
     eventSource.close();
     eventSource = null;

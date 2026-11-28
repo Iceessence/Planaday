@@ -19,6 +19,7 @@ import { createRecord, softDeleteRecord, updateRecord } from '../../core/reposit
 import { getBlobObjectUrl, storeBlob } from '../../core/db';
 import { sanitizeSvgMarkup } from '../../core/sanitizer';
 import { ModalDialog } from '../Common/ModalDialog';
+import { SafeTextarea } from '../Common/SafeTextEditor';
 import type { DecorItemPayload, LifeRecord } from '../../core/types';
 
 const WASHI_COLORS = ['#c96f53', '#5e8c78', '#c79b43', '#6b5ca5', '#3b6ea5', '#d98a9c'];
@@ -78,6 +79,9 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
 
   // Smooth customizable ink state
   const [inkMode, setInkMode] = useState(false);
+  const [clearInkOpen, setClearInkOpen] = useState(false);
+  const [clearingInk, setClearingInk] = useState(false);
+  const clearInkLock = useRef(false);
   const [inkTool, setInkTool] = useState<InkTool>('pen');
   const [inkColor, setInkColor] = useState('#2a241d');
   const [inkWidth, setInkWidth] = useState(3);
@@ -90,12 +94,19 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
   const [activeCat, setActiveCat] = useState<StickerCategory | 'Favorites' | 'Recents' | 'Custom'>('Planning');
   const [stickerSearch, setStickerSearch] = useState('');
   const [dieCutBorder, setDieCutBorder] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const uploadLock = useRef(false);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
 
   const layerRef = useRef<HTMLDivElement | null>(null);
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const draggingRef = useRef<{ id: string; startX: number; startY: number; origRelX: number; origRelY: number; curRelX: number; curRelY: number } | null>(null);
   const drawingRef = useRef(false);
+  const pointerRef = useRef<number | null>(null);
+  const inkFrame = useRef<number | null>(null);
+  const dragFrame = useRef<number | null>(null);
+  const erasedPending = useRef(new Set<string>());
+  const urlsRef = useRef(new Map<string, string>());
   const erasingRef = useRef(false);
   const inkPointsRef = useRef<Array<[number, number]>>([]);
   const customInputRef = useRef<HTMLInputElement | null>(null);
@@ -103,7 +114,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
   const decorItems = useMemo(
     () =>
       (records.filter(
-        (r) => r.type === 'decor_item' && (r.payload as DecorItemPayload).spreadKey === spreadKey
+        (r) => !r.deletedAt && r.type === 'decor_item' && (r.payload as DecorItemPayload).spreadKey === spreadKey
       ) as Array<LifeRecord<DecorItemPayload>>).sort((a, b) => (a.payload.zIndex ?? 1) - (b.payload.zIndex ?? 1)),
     [records, spreadKey]
   );
@@ -114,7 +125,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
   );
 
   const customStickers = useMemo(
-    () => records.filter((r) => r.type === 'custom_sticker'),
+    () => records.filter((r) => !r.deletedAt && r.type === 'custom_sticker'),
     [records]
   );
 
@@ -131,26 +142,37 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
     if (changed) setErasedLocalIds(next);
   }, [decorItems, erasedLocalIds]);
 
-  useEffect(() => {
+  // Stable hash dependency: dragging, changing opacity, or adding ink does not reload images.
+  const hashKey = useMemo(() => {
     const hashes = new Set<string>();
     for (const d of decorItems) if (d.payload.customBlobId) hashes.add(d.payload.customBlobId);
-    for (const cs of customStickers) {
+    if (drawerOpen && activeCat === 'Custom') for (const cs of customStickers) {
       const h = (cs.payload as { blobHash?: string }).blobHash;
       if (h) hashes.add(h);
     }
+    return JSON.stringify([...hashes].sort());
+  }, [decorItems, customStickers, drawerOpen, activeCat]);
+  useEffect(() => {
+    const wanted = new Set<string>(JSON.parse(hashKey) as string[]);
     let alive = true;
-    (async () => {
-      const next: Record<string, string> = {};
-      for (const h of hashes) {
-        const u = await getBlobObjectUrl(h);
-        if (u) next[h] = u;
-      }
-      if (alive) setBlobUrls(next);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [decorItems, customStickers]);
+    for (const [hash, url] of urlsRef.current) if (!wanted.has(hash)) {
+      URL.revokeObjectURL(url); urlsRef.current.delete(hash);
+    }
+    setBlobUrls(Object.fromEntries(urlsRef.current));
+    void Promise.all([...wanted].filter((hash) => !urlsRef.current.has(hash)).map(async (hash) => {
+      try {
+        const url = await getBlobObjectUrl(hash, false, true);
+        if (!url) return;
+        if (!alive) { URL.revokeObjectURL(url); return; }
+        urlsRef.current.set(hash, url);
+      } catch { /* Missing or unavailable images retain the existing placeholder. */ }
+    })).then(() => { if (alive) setBlobUrls(Object.fromEntries(urlsRef.current)); });
+    return () => { alive = false; };
+  }, [hashKey]);
+  useEffect(() => () => {
+    for (const url of urlsRef.current.values()) URL.revokeObjectURL(url);
+    urlsRef.current.clear();
+  }, []);
 
   // Size live canvas cleanly to layer dimensions when inkMode is active
   const syncLiveCanvasSize = useCallback(() => {
@@ -158,7 +180,8 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
     const layer = layerRef.current;
     if (!canvas || !layer) return;
     const rect = layer.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // Limit the backing store to roughly 8 megapixels even on very long spreads.
+    const dpr = Math.min(2, window.devicePixelRatio || 1, Math.sqrt(8_000_000 / Math.max(1, rect.width * rect.height)), 8192 / Math.max(1, rect.width, rect.height));
     const targetW = Math.max(1, Math.round(rect.width * dpr));
     const targetH = Math.max(1, Math.round(rect.height * dpr));
     if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -171,8 +194,10 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
     if (!inkMode) return;
     syncLiveCanvasSize();
     const onResize = () => syncLiveCanvasSize();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+    if (layerRef.current) observer?.observe(layerRef.current);
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', onResize); };
   }, [inkMode, syncLiveCanvasSize]);
 
   const effectiveInkWidth =
@@ -184,7 +209,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           ? Math.max(6, inkWidth * 2.1)
           : inkWidth;
 
-  const effectiveInkOpacity = inkTool === 'highlighter' ? Math.min(0.45, inkOpacity / 100) : inkOpacity / 100;
+  const effectiveInkOpacity = inkTool === 'highlighter' ? Math.min(0.45, inkOpacity / 100) : inkTool === 'pencil' ? Math.min(0.65, inkOpacity / 100) : inkOpacity / 100;
 
   const clearLiveCanvas = useCallback(() => {
     const canvas = liveCanvasRef.current;
@@ -196,7 +221,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
   const drawLiveStroke = useCallback(() => {
     const canvas = liveCanvasRef.current;
     const pts = inkPointsRef.current;
-    if (!canvas || pts.length < 2) return;
+    if (!canvas || pts.length === 0) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -209,22 +234,53 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     // Match 1000-unit SVG viewBox scale so live preview width equals saved stroke width
-    ctx.lineWidth = (effectiveInkWidth / 1000) * Math.max(w, h);
+    // Draw in the same normalized coordinate space as the persisted SVG.
+    ctx.scale(w / 1000, h / 1000);
+    ctx.lineWidth = effectiveInkWidth;
     if (inkTool === 'dashed') {
       ctx.setLineDash([ctx.lineWidth * 2.5, ctx.lineWidth * 2]);
     }
     ctx.beginPath();
-    ctx.moveTo(pts[0][0] * w, pts[0][1] * h);
-    for (let i = 1; i < pts.length - 1; i++) {
-      const mx = ((pts[i][0] + pts[i + 1][0]) * 0.5) * w;
-      const my = ((pts[i][1] + pts[i + 1][1]) * 0.5) * h;
-      ctx.quadraticCurveTo(pts[i][0] * w, pts[i][1] * h, mx, my);
+    const start = pts[0]; const last = pts[pts.length - 1];
+    const x = start[0] * 1000, y = start[1] * 1000, ex = last[0] * 1000, ey = last[1] * 1000;
+    if (pts.length === 1) { ctx.moveTo(x, y); ctx.lineTo(x + 0.5, y); }
+    else if (inkTool === 'line') { ctx.moveTo(x, y); ctx.lineTo(ex, ey); }
+    else if (inkTool === 'rect') ctx.rect(x, y, ex - x, ey - y);
+    else if (inkTool === 'ellipse') ctx.ellipse((x + ex) / 2, (y + ey) / 2, Math.abs(ex - x) / 2, Math.abs(ey - y) / 2, 0, 0, Math.PI * 2);
+    else {
+      ctx.moveTo(x, y);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const mx = (pts[i][0] + pts[i + 1][0]) * 500;
+        const my = (pts[i][1] + pts[i + 1][1]) * 500;
+        ctx.quadraticCurveTo(pts[i][0] * 1000, pts[i][1] * 1000, mx, my);
+      }
+      ctx.lineTo(ex, ey);
     }
-    const last = pts[pts.length - 1];
-    ctx.lineTo(last[0] * w, last[1] * h);
     ctx.stroke();
     ctx.restore();
   }, [inkColor, effectiveInkOpacity, effectiveInkWidth, inkTool]);
+
+  const scheduleInk = () => {
+    if (inkFrame.current === null) inkFrame.current = requestAnimationFrame(() => {
+      inkFrame.current = null; drawLiveStroke();
+    });
+  };
+  const cancelGesture = useCallback(() => {
+    if (inkFrame.current !== null) cancelAnimationFrame(inkFrame.current);
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    inkFrame.current = null; dragFrame.current = null;
+    pointerRef.current = null; drawingRef.current = false; erasingRef.current = false;
+    draggingRef.current = null; inkPointsRef.current = [];
+    clearLiveCanvas();
+  }, [clearLiveCanvas]);
+  useEffect(() => {
+    cancelGesture(); setDragPos(null); setSelectedId(null); setClearInkOpen(false);
+    return cancelGesture;
+  }, [spreadKey, inkMode, cancelGesture]);
+  const inkMarkup = useMemo(() => inkItems.flatMap((d) => d.payload.inkPaths!.map((path, idx) => ({
+    key: `${d.id}-${idx}`, path,
+    d: d.title.startsWith('Shape: rect') ? path.points.map(([x,y], i) => `${i ? 'L' : 'M'} ${x * 1000} ${y * 1000}`).join(' ') : buildSmoothSvgPath(path.points),
+  }))), [inkItems]);
 
   const eraseAtPoint = useCallback(
     (nx: number, ny: number) => {
@@ -232,6 +288,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
       const hitSq = hitRadius * hitRadius;
       const toErase: string[] = [];
       for (const item of inkItems) {
+        if (item.payload.locked || erasedPending.current.has(item.id)) continue;
         const paths = item.payload.inkPaths ?? [];
         let hit = false;
         for (const p of paths) {
@@ -260,11 +317,15 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           return next;
         });
         for (const id of toErase) {
-          void softDeleteRecord(id);
+          erasedPending.current.add(id);
+          void softDeleteRecord(id).catch(() => {
+            setErasedLocalIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+            pushToast('Could not erase stroke. Please retry.', { tone: 'warn' });
+          }).finally(() => erasedPending.current.delete(id));
         }
       }
     },
-    [inkItems, inkWidth]
+    [inkItems, inkWidth, pushToast]
   );
 
   const placeDecor = async (partial: Partial<DecorItemPayload>, title: string, opts?: { silent?: boolean }) => {
@@ -272,6 +333,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
     const rect = layerRef.current?.getBoundingClientRect();
     const rx = partial.relX ?? 0.72;
     const ry = partial.relY ?? 0.14;
+    try {
     const created = await createRecord<DecorItemPayload>(
       'decor_item',
       title,
@@ -301,11 +363,16 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
       setDrawerOpen(false);
       pushToast(`Placed "${title}" — anchored cleanly against layout resizing`, { canUndo: true });
     }
+    } catch (err) { if (opts?.silent) throw err; pushToast('Could not place decor. Please retry.', { tone: 'warn' }); }
   };
 
   const handleUploadCustomSticker = async (file: File) => {
+    if (uploadLock.current) return;
+    if (file.size > 20 * 1024 * 1024) { pushToast('Sticker files must be 20 MB or smaller.', { tone: 'warn' }); return; }
+    if (!/\.(svg|png|webp|jpe?g)$/i.test(file.name) && !['image/svg+xml','image/png','image/webp','image/jpeg'].includes(file.type)) { pushToast('Choose a PNG, WebP, JPEG or SVG image.', { tone: 'warn' }); return; }
+    uploadLock.current = true; setUploading(true);
     try {
-      if (file.type === 'image/svg+xml' || file.name.endsWith('.svg')) {
+      if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
         const raw = await file.text();
         const cleanSvg = await sanitizeSvgMarkup(raw);
         const blob = new Blob([cleanSvg], { type: 'image/svg+xml' });
@@ -318,6 +385,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
       let finalBlob: Blob = file;
       if (dieCutBorder && typeof createImageBitmap === 'function') {
         const bmp = await createImageBitmap(file);
+        try {
         const size = Math.min(320, Math.max(bmp.width, bmp.height));
         const canvas = document.createElement('canvas');
         canvas.width = size + 24;
@@ -332,19 +400,21 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           ctx.beginPath();
           ctx.roundRect(12, 12, size, size, 20);
           ctx.clip();
-          ctx.drawImage(bmp, 12, 12, size, size);
+          const ratio = Math.min(size / bmp.width, size / bmp.height);
+          const bw = bmp.width * ratio, bh = bmp.height * ratio;
+          ctx.drawImage(bmp, 12 + (size - bw) / 2, 12 + (size - bh) / 2, bw, bh);
           ctx.restore();
           const out = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), 'image/png'));
           if (out) finalBlob = out;
         }
-        bmp.close();
+        } finally { bmp.close(); }
       }
       const stored = await storeBlob(finalBlob, file.name);
       await createRecord('custom_sticker', file.name.replace(/\.[^.]+$/, ''), { blobHash: stored.hash });
       pushToast(`Saved custom die-cut sticker "${file.name}"`);
     } catch {
       pushToast('Could not process custom sticker file.', { tone: 'warn' });
-    }
+    } finally { uploadLock.current = false; setUploading(false); }
   };
 
   const visibleStickers = useMemo(() => {
@@ -372,7 +442,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           style={{ padding: '4px 9px', fontSize: '0.76rem', minHeight: 28, opacity: 0.92 }}
           onClick={() => setDrawerOpen(true)}
           aria-label="Open stickers and decor drawer"
-          title="Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+          title="Open built-in stickers, washi tape, sticky notes and stamps"
         >
           <Sparkles size={12} /> Decor
         </button>
@@ -381,6 +451,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           className={`dp-btn dp-btn-sm ${inkMode ? 'dp-btn-primary' : ''}`}
           style={{ padding: '4px 9px', fontSize: '0.76rem', minHeight: 28, opacity: 0.92 }}
           onClick={() => setInkMode((v) => !v)}
+          aria-pressed={inkMode}
           aria-label={inkMode ? 'Turn off ink mode' : 'Turn on ink mode'}
           title="Toggle Smooth Pen, Highlighter & Stroke Eraser"
         >
@@ -457,6 +528,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
                 type="button"
                 className={`dp-btn dp-btn-sm ${inkTool === toolId ? 'dp-btn-primary' : ''}`}
                 style={{ padding: '2px 7px', fontSize: '0.74rem' }}
+                aria-pressed={inkTool === toolId}
                 onClick={() => setInkTool(toolId)}
               >
                 {icon} {label}
@@ -471,6 +543,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
                   key={col}
                   type="button"
                   aria-label={`Ink color ${col}`}
+                  aria-pressed={inkColor === col}
                   onClick={() => setInkColor(col)}
                   style={{
                     width: 18,
@@ -541,12 +614,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
               className="dp-btn dp-btn-danger dp-btn-sm"
               style={{ padding: '2px 7px', fontSize: '0.74rem' }}
               disabled={inkItems.length === 0}
-              onClick={async () => {
-                for (const item of inkItems) {
-                  await softDeleteRecord(item.id);
-                }
-                pushToast(`Cleared ${inkItems.length} ink stroke(s) (recoverable in Trash)`, { canUndo: true });
-              }}
+              onClick={() => setClearInkOpen(true)}
             >
               <Trash2 size={12} /> Clear Ink
             </button>
@@ -572,7 +640,8 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           touchAction: inkMode ? 'none' : 'auto',
         }}
         onPointerDown={(e) => {
-          if (!inkMode || !layerRef.current) return;
+          if (!inkMode || !layerRef.current || pointerRef.current !== null || e.button !== 0) return;
+          pointerRef.current = e.pointerId;
           e.preventDefault();
           layerRef.current.setPointerCapture?.(e.pointerId);
           const rect = layerRef.current.getBoundingClientRect();
@@ -588,8 +657,10 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           syncLiveCanvasSize();
           drawingRef.current = true;
           inkPointsRef.current = [[Number(nx.toFixed(4)), Number(ny.toFixed(4))]];
+          scheduleInk();
         }}
         onPointerMove={(e) => {
+          if (pointerRef.current !== e.pointerId) return;
           if (inkMode && layerRef.current) {
             const rect = layerRef.current.getBoundingClientRect();
             const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
@@ -604,8 +675,10 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
               const prev = pts[pts.length - 1];
               // Skip redundant sub-pixel samples for super crisp, compact strokes
               if (!prev || Math.hypot(nx - prev[0], ny - prev[1]) >= 0.0022) {
-                pts.push([Number(nx.toFixed(4)), Number(ny.toFixed(4))]);
-                drawLiveStroke();
+                const point: [number, number] = [Number(nx.toFixed(4)), Number(ny.toFixed(4))];
+                if (['line', 'rect', 'ellipse'].includes(inkTool) && pts.length > 1) pts[1] = point;
+                else pts.push(point);
+                scheduleInk();
               }
               return;
             }
@@ -624,9 +697,18 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           relY = Math.max(0.02, Math.min(0.95, relY));
           drag.curRelX = relX;
           drag.curRelY = relY;
-          setDragPos({ id: drag.id, relX, relY });
+          if (dragFrame.current === null) dragFrame.current = requestAnimationFrame(() => {
+            dragFrame.current = null;
+            const current = draggingRef.current;
+            if (current) setDragPos({ id: current.id, relX: current.curRelX, relY: current.curRelY });
+          });
         }}
-        onPointerUp={async () => {
+        onPointerUp={async (e) => {
+          if (pointerRef.current !== e.pointerId) return;
+          pointerRef.current = null;
+          if (inkFrame.current !== null) { cancelAnimationFrame(inkFrame.current); inkFrame.current = null; }
+          if (dragFrame.current !== null) { cancelAnimationFrame(dragFrame.current); dragFrame.current = null; }
+          try {
           if (draggingRef.current) {
             const d = draggingRef.current;
             draggingRef.current = null;
@@ -634,7 +716,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             const rect = layerRef.current?.getBoundingClientRect();
             const pxX = rect ? Math.round(d.curRelX * rect.width) : undefined;
             const pxY = rect ? Math.round(d.curRelY * rect.height) : undefined;
-            await updateRecord<DecorItemPayload>(
+            if (d.curRelX !== d.origRelX || d.curRelY !== d.origRelY) await updateRecord<DecorItemPayload>(
               d.id,
               (c) => ({
                 ...c,
@@ -648,6 +730,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
               }),
               { skipUndo: true }
             );
+            return; // Do not touch a new drawing gesture started during the async drag save.
           }
 
           if (erasingRef.current) {
@@ -658,11 +741,18 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
           if (drawingRef.current) {
             drawingRef.current = false;
             const pts = [...inkPointsRef.current];
+            const rect = layerRef.current?.getBoundingClientRect();
+            if (rect && pts.length) {
+              const end: [number, number] = [Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width))), Math.max(0, Math.min(1, (e.clientY - rect.top) / Math.max(1, rect.height)))];
+              const last = pts[pts.length - 1];
+              if (Math.hypot(end[0] - last[0], end[1] - last[1]) > 0.0005) pts.push(end);
+            }
             inkPointsRef.current = [];
             clearLiveCanvas();
 
-            if (pts.length >= 2) {
+            if (pts.length >= 1) {
               const isShape = inkTool === 'line' || inkTool === 'rect' || inkTool === 'ellipse';
+              if (isShape && pts.length < 2) return;
               if (isShape) {
                 const start = pts[0];
                 const end = pts[pts.length - 1];
@@ -720,31 +810,17 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
               }
             }
           }
+          } catch { pushToast('Could not save decor change. Please retry.', { tone: 'warn' }); }
         }}
-        onPointerCancel={() => {
-          drawingRef.current = false;
-          erasingRef.current = false;
-          inkPointsRef.current = [];
-          clearLiveCanvas();
-        }}
+        onPointerCancel={(e) => { if (pointerRef.current === e.pointerId) { cancelGesture(); setDragPos(null); } }}
+        onLostPointerCapture={(e) => { if (pointerRef.current === e.pointerId) { cancelGesture(); setDragPos(null); } }}
       >
         {/* Persisted Smooth SVG Ink / Highlighter Strokes */}
         <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-          {inkItems.map((d) =>
-            d.payload.inkPaths!.map((path, idx) => (
-              <path
-                key={`${d.id}-${idx}`}
-                d={buildSmoothSvgPath(path.points)}
-                fill="none"
-                stroke={path.color}
-                strokeWidth={path.width}
-                strokeOpacity={path.opacity ?? (path.highlighter ? 0.35 : 0.9)}
-                strokeDasharray={path.tool === 'dashed' ? `${path.width * 2.5} ${path.width * 2}` : undefined}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ))
-          )}
+          {inkMarkup.map(({ key, path, d }) => <path key={key} d={d} fill="none" stroke={path.color}
+            strokeWidth={path.width} strokeOpacity={path.opacity ?? (path.highlighter ? 0.35 : 0.9)}
+            strokeDasharray={path.tool === 'dashed' ? `${path.width * 2.5} ${path.width * 2}` : undefined}
+            strokeLinecap="round" strokeLinejoin="round" />)}
         </svg>
 
         {/* Zero-Lag 60fps Live Stroke Canvas */}
@@ -764,7 +840,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             const curX = dragPos?.id === item.id ? dragPos.relX : p.relX;
             const curY = dragPos?.id === item.id ? dragPos.relY : p.relY;
             const useFixedPx =
-              !dragPos &&
+              dragPos?.id !== item.id &&
               (p.anchorMode === 'canvas' || p.anchorMode === 'section' || p.anchorMode === 'object') &&
               typeof p.fixedPxX === 'number' &&
               typeof p.fixedPxY === 'number';
@@ -785,33 +861,47 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
                   outline: isSel ? '2px dashed var(--dp-accent)' : undefined,
                   borderRadius: 6,
                   pointerEvents: inkMode ? 'none' : 'auto',
+                  touchAction: p.locked ? 'auto' : 'none',
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedId(item.id);
                 }}
                 onPointerDown={(e) => {
-                  if (inkMode) return;
+                  if (inkMode || e.button !== 0 || pointerRef.current !== null) return;
                   e.stopPropagation();
                   setSelectedId(item.id);
                   if (p.locked) return;
+                  const rect = layerRef.current?.getBoundingClientRect();
+                  const rx = useFixedPx && rect ? p.fixedPxX! / Math.max(1, rect.width) : p.relX;
+                  const ry = useFixedPx && rect ? p.fixedPxY! / Math.max(1, rect.height) : p.relY;
+                  pointerRef.current = e.pointerId;
+                  layerRef.current?.setPointerCapture?.(e.pointerId);
                   draggingRef.current = {
                     id: item.id,
                     startX: e.clientX,
                     startY: e.clientY,
-                    origRelX: p.relX,
-                    origRelY: p.relY,
-                    curRelX: p.relX,
-                    curRelY: p.relY,
+                    origRelX: rx,
+                    origRelY: ry,
+                    curRelX: rx,
+                    curRelY: ry,
                   };
                 }}
                 onKeyDown={(e) => {
-                  if (p.locked) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(item.id); return; }
+                  if (p.locked || !['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) return;
+                  e.preventDefault(); e.stopPropagation();
                   const step = e.shiftKey ? 0.05 : 0.015;
-                  if (e.key === 'ArrowLeft') { e.preventDefault(); void updateRecord<DecorItemPayload>(item.id, (c) => ({ ...c, payload: { ...c.payload, relX: Math.max(0.02, c.payload.relX - step) } })); }
-                  if (e.key === 'ArrowRight') { e.preventDefault(); void updateRecord<DecorItemPayload>(item.id, (c) => ({ ...c, payload: { ...c.payload, relX: Math.min(0.95, c.payload.relX + step) } })); }
-                  if (e.key === 'ArrowUp') { e.preventDefault(); void updateRecord<DecorItemPayload>(item.id, (c) => ({ ...c, payload: { ...c.payload, relY: Math.max(0.02, c.payload.relY - step) } })); }
-                  if (e.key === 'ArrowDown') { e.preventDefault(); void updateRecord<DecorItemPayload>(item.id, (c) => ({ ...c, payload: { ...c.payload, relY: Math.min(0.95, c.payload.relY + step) } })); }
+                  const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+                  const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+                  const rect = layerRef.current?.getBoundingClientRect();
+                  void updateRecord<DecorItemPayload>(item.id, (c) => {
+                    const cp = c.payload;
+                    const fixed = rect && ['canvas','section','object'].includes(cp.anchorMode ?? '') && cp.fixedPxX != null && cp.fixedPxY != null;
+                    const x = Math.max(0.02, Math.min(0.95, (fixed ? cp.fixedPxX! / Math.max(1, rect!.width) : cp.relX) + dx));
+                    const y = Math.max(0.02, Math.min(0.95, (fixed ? cp.fixedPxY! / Math.max(1, rect!.height) : cp.relY) + dy));
+                    return { ...c, payload: { ...cp, relX: x, relY: y, fixedPxX: rect ? Math.round(x * rect.width) : cp.fixedPxX, fixedPxY: rect ? Math.round(y * rect.height) : cp.fixedPxY } };
+                  }).catch(() => pushToast('Could not move decor.', { tone: 'warn' }));
                 }}
               >
                 {p.kind === 'sticker' && p.customBlobId && blobUrls[p.customBlobId] ? (
@@ -860,10 +950,11 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             borderRadius: 10,
             padding: '5px 8px',
             boxShadow: 'var(--dp-shadow-float)',
-            fontSize: '0.78rem',
+            fontSize: '0.78rem', flexWrap: 'wrap', maxWidth: 'calc(100% - 16px)',
           }}
         >
           <strong>{selectedItem.title}</strong>
+          {selectedItem.payload.kind === 'sticky_note' && <SafeTextarea key={selectedItem.id} recordKey={`${selectedItem.id}:text`} externalValue={selectedItem.payload.text ?? ''} titleHint={selectedItem.title} aria-label="Edit sticky note" className="dp-input" rows={2} autoGrow={false} disabled={selectedItem.payload.locked} onCommit={async (text) => { await updateRecord<DecorItemPayload>(selectedItem.id, (c) => ({ ...c, payload: { ...c.payload, text } })); }} />}
           <button
             type="button"
             className="dp-btn dp-btn-sm"
@@ -975,8 +1066,23 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
         </div>
       )}
 
+      <ModalDialog open={clearInkOpen} onClose={() => { if (!clearInkLock.current) setClearInkOpen(false); }} dismissible={!clearingInk} title="Clear ink on this spread?">
+        <p>Move {inkItems.length} ink stroke(s) to Trash? Stickers, stamps and sticky notes will stay in place.</p>
+        <div className="dp-row" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="dp-btn" disabled={clearingInk} onClick={() => setClearInkOpen(false)}>Cancel</button>
+          <button type="button" className="dp-btn dp-btn-danger" disabled={clearingInk} onClick={async () => {
+            if (clearInkLock.current) return;
+            clearInkLock.current = true; setClearingInk(true);
+            let cleared = 0;
+            try { for (const item of inkItems) { const result = await softDeleteRecord(item.id); if (result.trashed) cleared++; } pushToast(`Cleared ${cleared} ink stroke(s), recoverable in Trash.`); setClearInkOpen(false); }
+            catch { pushToast(`Cleared ${cleared} stroke(s) before an error. Try again for remaining strokes.`, { tone: 'warn' }); }
+            finally { clearInkLock.current = false; setClearingInk(false); }
+          }}>{clearingInk ? 'Clearing…' : 'Clear Ink'}</button>
+        </div>
+      </ModalDialog>
+
       {/* Sticker Book, Washi, Stamps & Sticky Notes Modal */}
-      <ModalDialog open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Stationery Decor Studio (208 Built-In Stickers + Custom)" wide>
+      <ModalDialog open={drawerOpen} onClose={() => setDrawerOpen(false)} title={`Stationery Decor Studio (${BUILTIN_STICKERS.length} Built-In Stickers + Custom)`} wide>
         <div className="dp-stack">
           <div className="dp-grid-3" style={{ gap: 10 }}>
             <div className="dp-card dp-stack" style={{ padding: 10, gap: 6 }}>
@@ -1032,7 +1138,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             <input
               className="dp-input"
               style={{ flex: 1 }}
-              placeholder="Search all 208 built-in stickers…"
+              aria-label="Search stickers" placeholder={`Search all ${BUILTIN_STICKERS.length} built-in stickers…`}
               value={stickerSearch}
               onChange={(e) => setStickerSearch(e.target.value)}
             />
@@ -1040,8 +1146,8 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
               <input type="checkbox" checked={dieCutBorder} onChange={(e) => setDieCutBorder(e.target.checked)} />
               <span>White die-cut border</span>
             </label>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => customInputRef.current?.click()}>
-              <Upload size={13} /> Upload PNG/SVG
+            <button type="button" className="dp-btn dp-btn-sm" disabled={uploading} onClick={() => customInputRef.current?.click()}>
+              <Upload size={13} /> {uploading ? 'Processing…' : 'Upload PNG/SVG'}
             </button>
             <input
               ref={customInputRef}
@@ -1060,6 +1166,7 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
             {(['Favorites', 'Recents', 'Custom', ...STICKER_CATEGORIES] as const).map((cat) => (
               <button
                 key={cat}
+                aria-pressed={activeCat === cat && !stickerSearch}
                 type="button"
                 className={`dp-btn dp-btn-sm ${activeCat === cat && !stickerSearch ? 'dp-btn-primary' : ''}`}
                 onClick={() => {
@@ -1116,6 +1223,8 @@ export const DecorCanvasOverlay: React.FC<{ spreadKey: string }> = ({ spreadKey 
                       type="button"
                       className="dp-btn dp-btn-ghost dp-btn-sm"
                       style={{ fontSize: '0.7rem', padding: '1px 4px' }}
+                      aria-pressed={isFav}
+                      aria-label={`${isFav ? 'Remove' : 'Add'} ${stk.name} ${isFav ? 'from' : 'to'} favorites`}
                       onClick={() => {
                         const nextFavs = isFav
                           ? settings.favoriteStickerIds.filter((x) => x !== stk.id)

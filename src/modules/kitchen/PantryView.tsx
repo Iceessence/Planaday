@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import { useViewFormGuard } from '../../components/Common/viewSafety';
+import React, { useMemo, useRef, useState } from 'react';
 import { Package, Plus, ScanBarcode, Snowflake, Trash2 } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
@@ -11,6 +12,7 @@ const DEFAULT_ZONES = ['Fridge', 'Freezer', 'Dry Pantry', 'Spice Rack', 'Counter
 
 export const PantryView: React.FC = () => {
   const { settings, records, logicalToday, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
   const [zoneFilter, setZoneFilter] = useState('All');
   const [pantrySearch, setPantrySearch] = useState('');
   const [freshFilter, setFreshFilter] = useState<'all' | 'expiring' | 'low_stock'>('all');
@@ -40,11 +42,12 @@ export const PantryView: React.FC = () => {
     [records]
   );
 
+  const freshnessById = useMemo(() => new Map(lots.map(l => [l.id, computeLotFreshness(l.payload, logicalToday)])), [lots, logicalToday]);
   const visibleLots = useMemo(() => {
     const q = pantrySearch.trim().toLowerCase();
     const list = lots.filter((l) => {
       if (zoneFilter !== 'All' && l.payload.zone !== zoneFilter) return false;
-      const fr = computeLotFreshness(l.payload, logicalToday);
+      const fr = freshnessById.get(l.id)!;
       if (freshFilter === 'expiring' && fr.status !== 'Use Soon' && fr.status !== 'Expires Today' && fr.status !== 'Expired') return false;
       if (freshFilter === 'low_stock' && !(l.payload.parLevel && l.payload.quantity <= l.payload.parLevel)) return false;
       if (q) {
@@ -60,14 +63,23 @@ export const PantryView: React.FC = () => {
       if (pantrySortBy === 'zone') return (a.payload.zone || '').localeCompare(b.payload.zone || '') * dir;
       return (a.payload.bestByDate || '9999-12-31').localeCompare(b.payload.bestByDate || '9999-12-31') * dir;
     });
-  }, [lots, zoneFilter, pantrySearch, freshFilter, logicalToday, pantrySortBy, pantrySortDir]);
+  }, [lots, zoneFilter, pantrySearch, freshFilter, freshnessById, pantrySortBy, pantrySortDir]);
 
+  const barcodeRequest = useRef(0);
+  const barcodeValue = useRef(barcode);
+  barcodeValue.current = barcode;
   const handleBarcodeLookup = async () => {
     if (!barcode.trim()) return;
+    const request = ++barcodeRequest.current;
+    const query = barcode.trim();
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8000);
     try {
       const base = settings.syncServerUrl.replace(/\/+$/, '');
-      const res = await fetch(`${base}/api/proxy/barcode/${encodeURIComponent(barcode.trim())}`);
+      const res = await fetch(`${base}/api/proxy/barcode/${encodeURIComponent(query)}`, { signal: controller.signal, headers: settings.syncAuthToken ? { Authorization: `Bearer ${settings.syncAuthToken}` } : {} });
+      if (!res.ok) throw new Error(`Barcode lookup failed (${res.status})`);
       const data = (await res.json()) as { found?: boolean; name?: string };
+      if (request !== barcodeRequest.current || query !== barcodeValue.current.trim()) return;
       if (data.found && data.name) {
         setName(data.name);
         pushToast(`Barcode matched: ${data.name}`);
@@ -75,8 +87,8 @@ export const PantryView: React.FC = () => {
         pushToast('Barcode not found online — enter ingredient name manually.');
       }
     } catch {
-      pushToast('Offline mode — barcode stored locally; type ingredient name manually.');
-    }
+      if (request === barcodeRequest.current) pushToast('Barcode lookup unavailable; type ingredient name manually.');
+    } finally { window.clearTimeout(timer); }
   };
 
   return (
@@ -96,9 +108,10 @@ export const PantryView: React.FC = () => {
       <form
         className="dp-card dp-stack"
         style={{ padding: 12 }}
-        onSubmit={async (e) => {
+        onSubmit={guardForm('form-1', async (e) => {
           e.preventDefault();
           if (!name.trim()) return;
+          if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(parLevel) || parLevel < 0) { pushToast('Enter valid nonnegative quantities.', { tone: 'warn' }); return; }
           await createRecord<PantryLotPayload>(
             'pantry_lot',
             name.trim(),
@@ -120,7 +133,7 @@ export const PantryView: React.FC = () => {
           setBarcode('');
           setShelfBin('');
           pushToast('Added pantry lot', { canUndo: true });
-        }}
+        })}
       >
         <div className="dp-row">
           <input className="dp-input" style={{ flex: 2 }} placeholder="Ingredient / food item…" value={name} onChange={(e) => setName(e.target.value)} />
@@ -219,7 +232,7 @@ export const PantryView: React.FC = () => {
       {/* Pantry Lots Grid */}
       <div className="dp-stack">
         {visibleLots.map((lot) => {
-          const fresh = computeLotFreshness(lot.payload, logicalToday);
+          const fresh = freshnessById.get(lot.id)!;
           const badgeColor =
             fresh.status === 'Expired'
               ? 'var(--dp-danger)'

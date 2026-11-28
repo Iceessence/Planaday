@@ -40,12 +40,13 @@ export function expandRecurrenceDates(
   const rangeStart = options.rangeStart ?? startDate;
   const rangeEnd = options.rangeEnd ?? addDaysIso(startDate, 366);
   const maxCount = options.maxCount ?? 250;
+  if (maxCount <= 0 || rangeEnd < rangeStart) return [];
 
   if (!rule) {
     return startDate >= rangeStart && startDate <= rangeEnd ? [startDate] : [];
   }
 
-  const interval = Math.max(1, rule.interval || 1);
+  const interval = Math.max(1, Math.floor(Number.isFinite(rule.interval) ? rule.interval : 1));
   const exceptions = new Set(rule.exceptions ?? []);
   const results: string[] = [];
   let generatedTotal = 0;
@@ -70,8 +71,9 @@ export function expandRecurrenceDates(
   };
 
   if (rule.freq === 'daily') {
-    let cur = startDate;
-    for (let step = 0; step < 2000; step++) {
+    const offset = rule.count ? 0 : Math.max(0, Math.ceil(diffDaysIso(startDate, rangeStart) / interval));
+    let cur = addDaysIso(startDate, offset * interval);
+    for (let step = 0; cur <= rangeEnd && step < 1_000_000; step++) {
       if (!pushCandidate(cur)) break;
       if (cur > rangeEnd) break;
       cur = addDaysIso(cur, interval);
@@ -80,10 +82,11 @@ export function expandRecurrenceDates(
   }
 
   if (rule.freq === 'weekly') {
-    const weekdays = rule.byWeekday && rule.byWeekday.length > 0 ? [...rule.byWeekday].sort() : [getWeekdayIso(startDate)];
+    const weekdays = rule.byWeekday && rule.byWeekday.length > 0 ? Array.from(new Set(rule.byWeekday.filter(d => Number.isInteger(d) && d >= 0 && d <= 6))).sort() : [getWeekdayIso(startDate)];
     const startDow = getWeekdayIso(startDate);
     let weekStart = addDaysIso(startDate, -startDow); // Sunday of start week
-    for (let w = 0; w < 600; w++) {
+    if (!rule.count) weekStart = addDaysIso(weekStart, Math.max(0, Math.floor(diffDaysIso(weekStart, rangeStart) / (7 * interval))) * 7 * interval);
+    for (let w = 0; weekStart <= rangeEnd && w < 150_000; w++) {
       let shouldStop = false;
       for (const wd of weekdays) {
         const candidate = addDaysIso(weekStart, wd);
@@ -102,9 +105,12 @@ export function expandRecurrenceDates(
   if (rule.freq === 'monthly') {
     const [sy, sm, sd] = startDate.split('-').map(Number);
     let totalMonths = sy * 12 + (sm - 1);
-    for (let i = 0; i < 240; i++) {
+    const [ry, rm] = rangeStart.split('-').map(Number);
+    if (!rule.count) totalMonths += Math.max(0, Math.floor((ry * 12 + rm - 1 - totalMonths) / interval)) * interval;
+    for (let i = 0; i < 120_000; i++) {
       const y = Math.floor(totalMonths / 12);
       const m = (totalMonths % 12) + 1;
+      if (`${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-01` > rangeEnd || y > 9999) break;
       let candidate: string | null = null;
       if (rule.firstBusinessDay) {
         candidate = getFirstBusinessDay(y, m);
@@ -123,7 +129,8 @@ export function expandRecurrenceDates(
 
   if (rule.freq === 'yearly') {
     const [sy, sm, sd] = startDate.split('-').map(Number);
-    for (let y = sy; y <= sy + 60; y += interval) {
+    const firstYear = rule.count ? sy : sy + Math.max(0, Math.floor((Number(rangeStart.slice(0, 4)) - sy) / interval)) * interval;
+    for (let y = firstYear; y <= Number(rangeEnd.slice(0, 4)); y += interval) {
       const candidate = resolveAnnualFloatingDate(sm, sd, y, rule.feb29Policy ?? 'feb28');
       if (candidate) {
         if (!pushCandidate(candidate)) break;
@@ -170,9 +177,7 @@ export function computeNextChoreDueDate(
       return addDaysIso(completionDateIso, interval);
     case 'fixed': {
       const base = chore.nextDueDate || completionDateIso;
-      let next = addDaysIso(base, interval);
-      while (next <= completionDateIso) next = addDaysIso(next, interval);
-      return next;
+      return addDaysIso(base, Math.max(1, Math.floor(diffDaysIso(base, completionDateIso) / interval) + 1) * interval);
     }
     case 'weekdays': {
       let cand = addDaysIso(completionDateIso, 1);
@@ -221,11 +226,7 @@ export function computeChoreFreshnessAtDate(chore: ChorePayload, asOfDateIso: st
   }
 
   // Reconstruct historical state strictly from completion ledger entries on/before asOfDateIso
-  const priorCompletions = (chore.completions ?? [])
-    .filter((c) => c.completedDate <= asOfDateIso)
-    .sort((a, b) => b.completedDate.localeCompare(a.completedDate));
-
-  const lastDone = priorCompletions[0]?.completedDate ?? chore.lastCompletedDate ?? null;
+  const lastDone = (chore.completions ?? []).reduce<string | null>((latest, c) => c.completedDate <= asOfDateIso && (!latest || c.completedDate > latest) ? c.completedDate : latest, chore.lastCompletedDate && chore.lastCompletedDate <= asOfDateIso ? chore.lastCompletedDate : null);
   const interval = Math.max(1, chore.intervalDays || 7);
 
   let effectiveDue = chore.nextDueDate;

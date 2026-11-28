@@ -126,6 +126,14 @@ export const OFFLINE_LEARNING_FACTS: LearningFact[] = [
   { id: 118, topic: 'Everyday Science', text: 'Fresh snow absorbs sound waves across its porous air pockets, which is why the world sounds noticeably hushed right after a snowfall.' },
   { id: 119, topic: 'Everyday Science', text: 'Cats always seem to land upright thanks to a flexible spine and inner-ear righting reflex that rotates front and back halves independently.' },
   { id: 120, topic: 'Everyday Science', text: 'A single pencil contains enough graphite to draw a continuous line roughly 35 miles long or write around 45,000 words.' },
+  { id: 121, topic: 'Math & Logic', text: 'A prime number greater than 3 is always one more or one less than a multiple of 6, although most numbers of that form are not prime.' },
+  { id: 122, topic: 'Physics', text: 'A refrigerator moves heat from its cold interior to the warmer room, using electrical work to drive that heat transfer.' },
+  { id: 123, topic: 'Technology', text: 'A checksum can detect many accidental changes to a file, while a cryptographic hash also makes finding another file with the same digest computationally difficult.' },
+  { id: 124, topic: 'Engineering', text: 'An integral image stores cumulative pixel sums, allowing the sum over any rectangular image region to be computed with four array lookups.' },
+  { id: 125, topic: 'Space', text: 'The phases of the Moon are caused by changing viewing geometry as it orbits Earth, not by Earth casting its shadow on the Moon.' },
+  { id: 126, topic: 'Food Science', text: 'Water dissolves polar substances like table salt, while oils dissolve many nonpolar flavor compounds; this is why different cooking liquids extract different flavors.' },
+  { id: 127, topic: 'Math & Logic', text: 'The median is resistant to extreme outliers: changing the largest value in a sorted sample may leave the median unchanged.' },
+  { id: 128, topic: 'Technology', text: 'A database transaction can group several changes so that either all commit together or none take effect.' },
 ];
 
 export function getFactTopics(customDeck?: LearningFact[]): string[] {
@@ -150,7 +158,8 @@ export function getDailyFact(
   for (let i = 0; i < dateIso.length; i++) {
     hash = (hash * 31 + dateIso.charCodeAt(i)) >>> 0;
   }
-  const index = (hash + offset) % deck.length;
+  const safeOffset = Number.isFinite(offset) ? Math.trunc(offset) : 0;
+  const index = (hash + safeOffset % deck.length) % deck.length;
   return {
     fact: deck[index < 0 ? index + deck.length : index],
     totalInDeck: deck.length,

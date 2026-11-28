@@ -21,7 +21,7 @@ export async function ensureTemporal(): Promise<TemporalNamespace> {
     temporalReadyPromise = import('temporal-polyfill').then((mod) => {
       globalThis.Temporal = mod.Temporal;
       return mod.Temporal;
-    });
+    }).catch(error => { temporalReadyPromise = null; throw error; });
   }
   return temporalReadyPromise;
 }
@@ -31,6 +31,18 @@ export function getTemporalSync(): TemporalNamespace {
     throw new Error('Temporal has not been initialized. Await ensureTemporal() at startup.');
   }
   return globalThis.Temporal;
+}
+
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+function getDateFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = JSON.stringify([locale, options]);
+  let fmt = formatterCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, options);
+    if (formatterCache.size >= 64) formatterCache.delete(formatterCache.keys().next().value!);
+    formatterCache.set(key, fmt);
+  }
+  return fmt;
 }
 
 export function getSystemTimeZone(): string {
@@ -57,13 +69,11 @@ export function computeLogicalDateIso(
     const plainDate = zdt.hour < dayBoundaryHour ? zdt.toPlainDate().subtract({ days: 1 }) : zdt.toPlainDate();
     return plainDate.toString();
   }
-  // Safe fallback if called before polyfill resolves in a test
-  const d = new Date(nowInstantMs);
-  const shifted = new Date(d.getTime() - dayBoundaryHour * 3600 * 1000);
-  const y = shifted.getFullYear();
-  const m = String(shifted.getMonth() + 1).padStart(2, '0');
-  const day = String(shifted.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  // Respect the requested IANA zone before Temporal is loaded, including DST.
+  const parts = getDateFormatter('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(nowInstantMs));
+  const part = (key: string) => parts.find(p => p.type === key)?.value ?? '';
+  const iso = `${part('year').padStart(4, '0')}-${part('month')}-${part('day')}`;
+  return Number(part('hour')) % 24 < dayBoundaryHour ? addDaysIso(iso, -1) : iso;
 }
 
 export function addDaysIso(dateIso: string, days: number): string {
@@ -110,7 +120,7 @@ export function formatDateLocalized(
     return pd.toLocaleString(locale, options);
   }
   const [y, m, d] = dateIso.split('-').map(Number);
-  return new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)));
+  return getDateFormatter(locale, { ...options, timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
 export function formatTimeDisplay(hhmm: string, format: '12h' | '24h' = '12h'): string {
@@ -118,7 +128,7 @@ export function formatTimeDisplay(hhmm: string, format: '12h' | '24h' = '12h'): 
   const [hStr, mStr] = hhmm.split(':');
   const h = Number(hStr);
   const m = Number(mStr);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 24 || m < 0 || m > 59 || (h === 24 && m !== 0)) return hhmm;
   if (format === '24h') {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }

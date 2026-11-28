@@ -53,7 +53,9 @@ export interface WetNirSummaryStats {
 
 export function meanOf(nums: number[]): number {
   if (nums.length === 0) return 0;
-  return nums.reduce((s, v) => s + v, 0) / nums.length;
+  let sum = 0, correction = 0;
+  for (const value of nums) { const y = value - correction; const t = sum + y; correction = (t - sum) - y; sum = t; }
+  return sum / nums.length;
 }
 
 export function computeWetNirComparison(records: WetNirPairRecord[]): WetNirSummaryStats {
@@ -68,15 +70,15 @@ export function computeWetNirComparison(records: WetNirPairRecord[]): WetNirSumm
     return { record: rec, wetMean, nirMean, signedDiff, absDiff, pctDiff };
   });
 
-  const points = allPoints.filter((p) => !p.record.excluded && Number.isFinite(p.wetMean) && Number.isFinite(p.nirMean));
-  const excludedPoints = allPoints.filter((p) => p.record.excluded);
+  const points = allPoints.filter((p) => !p.record.excluded && Number.isFinite(p.wetMean) && Number.isFinite(p.nirMean) && Number.isFinite(p.signedDiff));
+  const excludedPoints = allPoints.filter((p) => p.record.excluded || !Number.isFinite(p.wetMean) || !Number.isFinite(p.nirMean) || !Number.isFinite(p.signedDiff));
   const units = Array.from(new Set(points.map((p) => (p.record.unit || '%').trim()).filter(Boolean)));
   const mixedUnitsWarning = units.length > 1;
 
   const n = points.length;
-  if (n === 0) {
+  if (n === 0 || mixedUnitsWarning) {
     return {
-      nIncluded: 0,
+      nIncluded: n,
       nExcluded: excludedPoints.length,
       units,
       mixedUnitsWarning,
@@ -91,7 +93,7 @@ export function computeWetNirComparison(records: WetNirPairRecord[]): WetNirSumm
       rSquared: null,
       slope: null,
       intercept: null,
-      methodNotes: 'No included pairs available.',
+      methodNotes: mixedUnitsWarning ? 'Mixed units: aggregate statistics withheld. Filter to one consistent unit before comparing.' : 'No finite included pairs available.',
       points,
       excludedPoints,
     };
@@ -105,7 +107,7 @@ export function computeWetNirComparison(records: WetNirPairRecord[]): WetNirSumm
   const meanNir = meanOf(ys);
   const bias = meanOf(diffs);
   const meanAbsDiff = meanOf(points.map((p) => p.absDiff));
-  const validPcts = points.map((p) => p.pctDiff).filter((v): v is number => v !== null);
+  const validPcts = points.map((p) => p.pctDiff).filter((v): v is number => v !== null && Number.isFinite(v));
   const meanAbsPctDiff = validPcts.length > 0 ? meanOf(validPcts.map((v) => Math.abs(v))) : null;
 
   // RMSE = sqrt(sum((NIR - Wet)^2) / n)
@@ -137,7 +139,12 @@ export function computeWetNirComparison(records: WetNirPairRecord[]): WetNirSumm
     slope = sxy / sxx;
     intercept = meanNir - slope * meanWet;
     if (syy > 0) {
-      pearsonR = sxy / Math.sqrt(sxx * syy);
+      const prod = sxx * syy;
+      const rawR =
+        Number.isFinite(prod) && prod > 0
+          ? sxy / Math.sqrt(prod)
+          : (sxy / Math.sqrt(sxx)) / Math.sqrt(syy);
+      pearsonR = Math.max(-1, Math.min(1, rawR));
       rSquared = pearsonR * pearsonR;
     }
   }

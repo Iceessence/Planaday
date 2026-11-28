@@ -56,10 +56,19 @@ export function canonicalizeIngredientName(name: string): string {
   return cleaned || name.toLowerCase().trim();
 }
 
+// Only combine inventory in equivalent units; never subtract grams from cups blindly.
+function unitKey(unit: string): string {
+  const u = unit.trim().toLowerCase();
+  const aliases: Record<string, string> = { cups:'cup', tablespoon:'tbsp', tablespoons:'tbsp', teaspoon:'tsp', teaspoons:'tsp', grams:'g', gram:'g', ounces:'oz', ounce:'oz', pounds:'lb', pound:'lb', lbs:'lb', liters:'l', liter:'l', items:'item', pieces:'piece' };
+  return Object.prototype.hasOwnProperty.call(aliases, u) ? aliases[u] : u;
+}
+function ingredientUnitKey(name: string, unit: string): string { return name + '\u0000' + unitKey(unit); }
+
 export function inferAisle(name: string): string {
   const lower = name.toLowerCase();
+  if (/\bfrozen\b|\bice cream\b/.test(lower)) return 'Frozen';
   for (const [aisle, words] of AISLE_KEYWORDS) {
-    if (words.some((w) => lower.includes(w))) return aisle;
+    if (words.some((w) => new RegExp('(?:^|[^a-z])' + w + '(?:s|es)?(?:$|[^a-z])').test(lower))) return aisle;
   }
   return 'Pantry';
 }
@@ -184,7 +193,7 @@ export function scaleAndConvertIngredients(
   unitMode: 'original' | 'metric' | 'us'
 ): ScaledIngredientView[] {
   const baseServings = Math.max(1, recipe.servings || 1);
-  const factor = Math.max(0.25, targetServings / baseServings);
+  const factor = Number.isFinite(targetServings) && targetServings > 0 ? targetServings / baseServings : 1;
 
   return recipe.ingredients.map((ing) => {
     const scaledQty = ing.quantity * factor;
@@ -318,7 +327,7 @@ export async function finishCookingSession(
 
   await batchApplyChanges('Finished cooking & reconciled pantry/leftovers', async () => {
     const recipe = (await db.records.get(recipeId)) as LifeRecord<RecipePayload> | undefined;
-    if (!recipe) return [];
+    if (!recipe || recipe.deletedAt || recipe.type !== 'recipe') return [];
     const changes: UndoEntry['changes'] = [];
 
     // Increment madeCount
@@ -334,23 +343,27 @@ export async function finishCookingSession(
     // Deduct matching unexpired lots FIFO (soonest expiry first)
     if (options.deductPantry) {
       const lots = (await db.records.where('type').equals('pantry_lot').toArray()).filter(
-        (r) => !r.deletedAt
+        (r) => !r.deletedAt && r.workspaceId === recipe.workspaceId
       ) as Array<LifeRecord<PantryLotPayload>>;
+      const remaining = new Map(lots.map(l => [l.id, l]));
 
       for (const ing of recipe.payload.ingredients) {
         const canon = ing.canonicalName || canonicalizeIngredientName(ing.name);
         let need = ing.quantity * options.scaleFactor;
-        const candidates = lots
+        if (!Number.isFinite(need) || need <= 0) continue;
+        const candidates = Array.from(remaining.values())
           .filter(
             (l) =>
-              l.payload.quantity > 0 &&
-              (l.payload.canonicalName === canon || l.payload.ingredientName.toLowerCase().includes(canon))
+              computeLotFreshness(l.payload, options.todayIso).availableQty > 0 &&
+              computeLotFreshness(l.payload, options.todayIso).status !== 'Expired' &&
+              unitKey(l.payload.unit) === unitKey(ing.unit) &&
+              (l.payload.canonicalName || canonicalizeIngredientName(l.payload.ingredientName)) === canon
           )
           .sort((a, b) => (a.payload.eatByDate || a.payload.bestByDate || '9999').localeCompare(b.payload.eatByDate || b.payload.bestByDate || '9999'));
 
         for (const lot of candidates) {
           if (need <= 0) break;
-          const take = Math.min(lot.payload.quantity, need);
+          const take = Math.min(computeLotFreshness(lot.payload, options.todayIso).availableQty, need);
           need -= take;
           const nextQty = Math.max(0, Number((lot.payload.quantity - take).toFixed(2)));
           const updatedLot: LifeRecord<PantryLotPayload> = {
@@ -360,8 +373,10 @@ export async function finishCookingSession(
             deviceId: settings.deviceId,
             payload: { ...lot.payload, quantity: nextQty },
           };
-          changes.push({ recordId: lot.id, before: lot, after: updatedLot });
-          deductedLots++;
+          remaining.set(lot.id, updatedLot);
+          const prior = changes.find(ch => ch.recordId === lot.id);
+          if (prior) prior.after = updatedLot;
+          else { changes.push({ recordId: lot.id, before: lot, after: updatedLot }); deductedLots++; }
         }
       }
     }
@@ -420,9 +435,7 @@ export async function generateNetGroceryItems(options: {
   const now = new Date().toISOString();
   const store = options.store || 'Local Market';
 
-  const allRecords = (await db.records.toArray()).filter(
-    (r) => !r.deletedAt && r.workspaceId === settings.activeWorkspaceId
-  );
+  const allRecords = await db.records.where('workspaceId').equals(settings.activeWorkspaceId).filter(r => !r.deletedAt).toArray();
   const recipesById = new Map(
     (allRecords.filter((r) => r.type === 'recipe') as Array<LifeRecord<RecipePayload>>).map((r) => [r.id, r])
   );
@@ -434,7 +447,8 @@ export async function generateNetGroceryItems(options: {
     const f = computeLotFreshness(lot.payload, options.todayIso);
     if (f.status === 'Expired') continue;
     const c = lot.payload.canonicalName || canonicalizeIngredientName(lot.payload.ingredientName);
-    stockByCanon.set(c, (stockByCanon.get(c) ?? 0) + f.availableQty);
+    const key = ingredientUnitKey(c, lot.payload.unit);
+    stockByCanon.set(key, (stockByCanon.get(key) ?? 0) + f.availableQty);
   }
 
   // Sum needed quantities across selected recipes & meal plans
@@ -442,11 +456,12 @@ export async function generateNetGroceryItems(options: {
 
   const addNeed = (rawName: string, qty: number, unit: string, aisle: string, source: string) => {
     const canon = canonicalizeIngredientName(rawName);
-    const existing = needed.get(canon);
+    const key = ingredientUnitKey(canon, unit);
+    const existing = needed.get(key);
     if (existing) {
       existing.qty += qty;
     } else {
-      needed.set(canon, { name: rawName, qty, unit, aisle: aisle || inferAisle(rawName), source });
+      needed.set(key, { name: rawName, qty, unit, aisle: aisle || inferAisle(rawName), source });
     }
   };
 
@@ -493,8 +508,9 @@ export async function generateNetGroceryItems(options: {
   let addedCount = 0;
   await batchApplyChanges('Generated net aisle-sorted grocery list', async () => {
     const changes: UndoEntry['changes'] = [];
-    for (const [canon, item] of needed.entries()) {
-      const onHand = stockByCanon.get(canon) ?? 0;
+    for (const [key, item] of needed.entries()) {
+      const canon = canonicalizeIngredientName(item.name);
+      const onHand = stockByCanon.get(key) ?? 0;
       const netQty = Number((item.qty - onHand).toFixed(2));
       if (netQty <= 0.01) continue;
 
@@ -543,22 +559,26 @@ export async function reconcileFinishedShopping(options: {
   todayIso: string;
   createExpense?: boolean;
   currency?: string;
+  itemIds?: string[];
 }): Promise<{ lotsCreated: number; totalSpent: number }> {
   const settings = await getOrInitSettings();
   const now = new Date().toISOString();
   let lotsCreated = 0;
   let totalSpent = 0;
 
+  const selected = options.itemIds ? new Set(options.itemIds) : null;
   await batchApplyChanges('Finished Shopping — reconciled into Pantry Inventory', async () => {
     const groceries = (await db.records.where('type').equals('grocery_item').toArray()).filter(
-      (r) => !r.deletedAt && r.status === 'active' && (r.payload as GroceryItemPayload).checked
+      (r) => !r.deletedAt && r.workspaceId === settings.activeWorkspaceId && r.status === 'active' && (r.payload as GroceryItemPayload).checked && (!selected || selected.has(r.id)) && (settings.activeProfileId === 'all' || !r.ownerProfileId || r.ownerProfileId === settings.activeProfileId || r.sharedWithAll || r.sharedWithProfileIds?.includes(settings.activeProfileId) || r.assigneeId === settings.activeProfileId)
     ) as Array<LifeRecord<GroceryItemPayload>>;
 
     const changes: UndoEntry['changes'] = [];
 
     for (const g of groceries) {
       const qty = g.payload.boughtQty ?? g.payload.quantity;
-      totalSpent += Number(g.payload.price || 0);
+      const price = Number(g.payload.price || 0);
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price < 0) throw new Error(`Invalid checkout quantity or price for ${g.title}.`);
+      totalSpent += price;
 
       // Mark grocery item done
       const doneGrocery: LifeRecord<GroceryItemPayload> = {
@@ -575,6 +595,9 @@ export async function reconcileFinishedShopping(options: {
       const lotRec: LifeRecord<PantryLotPayload> = {
         id: lotId,
         workspaceId: g.workspaceId,
+        ownerProfileId: g.ownerProfileId,
+        sharedWithAll: g.sharedWithAll,
+        sharedWithProfileIds: g.sharedWithProfileIds,
         type: 'pantry_lot',
         title: g.title,
         status: 'active',
@@ -619,7 +642,7 @@ export async function reconcileFinishedShopping(options: {
           links: [],
           payload: {
             amount: Number(totalSpent.toFixed(2)),
-            currency: options.currency || 'USD',
+            currency: options.currency || settings.defaultCurrency || 'USD',
             date: options.todayIso,
             category: 'Groceries',
           },

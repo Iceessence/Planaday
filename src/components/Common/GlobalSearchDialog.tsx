@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ModalDialog } from './ModalDialog';
 import { useApp } from '../../core/AppContext';
 import { globalSearchIndex } from '../../core/searchIndex';
@@ -36,8 +36,19 @@ function recordTypeToView(type: RecordType): NavView {
       return 'shopping';
     case 'goal':
       return 'goals';
-    case 'habit':
-      return 'habits';
+    case 'habit': case 'routine': return 'habits';
+    case 'alarm': return 'alarms';
+    case 'timer': case 'interval_preset': return 'timers';
+    case 'medication': case 'workout': case 'wellness_log': return 'health';
+    case 'food_log': return 'meals';
+    case 'media_item': case 'hobby_project': return 'media';
+    case 'review_card': return 'learning';
+    case 'household_member': return 'household';
+    case 'custom_space': return 'spaces';
+    case 'automation_rule': return 'automations';
+    case 'planner_book': case 'planner_page': return 'digital_planner';
+    case 'period_reflection': return 'planner';
+    case 'quick_capture': return 'quick_glance';
     case 'person':
     case 'gift':
       return 'people';
@@ -125,13 +136,44 @@ export const GlobalSearchDialog: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [settledQuery, setSettledQuery] = useState(query);
+  useEffect(() => {
+    if (!searchOpen) return;
+    const timer = window.setTimeout(() => setSettledQuery(query), 140);
+    return () => window.clearTimeout(timer);
+  }, [query, searchOpen]);
+  const pending = query !== settledQuery;
 
   // Hide records belonging to toggled-off modules from search filters (Section 02.04)
   const hiddenTypes = useMemo<RecordType[]>(() => {
     const h: RecordType[] = [];
     const em = settings.enabledModules;
     if (!em.goals) h.push('goal');
-    if (!em.habits) h.push('habit');
+    if (!em.habits) h.push('habit', 'routine');
+    if (!em.tasks) h.push('task');
+    if (!em.chores) h.push('chore');
+    if (!em.notes) h.push('note', 'notebook');
+    if (!em.thoughts) h.push('thought', 'triage_item');
+    if (!em.diary) h.push('diary');
+    if (!em.calendar) h.push('event', 'timeblock');
+    if (!em.events) h.push('life_event');
+    if (!em.time) h.push('alarm', 'timer', 'interval_preset', 'countdown');
+    if (!em.kitchen) h.push('recipe', 'pantry_lot', 'pantry_zone', 'meal_plan', 'grocery_item', 'food_log');
+    if (!em.household) h.push('household_member');
+    if (!em.calculator) h.push('calc_saved');
+    if (!em.spreadsheets) h.push('spreadsheet');
+    if (!em.presentations) h.push('presentation');
+    if (!em.projects) h.push('project', 'custom_schema', 'custom_entity');
+    if (!em.game_dev) h.push('game_project', 'game_entity');
+    if (!em.book_writing) h.push('book_project', 'book_chapter', 'book_entity');
+    if (!em.kanban) h.push('kanban_board', 'kanban_card');
+    if (!em.whiteboard) h.push('whiteboard');
+    if (!em.code_studio) h.push('code_project', 'code_snippet');
+    if (!em.photo_studio) h.push('photo_asset');
+    if (!em.files) h.push('file_folder');
+    if (!em.scanner) h.push('scanned_doc');
+    if (!em.pdf_studio) h.push('pdf_doc');
+    if (!em.lab) h.push('lab_sample', 'lab_subcontract', 'lab_inventory', 'lab_order', 'lab_budget', 'lab_price_entry', 'lab_price_template', 'lab_research', 'lab_email_draft', 'lab_task', 'lab_meeting', 'lab_calibration', 'lab_wet_nir', 'lab_work_hour', 'lab_qms_item');
     if (!em.finance) h.push('bill', 'budget_envelope', 'expense', 'warranty', 'wishlist_item');
     if (!em.health) h.push('medication', 'workout', 'wellness_log');
     if (!em.travel) h.push('trip', 'packing_template', 'party');
@@ -142,26 +184,36 @@ export const GlobalSearchDialog: React.FC = () => {
     return h;
   }, [settings.enabledModules]);
 
+  useMemo(() => { if (searchOpen) globalSearchIndex.syncFromArray(records); }, [searchOpen, records]);
   const result = useMemo(() => {
-    globalSearchIndex.syncFromArray(records);
+    if (!searchOpen) return { hits: [], total: 0, page: 1, pageCount: 1 };
     return globalSearchIndex.search(
-      query,
+      settledQuery,
       {
         types: typeFilter === 'all' ? undefined : [typeFilter as RecordType],
-        tag: tagFilter.trim() || undefined,
+        tag: tagFilter.trim().replace(/^#/, '') || undefined,
         hiddenTypes,
       },
       page,
       20
     );
-  }, [records, query, typeFilter, tagFilter, hiddenTypes, page]);
+  }, [searchOpen, records, settledQuery, typeFilter, tagFilter, hiddenTypes, page]);
 
+  const types = useMemo(() => {
+    if (!searchOpen) return [];
+    const hidden = new Set(hiddenTypes);
+    return [...new Set(records.filter(r => !r.deletedAt && !hidden.has(r.type)).map(r => r.type))].sort();
+  }, [searchOpen, records, hiddenTypes]);
+  useEffect(() => {
+    if (searchOpen && typeFilter !== 'all' && !types.includes(typeFilter as RecordType)) { setTypeFilter('all'); setPage(1); }
+  }, [searchOpen, types, typeFilter]);
   return (
     <ModalDialog open={searchOpen} onClose={() => setSearchOpen(false)} title="Global Fuzzy Search" wide>
       <div className="dp-stack">
-        <div className="dp-row">
+        <div className="dp-row" style={{ flexWrap: 'wrap' }}>
           <input
             autoFocus
+            aria-label="Search all records"
             className="dp-input"
             style={{ flex: 2 }}
             placeholder="Typo-tolerant search across tasks, notes, recipes, pantry bins, storage…"
@@ -182,36 +234,12 @@ export const GlobalSearchDialog: React.FC = () => {
             }}
           >
             <option value="all">All modules</option>
-            <option value="task">Tasks</option>
-            <option value="event">Events</option>
-            <option value="chore">Chores</option>
-            <option value="note">Notes</option>
-            <option value="spreadsheet">Spreadsheets</option>
-            <option value="presentation">Presentations</option>
-            <option value="project">Projects</option>
-            <option value="game_project">Game Dev</option>
-            <option value="book_project">Books</option>
-            <option value="book_chapter">Book Chapters</option>
-            <option value="kanban_card">Kanban Cards</option>
-            <option value="whiteboard">Whiteboards</option>
-            <option value="code_project">Code Projects</option>
-            <option value="code_snippet">Code Snippets</option>
-            <option value="photo_asset">Photos</option>
-            <option value="pdf_doc">PDF Documents</option>
-            <option value="scanned_doc">Scanned Notes (OCR)</option>
-            <option value="calc_saved">Calculations</option>
-            <option value="lab_sample">Lab Samples</option>
-            <option value="lab_inventory">Lab Inventory</option>
-            <option value="thought">Thoughts</option>
-            <option value="diary">Diary</option>
-            <option value="recipe">Recipes</option>
-            <option value="pantry_lot">Pantry</option>
-            <option value="storage_item">Storage Bins</option>
-            <option value="person">People</option>
+            {types.map((type) => <option key={type} value={type}>{type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</option>)}
           </select>
           <input
             className="dp-input"
             style={{ width: 130 }}
+            aria-label="Filter by tag"
             placeholder="#tag filter"
             value={tagFilter}
             onChange={(e) => {
@@ -222,30 +250,31 @@ export const GlobalSearchDialog: React.FC = () => {
         </div>
 
         <div className="dp-between" style={{ fontSize: '0.82rem' }}>
-          <span className="dp-muted">
-            {result.total} matches (page {result.page} of {result.pageCount}) — no 100-hit cap
+          <span className="dp-muted" role="status">
+            {pending ? 'Searching…' : `${result.total} matches (page ${result.page} of ${result.pageCount})`}
           </span>
           <div className="dp-row">
+            {(query || tagFilter || typeFilter !== 'all') && <button type="button" className="dp-btn dp-btn-sm" onClick={() => { setQuery(''); setTagFilter(''); setTypeFilter('all'); setPage(1); }}>Clear</button>}
             <button
               type="button"
               className="dp-btn dp-btn-sm"
-              disabled={result.page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={pending || result.page <= 1}
+              onClick={() => setPage(Math.max(1, result.page - 1))}
             >
               Prev
             </button>
             <button
               type="button"
               className="dp-btn dp-btn-sm"
-              disabled={result.page >= result.pageCount}
-              onClick={() => setPage((p) => Math.min(result.pageCount, p + 1))}
+              disabled={pending || result.page >= result.pageCount}
+              onClick={() => setPage(Math.min(result.pageCount, result.page + 1))}
             >
               Next
             </button>
           </div>
         </div>
 
-        {result.hits.length === 0 ? (
+        {pending ? <p className="dp-muted">Updating results…</p> : result.hits.length === 0 ? (
           <div className="dp-empty">
             <p className="dp-muted">No matches for "{query}". Try a broader term or clear filters.</p>
           </div>

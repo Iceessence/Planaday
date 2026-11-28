@@ -1,3 +1,5 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
+import { diffDaysIso } from '../../core/temporal';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -70,6 +72,8 @@ function computePxPerHour(intervalMin: number): number {
 
 export const FlowCalendarView: React.FC = () => {
   const { settings, patchSettings, records, activeDate, setActiveDate, logicalToday, pushToast, selectedEventId, setSelectedEventId } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
 
   const calPrefs: CalendarViewPrefs = settings.calendarPrefs ?? {
     intervalMin: 15,
@@ -179,6 +183,8 @@ export const FlowCalendarView: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const icsInputRef = useRef<HTMLInputElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const resizeCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => { resizeCleanup.current?.(); if (longPressTimerRef.current !== null) window.clearTimeout(longPressTimerRef.current); }, []);
 
   const events = useMemo(
     () => records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>,
@@ -193,7 +199,7 @@ export const FlowCalendarView: React.FC = () => {
   const filteredEvents = useMemo(() => {
     const q = calSearch.trim().toLowerCase();
     return events.filter((ev) => {
-      if (ev.payload.calendarId && visibleCalendarIds.size > 0 && !visibleCalendarIds.has(ev.payload.calendarId)) {
+      if (ev.payload.calendarId && calendars.some(c => c.id === ev.payload.calendarId) && !visibleCalendarIds.has(ev.payload.calendarId)) {
         return false;
       }
       if (calCategoryFilter !== 'all' && (ev.category || 'Personal') !== calCategoryFilter) return false;
@@ -207,7 +213,7 @@ export const FlowCalendarView: React.FC = () => {
       }
       return true;
     });
-  }, [events, calSearch, calCategoryFilter, calChipFilter, logicalToday]);
+  }, [events, calSearch, calCategoryFilter, calChipFilter, logicalToday, visibleCalendarIds, calendars]);
 
   const unscheduledActions = useMemo(
     () => records.filter((r) => (r.type === 'task' || r.type === 'chore') && r.status === 'active').slice(0, 10),
@@ -480,6 +486,8 @@ export const FlowCalendarView: React.FC = () => {
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (!startDate || !endDate || endDate < startDate || (!allDay && (!startTime || !endTime))) { pushToast('Choose valid event dates and times.', { tone: 'warn' }); return; }
+    if (!allDay && endDate === startDate && endTime <= startTime) { pushToast('End must follow start. Choose the next date for an overnight event.', { tone: 'warn' }); return; }
 
     const payload: CalendarEventPayload = {
       startDate,
@@ -540,16 +548,10 @@ export const FlowCalendarView: React.FC = () => {
       }
       await updateRecord<CalendarEventPayload>(
         editingId,
-        {
-          title: title.trim(),
-          color,
-          category,
-          recurrence: builtRecurrence,
-          sharedWithAll,
-          sharedWithProfileIds,
-          isImportant,
-          payload,
-        },
+        (current) => ({
+          ...current, title: title.trim(), color, category, recurrence: builtRecurrence, sharedWithAll, sharedWithProfileIds, isImportant,
+          payload: { ...current.payload, ...payload },
+        }),
         { undoLabel: `Updated event "${title.trim()}"` }
       );
       pushToast(`Saved "${title.trim()}"`, { canUndo: true });
@@ -577,14 +579,17 @@ export const FlowCalendarView: React.FC = () => {
   ) => {
     const oldStartMin = timeToMinutes(ev.payload.startTime || '09:00');
     const oldEndMin = timeToMinutes(ev.payload.endTime || '10:00');
-    const durMin = Math.max(15, oldEndMin - oldStartMin);
-    const newEndTime = minutesToTime(timeToMinutes(targetStartTime) + durMin);
+    const daySpan = Math.max(0, diffDaysIso(ev.payload.startDate, ev.payload.endDate || ev.payload.startDate));
+    const durMin = Math.max(15, daySpan * 1440 + oldEndMin - oldStartMin);
+    const endMinute = timeToMinutes(targetStartTime) + durMin;
+    const newEndTime = minutesToTime(endMinute % 1440);
+    const targetEndDate = addDaysIso(targetDate, Math.floor(endMinute / 1440));
 
     if (copyMode) {
       await createRecord<CalendarEventPayload>(
         'event',
         `${ev.title} (Copy)`,
-        { ...ev.payload, startDate: targetDate, endDate: targetDate, startTime: targetStartTime, endTime: newEndTime },
+        { ...ev.payload, startDate: targetDate, endDate: targetEndDate, startTime: targetStartTime, endTime: newEndTime },
         { color: ev.color, category: ev.category, tags: [...ev.tags] }
       );
       pushToast(`Copied "${ev.title}" to ${targetDate} ${targetStartTime}`, { canUndo: true });
@@ -593,7 +598,7 @@ export const FlowCalendarView: React.FC = () => {
 
     const patch: Partial<CalendarEventPayload> = {
       startDate: targetDate,
-      endDate: targetDate,
+      endDate: targetEndDate,
       startTime: targetStartTime,
       endTime: newEndTime,
     };
@@ -1159,13 +1164,13 @@ export const FlowCalendarView: React.FC = () => {
         {selectedIds.size > 0 && (
           <div className="dp-row" style={{ padding: 8, background: 'var(--dp-surface-2)', borderRadius: 8 }}>
             <strong>{selectedIds.size} selected</strong>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleBatchShift(1)}>
+            <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('calendar-batch', () => handleBatchShift(1))}>
               Shift +1d
             </button>
-            <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleBatchShift(-1)}>
+            <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('calendar-batch', () => handleBatchShift(-1))}>
               Shift −1d
             </button>
-            <button type="button" className="dp-btn dp-btn-danger dp-btn-sm" onClick={() => void handleBatchDelete()}>
+            <button type="button" className="dp-btn dp-btn-danger dp-btn-sm" onClick={guardAction('calendar-batch', () => handleBatchDelete())}>
               Trash Selected
             </button>
             <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" onClick={() => setSelectedIds(new Set())}>
@@ -1655,6 +1660,9 @@ export const FlowCalendarView: React.FC = () => {
                             onPointerDown={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
+                              resizeCleanup.current?.();
+                              const pointerId = e.pointerId;
+                              let frame = 0;
                               const startY = e.clientY;
                               const origEndMin = pos.endMin;
                               const minDur = Math.max(5, Math.min(15, gridStepMin));
@@ -1683,17 +1691,26 @@ export const FlowCalendarView: React.FC = () => {
                               };
 
                               const onMove = (evMove: PointerEvent) => {
+                                if (evMove.pointerId !== pointerId) return;
                                 const dy = evMove.clientY - startY;
                                 if (Math.abs(dy) >= 4) dragged = true;
                                 if (!dragged) return;
                                 const deltaMin = Math.round(((dy / Math.max(1, totalGridHeight)) * visibleTotalMin) / gridStepMin) * gridStepMin;
                                 latestEndMin = Math.max(pos.startMin + minDur, Math.min(24 * 60, origEndMin + deltaMin));
-                                setResizingPreview({ eventId: pos.event.id, occDate: pos.occurrenceDate, endMin: latestEndMin });
+                                if (!frame) frame = requestAnimationFrame(() => { frame = 0; setResizingPreview({ eventId: pos.event.id, occDate: pos.occurrenceDate, endMin: latestEndMin }); });
                               };
 
-                              const onUp = () => {
+                              const cleanup = () => {
                                 window.removeEventListener('pointermove', onMove);
                                 window.removeEventListener('pointerup', onUp);
+                                window.removeEventListener('pointercancel', onCancel);
+                                if (frame) cancelAnimationFrame(frame);
+                                resizeCleanup.current = null;
+                              };
+                              const onCancel = (event: PointerEvent) => { if (event.pointerId !== pointerId) return; cleanup(); setResizingPreview(null); };
+                              const onUp = (event: PointerEvent) => {
+                                if (event.pointerId !== pointerId) return;
+                                cleanup();
                                 setResizingPreview(null);
                                 if (dragged) {
                                   if (latestEndMin !== origEndMin) commitEnd(latestEndMin);
@@ -1704,6 +1721,8 @@ export const FlowCalendarView: React.FC = () => {
 
                               window.addEventListener('pointermove', onMove);
                               window.addEventListener('pointerup', onUp);
+                              window.addEventListener('pointercancel', onCancel);
+                              resizeCleanup.current = cleanup;
                             }}
                             onClick={(e) => {
                               // Click extension is handled cleanly on pointerUp when not dragged
@@ -1808,7 +1827,7 @@ export const FlowCalendarView: React.FC = () => {
         onClose={() => setEditorOpen(false)}
         title={editingId ? 'Edit Calendar Event' : 'New Calendar Event'}
       >
-        <form className="dp-stack" onSubmit={handleSaveEvent}>
+        <form className="dp-stack" onSubmit={guardForm('form-1', handleSaveEvent)}>
           {/* Editable Templates */}
           <div className="dp-row" style={{ gap: 6 }}>
             {EVENT_TEMPLATES.map((tpl) => (

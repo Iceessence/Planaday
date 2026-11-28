@@ -10,7 +10,7 @@ import { QuickCaptureDialog } from './components/Common/QuickCaptureDialog';
 import { GlobalSearchDialog } from './components/Common/GlobalSearchDialog';
 import { CommandPalette } from './components/Common/CommandPalette';
 import { OnboardingModal } from './components/Settings/OnboardingModal';
-import { TodaySpread } from './modules/plan/TodaySpread';
+const TodaySpread = lazy(() => import('./modules/plan/TodaySpread').then((m) => ({ default: m.TodaySpread })));
 import { ZenSheetOverlay } from './modules/time/ZenSheetOverlay';
 import { DecorCanvasOverlay } from './components/Decor/DecorCanvas';
 
@@ -60,6 +60,15 @@ const DocumentScannerView = lazy(() => import('./modules/studio/DocumentScannerV
 const PdfStudioView = lazy(() => import('./modules/studio/PdfStudioView').then((m) => ({ default: m.PdfStudioView })));
 const FileManagerView = lazy(() => import('./modules/studio/FileManagerView').then((m) => ({ default: m.FileManagerView })));
 
+class StudioBoundary extends React.Component<React.PropsWithChildren, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { console.error('Planaday studio failed', error); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <div className="dp-card dp-stack" role="alert"><strong>This studio could not open.</strong><p>Other workspace tabs remain available. Retry or reload if a cached app update failed.</p><button type="button" className="dp-btn" onClick={() => this.setState({ failed: false })}>Retry studio</button><button type="button" className="dp-btn" onClick={() => window.location.reload()}>Reload app</button></div>;
+  }
+}
 const ActiveWorkspaceStage: React.FC = () => {
   const { activeView, activeCustomTabId } = useApp();
 
@@ -125,7 +134,7 @@ const ActiveWorkspaceStage: React.FC = () => {
 };
 
 const ShellFrame: React.FC = () => {
-  const { ready, storageHealth, openConflicts, setActiveView } = useApp();
+  const { ready, storageHealth, openConflicts, setActiveView, activeView, activeCustomTabId } = useApp();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   if (!ready) {
@@ -166,9 +175,9 @@ const ShellFrame: React.FC = () => {
         )}
 
         <main className="dp-content">
-          <Suspense fallback={<div className="dp-card" style={{ padding: '1.5rem' }}>Loading Planaday studio…</div>}>
+          <StudioBoundary key={`${activeView}:${activeCustomTabId ?? ''}`}><Suspense fallback={<div className="dp-card" role="status" style={{ padding: '1.5rem' }}>Loading Planaday studio…</div>}>
             <ActiveWorkspaceStage />
-          </Suspense>
+          </Suspense></StudioBoundary>
         </main>
       </div>
 

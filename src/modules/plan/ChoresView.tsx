@@ -1,3 +1,4 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { CalendarPlus, Check, Download, Pause, Pencil, Play, Plus } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -13,6 +14,7 @@ import type { ChorePayload, LifeRecord } from '../../core/types';
 
 export const ChoresView: React.FC = () => {
   const { settings, patchSettings, records, logicalToday, activeDate, pushToast } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
   const [title, setTitle] = useState('');
   const [room, setRoom] = useState('Kitchen');
   const [intervalDays, setIntervalDays] = useState(3);
@@ -47,13 +49,14 @@ export const ChoresView: React.FC = () => {
   const punctuality = useMemo(() => computeChorePunctualityStats(chores), [chores]);
   const punctualityById = useMemo(() => new Map(punctuality.perChore.map((x) => [x.choreId, x])), [punctuality]);
 
+  const freshnessById = useMemo(() => new Map(chores.map(c => [c.id, computeChoreFreshnessAtDate(c.payload, replayDate)])), [chores, replayDate]);
   const filtered = useMemo(() => {
     const q = choreSearch.trim().toLowerCase();
     const list = chores.filter((c) => {
       if (energyFilter !== 'all' && c.energy !== energyFilter) return false;
       if ((c.estimateMin ?? 15) > maxMinFilter) return false;
       if (roomFilter !== 'all' && c.payload.room !== roomFilter) return false;
-      const st = computeChoreFreshnessAtDate(c.payload, replayDate);
+      const st = freshnessById.get(c.id)!;
       if (dueFilter === 'overdue' && st.status !== 'overdue') return false;
       if (dueFilter === 'due_today' && st.status !== 'due_today' && st.status !== 'overdue') return false;
       if (dueFilter === 'fresh' && st.status !== 'fresh') return false;
@@ -75,13 +78,13 @@ export const ChoresView: React.FC = () => {
       if (sortBy === 'room') return a.payload.room.localeCompare(b.payload.room) * dir;
       if (sortBy === 'difficulty') return ((a.payload.difficulty || 1) - (b.payload.difficulty || 1)) * dir;
       if (sortBy === 'freshness') {
-        const fa = computeChoreFreshnessAtDate(a.payload, replayDate).freshnessPct;
-        const fb = computeChoreFreshnessAtDate(b.payload, replayDate).freshnessPct;
+        const fa = freshnessById.get(a.id)!.freshnessPct;
+        const fb = freshnessById.get(b.id)!.freshnessPct;
         return (fa - fb) * dir;
       }
       return (a.payload.nextDueDate || '9999').localeCompare(b.payload.nextDueDate || '9999') * dir;
     });
-  }, [chores, energyFilter, maxMinFilter, choreSearch, roomFilter, dueFilter, replayDate, sortBy, sortDir]);
+  }, [chores, energyFilter, maxMinFilter, choreSearch, roomFilter, dueFilter, freshnessById, sortBy, sortDir]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +236,7 @@ export const ChoresView: React.FC = () => {
       )}
 
       {/* Add Chore Form */}
-      <form className="dp-card dp-stack" style={{ padding: 12 }} onSubmit={handleAdd}>
+      <form className="dp-card dp-stack" style={{ padding: 12 }} onSubmit={guardForm('form-1', handleAdd)}>
         <div className="dp-row">
           <input className="dp-input" style={{ flex: 2 }} placeholder="New chore (e.g., Wash bedsheets)…" value={title} onChange={(e) => setTitle(e.target.value)} />
           <input list="dp-chore-rooms" className="dp-input" style={{ flex: 1 }} placeholder="Room / Zone (pick or type)…" value={room} onChange={(e) => setRoom(e.target.value)} />
@@ -397,7 +400,7 @@ export const ChoresView: React.FC = () => {
       {/* Chores List */}
       <div className="dp-stack">
         {filtered.map((c) => {
-          const state = computeChoreFreshnessAtDate(c.payload, replayDate);
+          const state = freshnessById.get(c.id)!;
           return (
             <div
               key={c.id}

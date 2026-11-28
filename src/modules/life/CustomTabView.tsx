@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   ArrowDown,
@@ -102,6 +103,9 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
     triggerAlarmRing,
     pushToast,
   } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   const [editingHeader, setEditingHeader] = useState(false);
   const [addingWidget, setAddingWidget] = useState(false);
@@ -132,7 +136,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
   const [linkUrlInputs, setLinkUrlInputs] = useState<Record<string, string>>({});
 
   const tab = useMemo(
-    () => settings.customTabs.find((t) => t.id === tabId) ?? settings.customTabs[0] ?? null,
+    () => tabId ? settings.customTabs.find((t) => t.id === tabId) ?? null : settings.customTabs[0] ?? null,
     [settings.customTabs, tabId]
   );
 
@@ -141,6 +145,12 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
     const next = settings.customTabs.map((t) => (t.id === tab.id ? updater(t) : t));
     void patchSettings({ customTabs: next });
   };
+
+  const allEvents = useMemo(() => records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>, [records]);
+  const allTasks = useMemo(() => records.filter((r) => r.type === 'task') as Array<LifeRecord<TaskPayload>>, [records]);
+  const allChores = useMemo(() => records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<LifeRecord<ChorePayload>>, [records]);
+  const allAlarms = useMemo(() => records.filter((r) => r.type === 'alarm' && r.status === 'active'), [records]);
+  const allHabits = useMemo(() => records.filter((r) => r.type === 'habit' && r.status === 'active') as Array<LifeRecord<HabitPayload>>, [records]);
 
   if (!tab) {
     return (
@@ -156,11 +166,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
     );
   }
 
-  const allEvents = records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>;
-  const allTasks = records.filter((r) => r.type === 'task') as Array<LifeRecord<TaskPayload>>;
-  const allChores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<LifeRecord<ChorePayload>>;
-  const allAlarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
-  const allHabits = records.filter((r) => r.type === 'habit' && r.status === 'active') as Array<LifeRecord<HabitPayload>>;
+
 
   const handleAddWidget = (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,7 +326,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
 
       {/* Add Widget Panel */}
       {addingWidget && (
-        <form className="dp-card dp-stack" style={{ padding: 14, gap: 10, background: 'var(--dp-surface-2)', borderColor: 'var(--dp-accent)' }} onSubmit={handleAddWidget}>
+        <form className="dp-card dp-stack" style={{ padding: 14, gap: 10, background: 'var(--dp-surface-2)', borderColor: 'var(--dp-accent)' }} onSubmit={guardForm('form-1', handleAddWidget)}>
           <div className="dp-between">
             <strong>Choose a Widget to Add to &ldquo;{tab.name}&rdquo;</strong>
             <button type="button" className="dp-btn dp-btn-ghost dp-btn-sm" onClick={() => setAddingWidget(false)}>
@@ -742,6 +748,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                               const lbl = (linkLabelInputs[w.id] || '').trim();
                               const url = (linkUrlInputs[w.id] || '').trim();
                               if (!lbl || !url) return;
+                              if (!/^https?:\/\//i.test(url)) { pushToast('Enter an http:// or https:// URL.', { tone: 'warn' }); return; }
                               patchWidget(w.id, (cur) => ({
                                 ...cur,
                                 links: [...(cur.links ?? []), { id: createId('lnk'), label: lbl, url }],
@@ -854,7 +861,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                         type="button"
                         className="dp-btn dp-btn-sm"
                         style={{ alignSelf: 'flex-start' }}
-                        onClick={async () => {
+                        onClick={guardAction('action-1', async () => {
                           const now = new Date();
                           const st = minutesToTime(Math.min(22 * 60, Math.ceil((now.getHours() * 60 + now.getMinutes() + 30) / 15) * 15));
                           const en = minutesToTime(Math.min(23 * 60, Math.ceil((now.getHours() * 60 + now.getMinutes() + 90) / 15) * 15));
@@ -866,7 +873,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                             { category: w.filterCategory || 'Personal', color: catObj?.color || tab.color }
                           );
                           openEventInCalendar(created.id, logicalToday);
-                        }}
+                        })}
                       >
                         + New Event Here
                       </button>
@@ -889,7 +896,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                     <div className="dp-stack" style={{ gap: 6 }}>
                       <form
                         className="dp-row"
-                        onSubmit={async (e) => {
+                        onSubmit={guardForm('form-2', async (e) => {
                           e.preventDefault();
                           const txt = (taskInputs[w.id] || '').trim();
                           if (!txt) return;
@@ -904,7 +911,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                             }
                           );
                           setTaskInputs((p) => ({ ...p, [w.id]: '' }));
-                        }}
+                        })}
                       >
                         <input
                           className="dp-input"
@@ -1165,7 +1172,7 @@ export const CustomTabView: React.FC<{ tabId: string | null }> = ({ tabId }) => 
                               </button>
                             ) : (
                               <a
-                                href={lnk.url}
+                                href={/^https?:\/\//i.test(lnk.url ?? '') ? lnk.url : undefined}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="dp-btn dp-btn-sm"

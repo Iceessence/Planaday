@@ -1,3 +1,4 @@
+import { useMinuteClock } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckCircle2, Download, ExternalLink, History, MessageSquareHeart, Sparkles } from 'lucide-react';
@@ -37,7 +38,7 @@ export const HistoryView: React.FC = () => {
   const [retroRating, setRetroRating] = useState<1 | 2 | 3 | 4 | 5>(4);
   const [retroNote, setRetroNote] = useState('');
 
-  const timeLedger = useLiveQuery(() => db.timeLedger.orderBy('startedAt').reverse().limit(100).toArray(), []) ?? [];
+  const timeLedger = useLiveQuery(() => db.timeLedger.orderBy('startedAt').reverse().filter(entry => entry.workspaceId === settings.activeWorkspaceId).limit(100).toArray(), [settings.activeWorkspaceId]) ?? [];
 
   const chores = useMemo(
     () => records.filter((r) => r.type === 'chore') as Array<LifeRecord<ChorePayload>>,
@@ -51,13 +52,14 @@ export const HistoryView: React.FC = () => {
   );
 
   // Past events awaiting a "How did it go?" check-in
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const clock = useMinuteClock();
+  const nowMin = clock.getHours() * 60 + clock.getMinutes();
   const unreviewedPastEvents = useMemo(() => {
     return events
       .filter((ev) => {
-        if (ev.payload.retrospective) return false;
-        if (ev.payload.startDate < logicalToday) return true;
-        if (ev.payload.startDate === logicalToday && !ev.payload.allDay && ev.payload.endTime) {
+        if (ev.payload.retrospective || ev.payload.eventStatus === 'canceled') return false;
+        if ((ev.payload.endDate || ev.payload.startDate) < logicalToday) return true;
+        if ((ev.payload.endDate || ev.payload.startDate) === logicalToday && !ev.payload.allDay && ev.payload.endTime) {
           return timeToMinutes(ev.payload.endTime) <= nowMin;
         }
         return false;
@@ -110,9 +112,10 @@ export const HistoryView: React.FC = () => {
 
     // 3. Past / Reviewed Events
     for (const ev of events) {
+      if (ev.payload.eventStatus === 'canceled' && !ev.payload.retrospective) continue;
       const isPast =
-        ev.payload.startDate < logicalToday ||
-        (ev.payload.startDate === logicalToday && !ev.payload.allDay && ev.payload.endTime && timeToMinutes(ev.payload.endTime) <= nowMin);
+        (ev.payload.endDate || ev.payload.startDate) < logicalToday ||
+        ((ev.payload.endDate || ev.payload.startDate) === logicalToday && !ev.payload.allDay && ev.payload.endTime && timeToMinutes(ev.payload.endTime) <= nowMin);
       if (!isPast && !ev.payload.retrospective) continue;
       const r = ev.payload.retrospective;
       list.push({

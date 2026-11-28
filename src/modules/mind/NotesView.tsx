@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -27,7 +28,9 @@ import {
   softDeleteRecord,
   updateRecord,
 } from '../../core/repository';
+import { withScopedRecords } from '../../components/Common/viewSafety';
 import {
+  findCanonicalDailyNote,
   convertDailyNoteToTarget,
   DAILY_NOTE_CATEGORIES,
   isDailyArchiveNote,
@@ -59,6 +62,7 @@ export const NotesView: React.FC = () => {
     setNotesInitialTab,
     syncState,
   } = useApp();
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'warn' }));
 
   const [notesTab, setNotesTab] = useState<'all' | 'daily' | 'graph'>(notesInitialTab);
   const [dailyCategoryFilter, setDailyCategoryFilter] = useState<'all' | DailyNoteCategory>('all');
@@ -101,7 +105,9 @@ export const NotesView: React.FC = () => {
   const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const voiceStarting = useRef(false);
+  const voiceMounted = useRef(true);
+  useEffect(() => { voiceMounted.current = true; return () => { voiceMounted.current = false; const mr = mediaRecRef.current; if (mr && mr.state !== 'inactive') mr.stop(); mr?.stream.getTracks().forEach(t => t.stop()); }; }, []);
   const lastRevisionAtRef = useRef<Record<string, number>>({});
 
   const customNotebooks = useMemo(
@@ -133,8 +139,11 @@ export const NotesView: React.FC = () => {
     return counts;
   }, [dailyArchiveNotes, showArchived]);
 
+  const deferredSearch = useDeferredValue(noteSearch);
   const visibleNotes = useMemo(() => {
-    const q = noteSearch.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
+    const counts = new Map<string, number>();
+    const countWords = (n: LifeRecord<NotePayload>) => { const existing = counts.get(n.id); if (existing !== undefined) return existing; const count = (n.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length; counts.set(n.id, count); return count; };
     const baseSource = notesTab === 'daily' ? dailyArchiveNotes : notes;
     const list = baseSource.filter((n) => {
       if (!showArchived && n.payload.archived) return false;
@@ -167,8 +176,8 @@ export const NotesView: React.FC = () => {
         return da.localeCompare(dbDate) * dir;
       }
       if (noteSortBy === 'words') {
-        const wa = (a.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length;
-        const wb = (b.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length;
+        const wa = countWords(a);
+        const wb = countWords(b);
         return (wa - wb) * dir;
       }
       return a.updatedAt.localeCompare(b.updatedAt) * dir;
@@ -180,7 +189,7 @@ export const NotesView: React.FC = () => {
     dailyCategoryFilter,
     dailyDateFilter,
     activeNotebook,
-    noteSearch,
+    deferredSearch,
     notePinFilter,
     noteSortBy,
     noteSortDir,
@@ -201,13 +210,18 @@ export const NotesView: React.FC = () => {
     return map;
   }, [visibleNotes]);
 
+  const allChildrenByParent = useMemo(() => {
+    const map = new Map<string, typeof notes>();
+    for (const n of notes) { const key = n.payload.parentId; if (!key) continue; const group = map.get(key); if (group) group.push(n); else map.set(key, [n]); }
+    return map;
+  }, [notes]);
   const getDescendantIds = useCallback(
     (rootId: string): Set<string> => {
       const out = new Set<string>([rootId]);
       const queue = [rootId];
       while (queue.length) {
-        const cur = queue.shift()!;
-        for (const n of notes) {
+        const cur = queue.pop()!;
+        for (const n of allChildrenByParent.get(cur) ?? []) {
           if (n.payload.parentId === cur && !out.has(n.id)) {
             out.add(n.id);
             queue.push(n.id);
@@ -216,7 +230,7 @@ export const NotesView: React.FC = () => {
       }
       return out;
     },
-    [notes]
+    [allChildrenByParent]
   );
 
   const getBreadcrumbTrail = useCallback(
@@ -240,9 +254,12 @@ export const NotesView: React.FC = () => {
     [notes, selectedNoteId, visibleNotes]
   );
 
-  // Load object URLs via bounded LRU blobUrlCache (lifecycle managed centrally in blobCache.ts!)
+  // Own URLs for the active note so unrelated LRU eviction cannot invalidate visible attachments.
   useEffect(() => {
     let active = true;
+    setBlobUrls({});
+    setLightboxUrl(null);
+    const owned = new Set<string>();
     const ids = [
       ...(activeNote?.payload.attachmentBlobIds ?? []),
       ...(activeNote?.payload.voiceMemoBlobIds ?? []),
@@ -251,25 +268,25 @@ export const NotesView: React.FC = () => {
     ];
     (async () => {
       const next: Record<string, string> = {};
-      for (const h of ids) {
-        const u = await getBlobObjectUrl(h);
-        if (u) {
-          next[h] = u;
-        }
+      for (const h of new Set(ids)) {
+        const u = await getBlobObjectUrl(h, false, true);
+        if (!active) { if (u) URL.revokeObjectURL(u); break; }
+        if (u) { owned.add(u); next[h] = u; }
       }
       if (active) {
         setBlobUrls(next);
       }
-    })();
+    })().catch(() => { if (active) setBlobUrls({}); });
     return () => {
       active = false;
+      owned.forEach(url => URL.revokeObjectURL(url));
     };
   }, [
     activeNote?.id,
-    activeNote?.payload.attachmentBlobIds?.length,
-    activeNote?.payload.voiceMemoBlobIds?.length,
+    activeNote?.payload.attachmentBlobIds?.join(','),
+    activeNote?.payload.voiceMemoBlobIds?.join(','),
     activeNote?.payload.sketchBlobId,
-    activeNote?.payload.ocrSourceBlobIds?.length,
+    activeNote?.payload.ocrSourceBlobIds?.join(','),
   ]);
 
   // IME-safe, cursor-preserving, RECORD-BOUND title & body commits (eliminates PD-016 cross-note overwrite!)
@@ -342,7 +359,7 @@ export const NotesView: React.FC = () => {
 
   const handleManualSave = useCallback(async () => {
     await Promise.all([titleBuffer.flushNow(true), bodyBuffer.flushNow(true)]);
-    pushToast('Saved note locally (queued for sync)');
+    pushToast('Local save requested. Check the editor save indicator for completion.');
   }, [titleBuffer, bodyBuffer, pushToast]);
 
   // Ctrl+S / Cmd+S manual save inside Notes
@@ -380,14 +397,17 @@ export const NotesView: React.FC = () => {
   };
 
   const handleDuplicateSubtree = async (root: LifeRecord<NotePayload>) => {
+    const visited = new Set<string>();
     const cloneBranch = async (src: LifeRecord<NotePayload>, newParentId: string | null): Promise<LifeRecord<NotePayload>> => {
+      if (visited.has(src.id)) throw new Error('Cannot duplicate a cyclic note tree. Repair the parent links first.');
+      visited.add(src.id);
       const copy = await createRecord<NotePayload>('note', `${src.title}${newParentId === src.payload.parentId ? ' (Copy)' : ''}`, {
         ...src.payload,
         parentId: newParentId,
         writtenForDate: logicalToday,
         touchedDates: [logicalToday],
       });
-      const kids = notes.filter((n) => n.payload.parentId === src.id);
+      const kids = allChildrenByParent.get(src.id) ?? [];
       for (const k of kids) {
         await cloneBranch(k, copy.id);
       }
@@ -472,21 +492,27 @@ export const NotesView: React.FC = () => {
   const toggleVoiceRecording = async () => {
     if (!activeNote) return;
     if (recording && mediaRecRef.current) {
-      mediaRecRef.current.stop();
+      if (mediaRecRef.current.state !== 'inactive') mediaRecRef.current.stop();
       setRecording(false);
       return;
     }
+    if (voiceStarting.current) return;
+    voiceStarting.current = true;
+    let stream: MediaStream | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!voiceMounted.current) { stream.getTracks().forEach(t => t.stop()); return; }
       const mr = new MediaRecorder(stream);
-      audioChunksRef.current = [];
+      const chunks: Blob[] = [];
       mr.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        if (e.data.size > 0) chunks.push(e.data);
       };
       mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const stored = await storeBlob(blob, `voice-${Date.now()}.webm`);
+        mr.stream.getTracks().forEach((t) => t.stop());
+        if (mediaRecRef.current === mr) mediaRecRef.current = null;
+        const blob = new Blob(chunks, { type: mr.mimeType || chunks[0]?.type || 'audio/webm' });
+        const extension = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+        const stored = await storeBlob(blob, `voice-${Date.now()}.${extension}`);
         await updateRecord<NotePayload>(activeNote.id, (cur) => ({
           ...cur,
           payload: {
@@ -500,8 +526,9 @@ export const NotesView: React.FC = () => {
       mr.start();
       setRecording(true);
     } catch {
+      stream?.getTracks().forEach(t => t.stop());
       pushToast('Microphone permission unavailable in this environment.', { tone: 'warn' });
-    }
+    } finally { voiceStarting.current = false; }
   };
 
   const saveSketchBlob = async () => {
@@ -662,7 +689,7 @@ export const NotesView: React.FC = () => {
           <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('scanner')}>
             <Camera size={14} /> Scan Physical Note
           </button>
-          <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleCreateNote()}>
+          <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={guardAction('action-1', () => handleCreateNote())}>
             <FilePlus size={14} /> New Note
           </button>
         </div>
@@ -685,13 +712,13 @@ export const NotesView: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn dp-btn-primary dp-btn-sm"
-                onClick={async () => {
+                onClick={guardAction('action-2', async () => {
                   const targetDate = dailyDateFilter || activeDate || logicalToday;
-                  const created = await upsertCanonicalDailyNote(records, targetDate, '');
+                  const created = await withScopedRecords(settings, 'note', async fresh => findCanonicalDailyNote(fresh, targetDate) ?? await upsertCanonicalDailyNote(fresh, targetDate, '', { workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId }));
                   setSelectedNoteId(created.id);
                   setMobilePane('editor');
                   pushToast(`Opened canonical Daily Note for ${targetDate}`);
-                }}
+                })}
               >
                 + Open / Create Daily Note ({dailyDateFilter || activeDate || logicalToday})
               </button>
@@ -1179,7 +1206,7 @@ export const NotesView: React.FC = () => {
                   ))}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleCreateNote(activeNote.id)}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('action-3', () => handleCreateNote(activeNote.id))}>
                     + Sub-Note
                   </button>
                   <select
@@ -1204,7 +1231,7 @@ export const NotesView: React.FC = () => {
                         ));
                     })()}
                   </select>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleDuplicateSubtree(activeNote)}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('action-4', () => handleDuplicateSubtree(activeNote))}>
                     Duplicate Branch
                   </button>
                   <button

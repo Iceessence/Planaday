@@ -1,3 +1,4 @@
+import { scopeKey, withScopedRecords } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import {
   BookOpen,
@@ -16,7 +17,7 @@ import { useApp } from '../../core/AppContext';
 import { createId } from '../../core/db';
 import { createRecord, updateRecord } from '../../core/repository';
 import { DecorCanvasOverlay } from '../../components/Decor/DecorCanvas';
-import { SafeTextarea } from '../../components/Common/SafeTextEditor';
+import { SafeInput, SafeTextarea } from '../../components/Common/SafeTextEditor';
 import type { CalendarEventPayload, ChorePayload, LifeRecord, TaskPayload } from '../../core/types';
 
 export type PlannerPageTemplate =
@@ -121,7 +122,7 @@ const PAGE_TEMPLATES: Array<{ id: PlannerPageTemplate; label: string }> = [
 
 function createDefaultBookPayload(todayIso: string): PlannerBookPayload {
   return {
-    subtitle: 'Handcrafted Personal Edition · 2026',
+    subtitle: `Handcrafted Personal Edition · ${todayIso.slice(0, 4)}`,
     orientation: 'landscape',
     frontCoverColor: '#4c3828',
     backCoverColor: '#3b2b1e',
@@ -179,15 +180,16 @@ export const DigitalPlannerView: React.FC = () => {
   );
 
   const activeBook = books[0] ?? null;
-  const bookPayload: PlannerBookPayload = activeBook?.payload ?? createDefaultBookPayload(logicalToday);
+  const defaultBook = useMemo(() => createDefaultBookPayload(logicalToday), [logicalToday]);
+  const bookPayload: PlannerBookPayload = activeBook?.payload ?? defaultBook;
 
-  const saveBook = async (updater: (cur: PlannerBookPayload) => PlannerBookPayload) => {
-    if (activeBook) {
-      await updateRecord<PlannerBookPayload>(activeBook.id, (c) => ({ ...c, payload: updater(c.payload) }), { skipUndo: true });
-    } else {
-      const next = updater(createDefaultBookPayload(logicalToday));
-      await createRecord<PlannerBookPayload>('planner_book', `${settings.plannerTitle} Physical Planner`, next);
-    }
+  const saveBook = async (updater: (cur: PlannerBookPayload) => PlannerBookPayload, propagateError = false) => {
+    try { await withScopedRecords(settings, 'planner_book', async fresh => {
+      const current = activeBook ? fresh.find(b => b.id === activeBook.id) : fresh[0];
+      if (current) await updateRecord<PlannerBookPayload>(current.id, c => ({ ...c, payload: updater(c.payload) }), { skipUndo: true });
+      else if (!activeBook) await createRecord<PlannerBookPayload>('planner_book', `${settings.plannerTitle} Physical Planner`, updater(defaultBook), { workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId });
+      else throw new Error('Planner no longer exists.');
+    }); } catch (error) { pushToast(error instanceof Error ? error.message : 'Planner save failed', { tone: 'warn' }); if (propagateError) throw error; }
   };
 
   const pages = bookPayload.pages;
@@ -211,9 +213,7 @@ export const DigitalPlannerView: React.FC = () => {
     [records]
   );
 
-  const updatePage = (id: string, patch: Partial<PlannerPageDef>) => {
-    void saveBook((b) => ({ ...b, pages: b.pages.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
-  };
+  const updatePage = (id: string, patch: Partial<PlannerPageDef>, propagateError = false) => saveBook((b) => ({ ...b, pages: b.pages.map((p) => (p.id === id ? { ...p, ...patch } : p)) }), propagateError);
 
   const renderPaperBg = (pg: PlannerPageDef): React.CSSProperties => {
     const sp = Math.max(14, pg.lineSpacingPx || 26);
@@ -258,11 +258,12 @@ export const DigitalPlannerView: React.FC = () => {
       <DecorCanvasOverlay spreadKey={`digiplanner:${activeBook?.id ?? 'default'}:${pg.id}`} />
 
       <div className="dp-between" style={{ paddingInlineEnd: 110, flexWrap: 'wrap', gap: 6 }}>
-        <input
+        <SafeInput
+          recordKey={`digipg:${scopeKey(settings)}:${pg.id}:title`}
           className="dp-input"
           style={{ fontWeight: 700, fontSize: '1.02rem', background: 'transparent', border: 'none', borderBottom: '1px dashed var(--dp-border)', borderRadius: 0, padding: '2px 4px', flex: 1 }}
-          value={pg.title}
-          onChange={(e) => updatePage(pg.id, { title: e.target.value })}
+          externalValue={pg.title}
+          onCommit={val => updatePage(pg.id, { title: val }, true)}
           aria-label="Planner page title"
         />
         <span className="dp-pill" style={{ fontSize: '0.7rem' }}>p.{idx + 1} · {pg.template.replace('_', ' ')}</span>
@@ -319,7 +320,12 @@ export const DigitalPlannerView: React.FC = () => {
             title={`Delete page ${pg.title}`}
             style={{ padding: '4px 8px', fontSize: '0.74rem', minHeight: 28, minWidth: 28, color: 'var(--dp-danger)' }}
             onClick={() => {
-              void saveBook((b) => ({ ...b, pages: b.pages.filter((x) => x.id !== pg.id) }));
+              void saveBook((b) => {
+                const removed = b.pages.findIndex(x => x.id === pg.id);
+                if (removed < 0 || b.pages.length <= 1) return b;
+                const pages = b.pages.filter(x => x.id !== pg.id);
+                return { ...b, pages, tabs: b.tabs.map(t => ({ ...t, targetPageIndex: Math.max(0, Math.min(pages.length - 1, t.targetPageIndex > removed ? t.targetPageIndex - 1 : t.targetPageIndex)) })) };
+              }).catch(error => pushToast(String(error), { tone: 'warn' }));
               setPageIdx((i) => Math.max(0, i - 1));
             }}
           >
@@ -396,9 +402,9 @@ export const DigitalPlannerView: React.FC = () => {
 
       {/* Freeform Handwritten / Typed Area */}
       <SafeTextarea
-        recordKey={`digipg:${pg.id}`}
+        recordKey={`digipg:${scopeKey(settings)}:${pg.id}:body`}
         externalValue={pg.typedText ?? ''}
-        onCommit={(val) => updatePage(pg.id, { typedText: val })}
+        onCommit={(val) => updatePage(pg.id, { typedText: val }, true)}
         className="dp-textarea"
         style={{ flex: 1, minHeight: 160, background: 'transparent', border: 'none', lineHeight: `${pg.lineSpacingPx || 26}px` }}
         placeholder="Type directly onto the stationery page, or click Ink / Decor above to handwrite, highlight, draw shapes, and place stickers…"
@@ -440,16 +446,16 @@ export const DigitalPlannerView: React.FC = () => {
           <div className="dp-grid-3" style={{ gap: 10 }}>
             <div className="dp-stack" style={{ gap: 6 }}>
               <strong>Cover &amp; Orientation</strong>
-              <input className="dp-input" value={bookPayload.subtitle} onChange={(e) => void saveBook((b) => ({ ...b, subtitle: e.target.value }))} placeholder="Cover subtitle…" />
+              <SafeInput recordKey={`digibook:${scopeKey(settings)}:subtitle`} className="dp-input" externalValue={bookPayload.subtitle} onCommit={value => saveBook(b => ({ ...b, subtitle: value }), true)} placeholder="Cover subtitle…" />
               <div className="dp-row" style={{ gap: 6 }}>
-                <label className="dp-row" style={{ gap: 4 }}>Front <input type="color" value={bookPayload.frontCoverColor} onChange={(e) => void saveBook((b) => ({ ...b, frontCoverColor: e.target.value }))} /></label>
-                <label className="dp-row" style={{ gap: 4 }}>Back <input type="color" value={bookPayload.backCoverColor} onChange={(e) => void saveBook((b) => ({ ...b, backCoverColor: e.target.value }))} /></label>
-                <select className="dp-select" style={{ width: 'auto' }} value={bookPayload.orientation} onChange={(e) => void saveBook((b) => ({ ...b, orientation: e.target.value as 'portrait' | 'landscape' }))}>
+                <label className="dp-row" style={{ gap: 4 }}>Front <input type="color" value={bookPayload.frontCoverColor} onChange={(e) => { const value = e.target.value; void saveBook(b => ({ ...b, frontCoverColor: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }} /></label>
+                <label className="dp-row" style={{ gap: 4 }}>Back <input type="color" value={bookPayload.backCoverColor} onChange={(e) => { const value = e.target.value; void saveBook(b => ({ ...b, backCoverColor: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }} /></label>
+                <select className="dp-select" style={{ width: 'auto' }} value={bookPayload.orientation} onChange={(e) => { const value = e.target.value as 'portrait' | 'landscape'; void saveBook(b => ({ ...b, orientation: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }}>
                   <option value="landscape">Landscape</option>
                   <option value="portrait">Portrait</option>
                 </select>
               </div>
-              <select className="dp-select" value={bookPayload.coverPattern} onChange={(e) => void saveBook((b) => ({ ...b, coverPattern: e.target.value as PlannerBookPayload['coverPattern'] }))}>
+              <select className="dp-select" value={bookPayload.coverPattern} onChange={(e) => { const value = e.target.value as PlannerBookPayload['coverPattern']; void saveBook(b => ({ ...b, coverPattern: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }}>
                 <option value="leather">Texture: Classic Leather</option>
                 <option value="linen">Texture: Woven Linen</option>
                 <option value="dots">Pattern: Polka Dots</option>
@@ -460,15 +466,15 @@ export const DigitalPlannerView: React.FC = () => {
 
             <div className="dp-stack" style={{ gap: 6 }}>
               <strong>Center Binding</strong>
-              <select className="dp-select" value={bookPayload.bindingStyle} onChange={(e) => void saveBook((b) => ({ ...b, bindingStyle: e.target.value as PlannerBookPayload['bindingStyle'] }))}>
+              <select className="dp-select" value={bookPayload.bindingStyle} onChange={(e) => { const value = e.target.value as PlannerBookPayload['bindingStyle']; void saveBook(b => ({ ...b, bindingStyle: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }}>
                 <option value="rings">Ring Binder</option>
                 <option value="spiral">Spiral Wire Coil</option>
                 <option value="book">Traditional Book Spine</option>
                 <option value="none">Binding-Free</option>
               </select>
               <div className="dp-row" style={{ gap: 8 }}>
-                <label className="dp-row" style={{ gap: 4 }}>Color <input type="color" value={bookPayload.bindingColor} onChange={(e) => void saveBook((b) => ({ ...b, bindingColor: e.target.value }))} /></label>
-                <label className="dp-row" style={{ gap: 4 }}>Rings <input type="number" min={2} max={24} className="dp-input" style={{ width: 60 }} value={bookPayload.ringCount} onChange={(e) => void saveBook((b) => ({ ...b, ringCount: Math.max(2, Math.min(24, Number(e.target.value) || 6)) }))} /></label>
+                <label className="dp-row" style={{ gap: 4 }}>Color <input type="color" value={bookPayload.bindingColor} onChange={(e) => { const value = e.target.value; void saveBook(b => ({ ...b, bindingColor: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }} /></label>
+                <label className="dp-row" style={{ gap: 4 }}>Rings <input type="number" min={2} max={24} className="dp-input" style={{ width: 60 }} value={bookPayload.ringCount} onChange={(e) => { const value = Math.max(2, Math.min(24, Number(e.target.value) || 6)); void saveBook(b => ({ ...b, ringCount: value })).catch(error => pushToast(String(error), { tone: 'warn' })); }} /></label>
               </div>
             </div>
 

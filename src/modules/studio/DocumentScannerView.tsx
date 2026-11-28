@@ -1,3 +1,4 @@
+import { useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -76,6 +77,9 @@ async function blobToCanvasImageData(
 
 export const DocumentScannerView: React.FC = () => {
   const { settings, records, logicalToday, pushToast, setActiveView, setSelectedNoteId } = useApp();
+  
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   const scans = useMemo(
     () =>
@@ -119,6 +123,8 @@ export const DocumentScannerView: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    let ownedUrl: string | null = null;
+    setPreviewUrl(null);
     const hash = showEnhanced
       ? activePage?.enhancedBlobHash || activePage?.originalBlobHash
       : activePage?.originalBlobHash;
@@ -126,11 +132,14 @@ export const DocumentScannerView: React.FC = () => {
       setPreviewUrl(null);
       return;
     }
-    void getBlobObjectUrl(hash).then((url) => {
-      if (mounted) setPreviewUrl(url);
-    });
+    void getBlobObjectUrl(hash, false, true).then((url) => {
+      if (!mounted) { if (url) URL.revokeObjectURL(url); return; }
+      ownedUrl = url;
+      setPreviewUrl(url);
+    }).catch(() => { if (mounted) setPreviewUrl(null); });
     return () => {
       mounted = false;
+      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
     };
   }, [activePage?.originalBlobHash, activePage?.enhancedBlobHash, showEnhanced]);
 
@@ -235,7 +244,7 @@ export const DocumentScannerView: React.FC = () => {
     try {
       const blobRec = await db.blobs.get(activePage.originalBlobHash);
       if (!blobRec) throw new Error('Original scan blob not found');
-      const origBlob = new Blob([blobRec.data], { type: blobRec.mimeType });
+      const origBlob = new Blob([blobRec.data ?? blobRec.blob ?? new ArrayBuffer(0)], { type: blobRec.mimeType });
       const { imageData } = await blobToCanvasImageData(origBlob, activePage.rotationDeg, 1280);
       const corners = (activePage.corners.length === 4
         ? activePage.corners
@@ -284,7 +293,7 @@ export const DocumentScannerView: React.FC = () => {
     const hash = page.enhancedBlobHash || page.originalBlobHash;
     const blobRec = await db.blobs.get(hash);
     if (!blobRec) throw new Error('Scan image blob missing');
-    const blob = new Blob([blobRec.data], { type: blobRec.mimeType });
+    const blob = new Blob([blobRec.data ?? blobRec.blob ?? new ArrayBuffer(0)], { type: blobRec.mimeType });
     const gpuCfg = settings.gpuConfig;
     const serverBase =
       settings.operatingMode === 'docker-sync'
@@ -310,7 +319,7 @@ export const DocumentScannerView: React.FC = () => {
     try {
       const res = await runOcrOnPage(activePage);
       if (res.fallbackNotice) setOcrNotice(res.fallbackNotice);
-      await updateCurrentPage((pg) => ({
+      await updateCurrentPage((pg) => (pg.enhancedBlobHash || pg.originalBlobHash) !== (activePage.enhancedBlobHash || activePage.originalBlobHash) ? pg : ({
         ...pg,
         extractedText: res.text || pg.extractedText,
         confidence: res.confidence,
@@ -538,11 +547,11 @@ export const DocumentScannerView: React.FC = () => {
               <button
                 type="button"
                 className="dp-btn dp-btn-danger dp-btn-sm"
-                onClick={async () => {
+                onClick={guardAction('action-1', async () => {
                   await softDeleteRecord(activeScan.id);
                   setSelectedScanId(null);
                   pushToast('Moved scan to Trash', { canUndo: true });
-                }}
+                })}
               >
                 <Trash2 size={13} /> Delete Scan
               </button>
@@ -636,7 +645,7 @@ export const DocumentScannerView: React.FC = () => {
                 type="button"
                 className="dp-btn dp-btn-primary dp-btn-sm"
                 disabled={ocrBusy}
-                onClick={() => void handleRunActivePageOcr()}
+                onClick={guardAction('ocr', () => handleRunActivePageOcr())}
               >
                 <Cpu size={13} /> {ocrBusy ? 'Recognizing…' : 'Recognize Page Text'}
               </button>
@@ -645,7 +654,7 @@ export const DocumentScannerView: React.FC = () => {
                   type="button"
                   className="dp-btn dp-btn-sm"
                   disabled={ocrBusy}
-                  onClick={() => void handleRunAllPagesOcr()}
+                  onClick={guardAction('ocr', () => handleRunAllPagesOcr())}
                 >
                   OCR All {activeScan.payload.pages.length} Pages
                 </button>
@@ -835,22 +844,22 @@ export const DocumentScannerView: React.FC = () => {
               <div className="dp-stack" style={{ gap: 6 }}>
                 <strong style={{ fontSize: '0.82rem' }}>Save Verified Scan Into Planaday (Original Scan Always Preserved):</strong>
                 <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                  <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleRouteTarget('note')}>
+                  <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={guardAction('route', () => handleRouteTarget('note'))}>
                     <FileText size={13} /> Save as Note
                   </button>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleRouteTarget('task')}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('route', () => handleRouteTarget('task'))}>
                     Save as Task
                   </button>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleRouteTarget('checklist')}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('route', () => handleRouteTarget('checklist'))}>
                     <ListChecks size={13} /> Save as Checklist
                   </button>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleRouteTarget('spreadsheet')}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('route', () => handleRouteTarget('spreadsheet'))}>
                     <FileSpreadsheet size={13} /> Save as Spreadsheet
                   </button>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleRouteTarget('lab_research')}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('route', () => handleRouteTarget('lab_research'))}>
                     <FlaskConical size={13} /> Save to Lab Research
                   </button>
-                  <button type="button" className="dp-btn dp-btn-sm" onClick={() => void handleRouteTarget('project')}>
+                  <button type="button" className="dp-btn dp-btn-sm" onClick={guardAction('route', () => handleRouteTarget('project'))}>
                     <FolderKanban size={13} /> Save to Project
                   </button>
                 </div>

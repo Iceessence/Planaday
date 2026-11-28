@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useViewFormGuard } from '../../components/Common/viewSafety';
+import { scopeKey, withScopedRecords, useMinuteClock } from '../../components/Common/viewSafety';
+import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -70,8 +72,9 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     pushToast,
     startCountdownTimer,
   } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
 
-  const [nowDate, setNowDate] = useState(() => new Date());
+  const nowDate = useMinuteClock(activeDate === logicalToday);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [factOffset, setFactOffset] = useState(0);
   const [addingFactOpen, setAddingFactOpen] = useState(false);
@@ -116,21 +119,18 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
   const [newSectionSched, setNewSectionSched] = useState<DailyNoteSectionDef['schedule']>('daily');
   const todayPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNowDate(new Date()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
   const isViewingToday = activeDate === logicalToday;
   const isPastDay = activeDate < logicalToday;
   const yesterday = addDaysIso(activeDate, -1);
 
-  const allTasks = records.filter((r) => r.type === 'task') as Array<LifeRecord<TaskPayload>>;
-  const allChores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<
+  // Collections are kept stable during local form edits.
+  const allTasks = useMemo(() => records.filter((r) => r.type === 'task') as Array<LifeRecord<TaskPayload>>, [records]);
+  const allChores = useMemo(() => records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<
     LifeRecord<ChorePayload>
-  >;
-  const allEvents = records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>;
+  >, [records]);
+  const allEvents = useMemo(() => records.filter((r) => r.type === 'event') as Array<LifeRecord<CalendarEventPayload>>, [records]);
 
   const todayTasks = useMemo(
     () => allTasks.filter((t) => t.doDate === activeDate),
@@ -232,7 +232,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     return { upcomingEvents: up, pastEvents: past };
   }, [dayEvents, isViewingToday, isPastDay, nowMin]);
 
-  const timedEvents = dayEvents.filter((e) => !e.payload.allDay && e.payload.startTime);
+  const timedEvents = useMemo(() => dayEvents.filter((e) => e.payload.eventStatus !== 'canceled' && !e.payload.allDay && e.payload.startTime), [dayEvents]);
 
   const plannedMinutes = timedEvents.reduce((sum, ev) => {
     const s = timeToMinutes(ev.payload.startTime || '09:00');
@@ -257,8 +257,11 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     );
   }, [timedEvents, isViewingToday, isPastDay, nowMin]);
 
-  const overdueChores = allChores.filter((c) => computeChoreFreshnessAtDate(c.payload, activeDate).status === 'overdue');
-  const dueChores = allChores.filter((c) => computeChoreFreshnessAtDate(c.payload, activeDate).status === 'due_today');
+  const { overdueChores, dueChores } = useMemo(() => {
+    const overdueChores: typeof allChores = [], dueChores: typeof allChores = [];
+    for (const c of allChores) { const status = computeChoreFreshnessAtDate(c.payload, activeDate).status; if (status === 'overdue') overdueChores.push(c); else if (status === 'due_today') dueChores.push(c); }
+    return { overdueChores, dueChores };
+  }, [allChores, activeDate]);
   const openTaskCount = allTasks.filter((t) => t.status === 'active').length;
 
   const diaryRecord = records.find(
@@ -279,27 +282,18 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
   const dailyNotesText = canonicalDailyNote?.payload.content ?? diary.dailyNotes ?? '';
 
   const saveCanonicalDailyNotes = async (val: string) => {
-    await upsertCanonicalDailyNote(records, activeDate, val, {
-      diaryRecordId: diaryRecord?.id ?? null,
-    });
+    await withScopedRecords(settings, 'note', fresh => upsertCanonicalDailyNote(fresh, activeDate, val, { diaryRecordId: diaryRecord?.id ?? null, workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId }));
   };
 
   const saveDiaryField = async (patch: Partial<DiaryPayload>) => {
-    if (diaryRecord) {
-      await updateRecord<DiaryPayload>(
-        diaryRecord.id,
-        (cur) => ({ ...cur, payload: { ...cur.payload, ...patch } }),
-        { skipUndo: true }
-      );
-    } else {
-      await createRecord<DiaryPayload>(
-        'diary',
-        `Daily Reflection — ${activeDate}`,
-        { date: activeDate, ...patch },
-        { category: 'Diary', tags: ['reflection'] },
-        { skipUndo: true }
-      );
-    }
+    await withScopedRecords(settings, 'diary', async (fresh) => {
+      const current = fresh.find(r => (r.payload as DiaryPayload).date === activeDate);
+      if (current) {
+        await updateRecord<DiaryPayload>(current.id, c => ({ ...c, payload: { ...c.payload, ...patch } }), { skipUndo: true });
+      } else {
+        await createRecord<DiaryPayload>('diary', `Daily Reflection — ${activeDate}`, { ...patch, date: activeDate }, { category: 'Diary', tags: ['reflection'], workspaceId: settings.activeWorkspaceId, ownerProfileId: settings.activeProfileId === 'all' ? null : settings.activeProfileId }, { skipUndo: true });
+      }
+    });
   };
 
   // Unified Inline Quick Add for Today Spread
@@ -310,13 +304,15 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
     if (quickKind === 'event') {
       const cat = settings.eventCategories.find((c) => c.id === quickEventCategoryId) ?? settings.eventCategories[0];
-      const endTime = minutesToTime(timeToMinutes(quickStartTime) + Math.max(15, quickDurationMin));
+      if (!quickStartTime || !Number.isFinite(quickDurationMin)) { pushToast('Enter a valid start time and duration.', { tone: 'warn' }); return; }
+      const endMinute = timeToMinutes(quickStartTime) + Math.max(15, quickDurationMin);
+      const endTime = minutesToTime(endMinute % 1440);
       await createRecord<CalendarEventPayload>(
         'event',
         text,
         {
           startDate: activeDate,
-          endDate: activeDate,
+          endDate: addDaysIso(activeDate, Math.floor(endMinute / 1440)),
           startTime: quickStartTime,
           endTime,
           allDay: false,
@@ -906,7 +902,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
       </div>
 
       {/* Inline Add-Anything-To-Today Bar (no tab switching required!) */}
-      <form className="dp-card dp-stack dp-no-print" style={{ padding: 12, gap: 10 }} onSubmit={handleInlineQuickAdd}>
+      <form className="dp-card dp-stack dp-no-print" style={{ padding: 12, gap: 10 }} onSubmit={guardForm('form-1', handleInlineQuickAdd)}>
         <div className="dp-row" style={{ gap: 5 }}>
           <strong style={{ fontSize: '0.82rem', marginInlineEnd: 4 }}>Add to Today:</strong>
           {(
@@ -1255,7 +1251,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
               {todayTasks.filter((t) => t.status === 'done').length}/{todayTasks.length} done
             </span>
           </div>
-          <form className="dp-row" onSubmit={handleQuickAddTask}>
+          <form className="dp-row" onSubmit={guardForm('form-2', handleQuickAddTask)}>
             <input
               className="dp-input"
               style={{ flex: 1 }}
@@ -1352,7 +1348,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
             </div>
           </div>
           <SafeTextarea
-            recordKey={`today:${activeDate}:dailyNotes`}
+            recordKey={`today:${scopeKey(settings)}:${activeDate}:dailyNotes`}
             externalValue={dailyNotesText}
             onCommit={saveCanonicalDailyNotes}
             className="dp-textarea"
@@ -1391,7 +1387,7 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
                   <label key={sec.id} className="dp-stack" style={{ gap: 4 }}>
                     <strong style={{ fontSize: '0.86rem' }}>{sec.emoji} {sec.title}</strong>
                     <SafeTextarea
-                      recordKey={`today:${activeDate}:sec:${sec.id}`}
+                      recordKey={`today:${scopeKey(settings)}:${activeDate}:sec:${sec.id}`}
                       externalValue={curVal}
                       onCommit={(val) => {
                         const patch: Partial<DiaryPayload> = {
@@ -1539,14 +1535,14 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
             </div>
             <div className="dp-grid-2" style={{ gap: 8 }}>
               <SafeInput
-                recordKey={`today:${activeDate}:mealsNote`}
+                recordKey={`today:${scopeKey(settings)}:${activeDate}:mealsNote`}
                 externalValue={diary.mealsNote ?? ''}
                 onCommit={(val) => saveDiaryField({ mealsNote: val })}
                 className="dp-input"
                 placeholder="Meals quick note…"
               />
               <SafeInput
-                recordKey={`today:${activeDate}:weatherNote`}
+                recordKey={`today:${scopeKey(settings)}:${activeDate}:weatherNote`}
                 externalValue={diary.weatherNote ?? ''}
                 onCommit={(val) => saveDiaryField({ weatherNote: val })}
                 className="dp-input"

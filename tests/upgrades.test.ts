@@ -229,8 +229,9 @@ describe('Upgrades — Seconds Timers, Post-Now Free Time, Chore Punctuality, Ev
     }
   });
 
-  it('provides 120 offline facts across 12 topics with topic filtering and WMO weather descriptions', () => {
-    expect(OFFLINE_LEARNING_FACTS.length).toBe(120);
+  it('provides 128+ offline facts across 12 topics with topic filtering and WMO weather descriptions', () => {
+    expect(OFFLINE_LEARNING_FACTS.length).toBeGreaterThanOrEqual(128);
+    expect(new Set(OFFLINE_LEARNING_FACTS.map((f) => f.id)).size).toBe(OFFLINE_LEARNING_FACTS.length);
     const topics = getFactTopics();
     expect(topics[0]).toBe('All');
     expect(topics.length).toBeGreaterThanOrEqual(13); // All + 12 topics

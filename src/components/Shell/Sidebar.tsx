@@ -93,15 +93,22 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
   const [quickAddTabOpen, setQuickAddTabOpen] = React.useState(false);
   const [newTabTitle, setNewTabTitle] = React.useState('');
 
-  const openTasksCount = records.filter((r) => r.type === 'task' && r.status === 'active').length;
-  const dueChoresCount = records.filter(
-    (r) =>
-      r.type === 'chore' &&
-      r.status === 'active' &&
-      String((r.payload as { nextDueDate?: string }).nextDueDate ?? '') <= logicalToday
-  ).length;
+  const [creating, setCreating] = React.useState(false);
+  const creatingRef = React.useRef(false);
+  const { openTasksCount, dueChoresCount } = React.useMemo(() => {
+    let openTasksCount = 0, dueChoresCount = 0;
+    for (const r of records) {
+      if (r.status !== 'active') continue;
+      if (r.type === 'task') openTasksCount++;
+      if (r.type === 'chore') {
+        const due = (r.payload as { nextDueDate?: string }).nextDueDate;
+        if (due && due <= logicalToday) dueChoresCount++;
+      }
+    }
+    return { openTasksCount, dueChoresCount };
+  }, [records, logicalToday]);
 
-  const groups: NavGroup[] = [
+  const groups = React.useMemo<NavGroup[]>(() => [
     {
       id: 'plan',
       label: 'Plan',
@@ -214,7 +221,10 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
         { view: 'settings', label: 'Settings & Themes', icon: <Settings size={17} /> },
       ],
     },
-  ];
+  ], [openTasksCount, dueChoresCount, trashedRecords.length]);
+  const visibleGroups = React.useMemo(() => groups.map((group) => ({ ...group, items: group.items.filter((item) =>
+    (!item.moduleId || isModuleEnabled(item.moduleId)) && !settings.hiddenSidebarViews.includes(item.view))
+  })).filter((group) => group.items.length), [groups, isModuleEnabled, settings.enabledModules, settings.hiddenSidebarViews]);
 
   return (
     <aside className="dp-sidebar" aria-label="Primary Planner Navigation">
@@ -229,6 +239,7 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
           type="button"
           className="dp-icon-btn"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
           onClick={onToggleCollapse}
         >
           <Menu size={17} />
@@ -249,6 +260,7 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
               style={{ width: 20, height: 20 }}
               title="Create a brand-new custom sidebar tab"
               aria-label="New Custom Tab"
+              aria-expanded={quickAddTabOpen}
               onClick={() => setQuickAddTabOpen((v) => !v)}
             >
               <Plus size={12} />
@@ -259,12 +271,14 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
           <form
             className="dp-row"
             style={{ padding: '4px 6px', gap: 4 }}
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const nm = newTabTitle.trim();
-              if (!nm) return;
+              if (!nm || creatingRef.current) return;
+              creatingRef.current = true; setCreating(true);
+              try {
               const id = `ctab_${Date.now().toString(36)}`;
-              void patchSettings({
+              await patchSettings({
                 customTabs: [
                   ...settings.customTabs,
                   {
@@ -284,18 +298,21 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
               setQuickAddTabOpen(false);
               openCustomTab(id);
               pushToast(`Created custom tab "${nm}"!`);
+              } catch { pushToast('Could not create tab. Please try again.', { tone: 'warn' }); }
+              finally { creatingRef.current = false; setCreating(false); }
             }}
           >
             <input
               autoFocus
               className="dp-input"
               style={{ flex: 1, padding: '3px 6px', fontSize: '0.78rem' }}
+              aria-label="New custom tab name"
               placeholder="Tab name…"
               value={newTabTitle}
               onChange={(e) => setNewTabTitle(e.target.value)}
             />
-            <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm" style={{ padding: '2px 6px' }}>
-              Add
+            <button type="submit" disabled={creating || !newTabTitle.trim()} className="dp-btn dp-btn-primary dp-btn-sm" style={{ padding: '2px 6px' }}>
+              {creating ? 'Adding…' : 'Add'}
             </button>
           </form>
         )}
@@ -306,6 +323,8 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
             className={`dp-nav-btn ${activeView === 'custom_tab' && activeCustomTabId === ct.id ? 'active' : ''}`}
             style={{ '--tab-color': ct.color } as React.CSSProperties}
             title={collapsed ? ct.name : undefined}
+            aria-label={ct.name}
+            aria-current={activeView === 'custom_tab' && activeCustomTabId === ct.id ? 'page' : undefined}
             onClick={() => openCustomTab(ct.id)}
           >
             <span style={{ fontSize: '1rem', lineHeight: 1 }}>{ct.emoji}</span>
@@ -314,13 +333,8 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
         ))}
       </div>
 
-      {groups.map((group) => {
-        const visibleItems = group.items.filter(
-          (item) =>
-            (!item.moduleId || isModuleEnabled(item.moduleId)) &&
-            !settings.hiddenSidebarViews.includes(item.view)
-        );
-        if (visibleItems.length === 0) return null;
+      {visibleGroups.map((group) => {
+        const visibleItems = group.items;
         const isGroupCollapsed = !collapsed && (settings.collapsedSidebarGroups ?? []).includes(group.id);
         return (
           <div key={group.id} className="dp-nav-group">
@@ -328,6 +342,7 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
               <button
                 type="button"
                 className="dp-nav-group-label"
+                aria-expanded={!isGroupCollapsed}
                 style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', justifyContent: 'space-between', padding: '4px 8px' }}
                 onClick={() => {
                   const cur = settings.collapsedSidebarGroups ?? [];
@@ -350,6 +365,8 @@ export const Sidebar: React.FC<{ collapsed: boolean; onToggleCollapse: () => voi
                   className={`dp-nav-btn ${activeView === item.view ? 'active' : ''}`}
                   style={{ '--tab-color': group.tabColor } as React.CSSProperties}
                   title={collapsed ? item.label : undefined}
+                  aria-label={item.badgeCount ? `${item.label}, ${item.badgeCount}` : item.label}
+                  aria-current={activeView === item.view ? 'page' : undefined}
                   onClick={() => setActiveView(item.view)}
                 >
                   {item.icon}

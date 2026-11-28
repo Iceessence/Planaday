@@ -1065,6 +1065,8 @@ export interface AppSettings {
   syncFallbackUrl: string; // Optional Tailscale / Remote fallback URL: e.g. http://100.x.y.z:3000 or https://host.ts.net
   syncAuthToken?: string; // Paired device Bearer token stored in IndexedDB (never localStorage) (PD-004 / PF-04)
   lastSyncSeq: number;
+  /** Workspace selection fingerprint associated with the pull cursor; absent on older installs. */
+  lastSyncScopeKey?: string;
   lastSyncAt: string | null;
   lastSyncServerId?: string; // Bound sync server identity (PD-003)
   lastSyncEpoch?: number; // Bound sync epoch (PD-003)

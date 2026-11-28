@@ -9,7 +9,7 @@
 //  - window.origin === "null" (distinct from Planaday's origin)
 //  - IndexedDB, localStorage, cookies, parent DOM, and Planaday records are inaccessible by browser security policy
 //  - fetch / WebSocket / XHR network egress is denied by CSP connect-src 'none'
-//  - Hard timeout terminates and detaches the iframe so infinite loops cannot freeze Planaday
+//  - Worker executes off the UI thread; timeout requests termination. Runtime isolation still requires browser verification.
 
 export interface SandboxExecutionResult {
   ok: boolean;
@@ -40,7 +40,7 @@ export interface CodeTestRunResult {
 
 export const SANDBOX_ISOLATION_POLICY = {
   sandboxAttribute: 'allow-scripts',
-  csp: "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; connect-src 'none'; img-src 'none'; style-src 'none'; frame-src 'none'; form-action 'none';",
+  csp: "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; connect-src 'none'; img-src 'none'; style-src 'none'; frame-src 'none'; form-action 'none'; worker-src blob:;",
   allowsSameOrigin: false,
   allowsNetwork: false,
   allowsStorage: false,
@@ -58,74 +58,59 @@ export function stripSimpleTypeScript(code: string): string {
     .replace(/\btype\s+\w+\s*=\s*[^;]+;/g, '');
 }
 
-function buildSandboxedIframeDoc(runId: string): string {
-  // Never interpolate user code directly into HTML! User code arrives strictly via postMessage after load.
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${SANDBOX_ISOLATION_POLICY.csp}">
-</head>
-<body>
-<script>
-(function() {
-  'use strict';
-  const EXPECTED_RUN_ID = ${JSON.stringify(runId)};
-  window.addEventListener('message', function(ev) {
+// An opaque-origin iframe owns the worker. The parent never executes user code.
+// Worker isolation and CSP must be verified in each supported browser; fail closed if unavailable.
+function sandboxWorkerMain() {
+  self.onmessage = async (ev: MessageEvent) => {
     const msg = ev.data;
-    if (!msg || msg.runId !== EXPECTED_RUN_ID || msg.cmd !== 'exec') return;
-    const logs = [];
-    const MAX_LOGS = 200;
-    const safeConsole = {
-      log: function() {
-        if (logs.length < MAX_LOGS) {
-          logs.push(Array.prototype.slice.call(arguments).map(function(x) {
-            try { return typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x); }
-            catch (_) { return '[Unserializable]'; }
-          }).join(' '));
-        }
-      },
-      warn: function() {
-        if (logs.length < MAX_LOGS) logs.push('[warn] ' + Array.prototype.slice.call(arguments).map(String).join(' '));
-      },
-      error: function() {
-        if (logs.length < MAX_LOGS) logs.push('[error] ' + Array.prototype.slice.call(arguments).map(String).join(' '));
-      }
+    const logs: string[] = [];
+    const stringify = (value: unknown) => {
+      try { return (typeof value === 'object' && value !== null ? JSON.stringify(value) ?? '' : String(value)).slice(0, 16000); }
+      catch { return '[Unserializable]'; }
     };
-    const t0 = performance.now();
+    const logger = (prefix: string) => (...args: unknown[]) => {
+      if (logs.length < 200) logs.push((prefix + args.map(stringify).join(' ')).slice(0, 16000));
+    };
+    const started = performance.now();
     try {
-      const fn = new Function(
-        'console', 'INPUT', 'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'navigator', 'parent', 'top', 'opener',
-        msg.userCode + '\\n; if (typeof solve === "function" && INPUT !== undefined) { return solve(INPUT); }'
-      );
-      const result = fn(safeConsole, msg.inputData, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
-      let retStr = '';
-      if (result !== undefined) {
-        retStr = typeof result === 'object' && result !== null ? JSON.stringify(result) : String(result);
-      }
-      window.parent.postMessage({
-        runId: EXPECTED_RUN_ID,
-        ok: true,
-        stdout: logs,
-        returnValue: retStr,
-        durationMs: Math.round((performance.now() - t0) * 100) / 100
-      }, '*');
-    } catch (err) {
-      window.parent.postMessage({
-        runId: EXPECTED_RUN_ID,
-        ok: false,
-        stdout: logs,
-        returnValue: '',
-        error: err && err.message ? String(err.message) : String(err),
-        durationMs: Math.round((performance.now() - t0) * 100) / 100
-      }, '*');
+      const fn = new Function('console', 'INPUT', msg.userCode + '\n; if (typeof solve === "function" && INPUT !== undefined) return solve(INPUT);');
+      const value = await fn({ log: logger(''), warn: logger('[warn] '), error: logger('[error] ') }, msg.inputData);
+      self.postMessage({ ok: true, stdout: logs, returnValue: value === undefined ? '' : stringify(value), durationMs: performance.now() - started });
+    } catch (error) {
+      self.postMessage({ ok: false, stdout: logs, returnValue: '', error: stringify(error instanceof Error ? error.message : error), durationMs: performance.now() - started });
     }
-  });
-  window.parent.postMessage({ runId: EXPECTED_RUN_ID, ready: true }, '*');
-})();
-</script>
-</body>
-</html>`;
+  };
+}
+function buildSandboxedIframeDoc(runId: string): string {
+  const workerSource = `(${sandboxWorkerMain.toString()})();`;
+  // Escape script-ending sequences in serialized source, even though it is application-owned.
+  const encoded = JSON.stringify(workerSource).replace(/</g, '\\u003c');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${SANDBOX_ISOLATION_POLICY.csp}"></head><body><script>
+  (() => {
+    const id = ${JSON.stringify(runId)};
+    let started = false;
+    window.addEventListener('message', ev => {
+      const msg = ev.data;
+      if (ev.source !== window.parent || started || !msg || msg.runId !== id || msg.cmd !== 'exec') return;
+      started = true;
+      let worker, url, timeout;
+      const finish = result => {
+        clearTimeout(timeout);
+        if (worker) worker.terminate();
+        if (url) URL.revokeObjectURL(url);
+        window.parent.postMessage({ ...result, runId: id }, '*');
+      };
+      try {
+        url = URL.createObjectURL(new Blob([${encoded}], { type: 'text/javascript' }));
+        worker = new Worker(url);
+        worker.onmessage = event => finish(event.data);
+        worker.onerror = () => finish({ ok: false, stdout: [], returnValue: '', error: 'Isolated worker unavailable or failed.' });
+        timeout = setTimeout(() => finish({ ok: false, timedOut: true, stdout: [], returnValue: '', error: 'Execution timed out.' }), msg.timeoutMs);
+        worker.postMessage({ userCode: msg.userCode, inputData: msg.inputData });
+      } catch (error) { finish({ ok: false, stdout: [], returnValue: '', error: 'Isolated worker unavailable.' }); }
+    });
+    window.parent.postMessage({ runId: id, ready: true }, '*');
+  })();</script></body></html>`;
 }
 
 /**
@@ -136,7 +121,8 @@ export function runSandboxedJs(
   code: string,
   opts: { input?: unknown; timeoutMs?: number; isTypeScript?: boolean } = {}
 ): Promise<SandboxExecutionResult> {
-  const timeoutMs = Math.max(100, Math.min(SANDBOX_ISOLATION_POLICY.maxTimeoutMs, opts.timeoutMs ?? SANDBOX_ISOLATION_POLICY.defaultTimeoutMs));
+  const requested = opts.timeoutMs ?? SANDBOX_ISOLATION_POLICY.defaultTimeoutMs;
+  const timeoutMs = Number.isFinite(requested) ? Math.max(100, Math.min(SANDBOX_ISOLATION_POLICY.maxTimeoutMs, requested)) : SANDBOX_ISOLATION_POLICY.defaultTimeoutMs;
   const preparedCode = opts.isTypeScript ? stripSimpleTypeScript(code) : code;
   const started = performance.now();
 
@@ -181,14 +167,14 @@ export function runSandboxedJs(
 
     const onMessage = (ev: MessageEvent) => {
       if (settled) return;
-      if (ev.source !== iframe.contentWindow) return;
+      if (ev.source !== iframe.contentWindow || ev.origin !== 'null') return;
       const data = ev.data as Record<string, unknown> | null;
       if (!data || data.runId !== runId) return;
 
       if (data.ready === true && !dispatched) {
         dispatched = true;
         iframe.contentWindow?.postMessage(
-          { runId, cmd: 'exec', userCode: preparedCode, inputData: opts.input },
+          { runId, cmd: 'exec', userCode: preparedCode, inputData: opts.input, timeoutMs },
           '*'
         );
         return;
@@ -199,7 +185,8 @@ export function runSandboxedJs(
         cleanup();
         resolve({
           ok: data.ok,
-          stdout: Array.isArray(data.stdout) ? data.stdout.map(String) : [],
+          stdout: Array.isArray(data.stdout) ? data.stdout.slice(0, 200).map(v => String(v).slice(0, 16000)) : [],
+          timedOut: data.timedOut === true,
           returnValue: typeof data.returnValue === 'string' ? data.returnValue : '',
           error: typeof data.error === 'string' ? data.error : undefined,
           durationMs: typeof data.durationMs === 'number' ? data.durationMs : Math.round(performance.now() - started),
@@ -216,7 +203,7 @@ export function runSandboxedJs(
         ok: false,
         stdout: [],
         returnValue: '',
-        error: `Execution timed out after ${timeoutMs}ms (null-origin sandbox frame terminated safely).`,
+        error: `Execution timed out after ${timeoutMs}ms (sandbox timeout).`,
         durationMs: timeoutMs,
         timedOut: true,
         isolationMode: 'null-origin-iframe',

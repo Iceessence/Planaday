@@ -1,3 +1,4 @@
+import { useViewFormGuard, useViewActionGuard } from '../../components/Common/viewSafety';
 import React, { useMemo, useState } from 'react';
 import { Activity, Bell, Check, Dumbbell, Pill, Plus, RefreshCw, SkipForward, Trash2, Users } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
@@ -67,10 +68,10 @@ export function isMedicationRefillDue(p: Partial<MedicationPayload>, todayIso: s
   due: boolean;
   reason: string | null;
 } {
-  const pills = p.pillsRemaining ?? 0;
+  const pills = p.pillsRemaining;
   const doseThresh = p.refillAlertDoses ?? 7;
   const daysBefore = p.refillAlertDaysBefore ?? 7;
-  const byDose = pills <= doseThresh;
+  const byDose = typeof pills === 'number' && Number.isFinite(pills) && pills <= doseThresh;
   const daysUntilRefillDate = p.refillByDate ? diffDaysIso(todayIso, p.refillByDate) : null;
   const byDate = daysUntilRefillDate !== null && daysUntilRefillDate <= daysBefore;
 
@@ -78,12 +79,13 @@ export function isMedicationRefillDue(p: Partial<MedicationPayload>, todayIso: s
     return { due: true, reason: `${pills} doses left & refill date ${p.refillByDate}` };
   }
   if (byDate) {
+    const stockText = typeof pills === 'number' && Number.isFinite(pills) ? `${pills} doses left` : 'stock: unknown';
     return {
       due: true,
       reason:
         daysUntilRefillDate! < 0
-          ? `Refill date passed (${p.refillByDate}) even with ${pills} doses remaining`
-          : `Refill date in ${daysUntilRefillDate}d (${p.refillByDate}) — track refill even with ${pills} doses left`,
+          ? `Refill date passed (${p.refillByDate}) (${stockText})`
+          : `Refill date in ${daysUntilRefillDate}d (${p.refillByDate}) — ${stockText}`,
     };
   }
   if (byDose) {
@@ -94,6 +96,9 @@ export function isMedicationRefillDue(p: Partial<MedicationPayload>, todayIso: s
 
 export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = ({ mode }) => {
   const { settings, records, logicalToday, pushToast, startCountdownTimer } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'danger' }));
+  const guardAction = useViewActionGuard(message => pushToast(message, { tone: 'danger' }));
+
 
   // Household member state
   const [memberName, setMemberName] = useState('');
@@ -204,7 +209,7 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
 
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-1', async (e) => {
             e.preventDefault();
             if (!memberName.trim()) return;
             await createRecord('household_member', memberName.trim(), {
@@ -214,7 +219,7 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
             });
             setMemberName('');
             pushToast('Added household member', { canUndo: true });
-          }}
+          })}
         >
           <input className="dp-input" style={{ flex: 2 }} placeholder="Member name…" value={memberName} onChange={(e) => setMemberName(e.target.value)} />
           <input
@@ -274,10 +279,10 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
                     className="dp-icon-btn"
                     title="Delete household member"
                     aria-label={`Delete ${row.member.title}`}
-                    onClick={async () => {
+                    onClick={guardAction('action-1', async () => {
                       await softDeleteRecord(row.member.id);
                       pushToast(`Moved "${row.member.title}" to Trash`, { canUndo: true });
-                    }}
+                    })}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -324,7 +329,7 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
         <form
           className="dp-stack"
           style={{ gap: 10 }}
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-2', async (e) => {
             e.preventDefault();
             if (!medName.trim()) return;
             await createRecord<MedicationPayload>('medication', medName.trim(), {
@@ -344,7 +349,7 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
             setMedName('');
             setMedSecondTime('');
             pushToast('Medication added with reminder & refill tracking', { canUndo: true });
-          }}
+          })}
         >
           <div className="dp-row">
             <input className="dp-input" style={{ flex: 2, minWidth: 160 }} placeholder="Medication / supplement name…" value={medName} onChange={(e) => setMedName(e.target.value)} />
@@ -498,7 +503,7 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
                   <button
                     type="button"
                     className="dp-btn dp-btn-primary dp-btn-sm"
-                    onClick={async () => {
+                    onClick={guardAction('action-2', async () => {
                       const now = new Date();
                       const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
                       const nextPills = Math.max(0, remaining - 1);
@@ -539,7 +544,7 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
                       } else {
                         pushToast(`Logged ${m.title} taken at ${formatTimeDisplay(nowHHMM, settings.timeFormat)}`, { canUndo: true });
                       }
-                    }}
+                    })}
                   >
                     <Check size={14} /> Take Now
                   </button>
@@ -600,10 +605,10 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
                     className="dp-icon-btn"
                     title="Move medication to Trash"
                     aria-label={`Delete ${m.title}`}
-                    onClick={async () => {
+                    onClick={guardAction('action-3', async () => {
                       await softDeleteRecord(m.id);
                       pushToast(`Moved "${m.title}" to Trash`, { canUndo: true });
-                    }}
+                    })}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -669,13 +674,13 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
           <h4><Dumbbell size={16} /> Workout Templates &amp; Rest Timer</h4>
           <form
             className="dp-stack"
-            onSubmit={async (e) => {
+            onSubmit={guardForm('form-3', async (e) => {
               e.preventDefault();
               if (!workoutTitle.trim()) return;
               await createRecord('workout', workoutTitle.trim(), { details: workoutDetails, restSec, logs: [] });
               setWorkoutTitle('');
               pushToast('Saved workout template', { canUndo: true });
-            }}
+            })}
           >
             <input className="dp-input" placeholder="Workout template (e.g., Full Body A)" value={workoutTitle} onChange={(e) => setWorkoutTitle(e.target.value)} />
             <input className="dp-input" value={workoutDetails} onChange={(e) => setWorkoutDetails(e.target.value)} placeholder="Sets/reps/weight or cardio" />
@@ -704,10 +709,10 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
                     type="button"
                     className="dp-icon-btn"
                     title="Delete workout template"
-                    onClick={async () => {
+                    onClick={guardAction('action-4', async () => {
                       await softDeleteRecord(w.id);
                       pushToast(`Moved "${w.title}" to Trash`, { canUndo: true });
-                    }}
+                    })}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -730,11 +735,11 @@ export const HouseholdHealthView: React.FC<{ mode: 'household' | 'health' }> = (
           <button
             type="button"
             className="dp-btn dp-btn-primary dp-btn-sm"
-            onClick={async () => {
+            onClick={guardAction('action-5', async () => {
               await createRecord('wellness_log', `Wellness ${logicalToday}`, { date: logicalToday, steps: stepsToday, note: vitalsNote });
               setVitalsNote('');
               pushToast('Logged wellness check-in', { canUndo: true });
-            }}
+            })}
           >
             Save Wellness Log
           </button>

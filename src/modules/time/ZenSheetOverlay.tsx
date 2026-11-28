@@ -20,8 +20,11 @@ export const ZenSheetOverlay: React.FC = () => {
 
   useEffect(() => {
     if (!zenOpen) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 500);
-    return () => window.clearInterval(id);
+    const refresh = () => { if (!document.hidden) setNowMs(Date.now()); };
+    refresh();
+    const id = window.setInterval(refresh, 1000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', refresh); };
   }, [zenOpen]);
 
   if (!zenOpen) return null;

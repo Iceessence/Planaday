@@ -1,3 +1,5 @@
+import { useViewFormGuard } from '../../components/Common/viewSafety';
+import { useMinuteClock } from '../../components/Common/viewSafety';
 import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -73,6 +75,7 @@ export const QuickGlanceView: React.FC = () => {
     startCountdownTimer,
     pushToast,
   } = useApp();
+  const guardForm = useViewFormGuard(message => pushToast(message, { tone: 'warn' }));
 
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [quickText, setQuickText] = useState('');
@@ -94,12 +97,13 @@ export const QuickGlanceView: React.FC = () => {
     numberStyle: 'arabic' as const,
   };
 
-  const nowHHMM = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
+  const now = useMinuteClock();
+  const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   // 1. Next Single Upcoming Event
   const nextEvent = useMemo(() => {
     const evs = (records.filter((r) => r.type === 'event' && r.status === 'active') as Array<LifeRecord<CalendarEventPayload>>)
-      .filter((e) => e.payload.startDate > logicalToday || (e.payload.startDate === logicalToday && (e.payload.allDay || (e.payload.endTime || '23:59') >= nowHHMM)))
+      .filter((e) => e.payload.eventStatus !== 'canceled' && ((e.payload.endDate || e.payload.startDate) > logicalToday || ((e.payload.endDate || e.payload.startDate) === logicalToday && (e.payload.allDay || (e.payload.endTime || '23:59') >= nowHHMM))))
       .sort((a, b) =>
         `${a.payload.startDate} ${a.payload.startTime || '00:00'}`.localeCompare(
           `${b.payload.startDate} ${b.payload.startTime || '00:00'}`
@@ -427,7 +431,7 @@ export const QuickGlanceView: React.FC = () => {
         </div>
 
         {activeAction && (
-          <form className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }} onSubmit={handleQuickActionSubmit}>
+          <form className="dp-row" style={{ flexWrap: 'wrap', gap: 8 }} onSubmit={guardForm('form-1', handleQuickActionSubmit)}>
             <input
               autoFocus
               className="dp-input"
@@ -624,13 +628,13 @@ export const QuickGlanceView: React.FC = () => {
         </div>
         <form
           className="dp-row"
-          onSubmit={async (e) => {
+          onSubmit={guardForm('form-2', async (e) => {
             e.preventDefault();
             if (!inboxInput.trim()) return;
             await createRecord('quick_capture', inboxInput.trim(), { capturedDate: logicalToday });
             setInboxInput('');
             pushToast('Added to Quick Capture Inbox');
-          }}
+          })}
         >
           <input
             className="dp-input"

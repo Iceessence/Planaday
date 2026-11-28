@@ -54,3 +54,12 @@
     display: none !important;
   }
 }
+
+@media print {
+  .dp-content, .dp-main-col { overflow: visible !important; height: auto !important; max-height: none !important; }
+  .dp-paper-sheet, .dp-open-book { break-inside: auto; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+}
+
+@media print { .dp-sheet-grid { overflow: visible !important; max-height: none !important; } }

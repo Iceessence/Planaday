@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlarmClock,
@@ -218,19 +218,29 @@ export const MobileNav: React.FC = () => {
   const [menuQuery, setMenuQuery] = useState('');
   const [newTabName, setNewTabName] = useState('');
 
-  const primaryTabs = settings.mobilePrimaryTabs.slice(0, 4);
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const visibleGroups = useMemo(() => DRAWER_GROUPS.map((g) => ({ ...g, items: g.items.filter((it) =>
+    (!it.moduleId || isModuleEnabled(it.moduleId)) && !settings.hiddenSidebarViews.includes(it.view))
+  })).filter((g) => g.items.length), [isModuleEnabled, settings.enabledModules, settings.hiddenSidebarViews]);
+  const primaryTabs = useMemo(() => {
+    const allowed = new Set(visibleGroups.flatMap((g) => g.items.map((it) => it.view)));
+    return Array.from(new Set([...settings.mobilePrimaryTabs, 'home', 'today', 'calendar', 'tasks', ...allowed] as NavView[]))
+      .filter((view) => allowed.has(view)).slice(0, 4);
+  }, [settings.mobilePrimaryTabs, visibleGroups]);
+  useEffect(() => { if (!mobileMenuOpen) setMenuQuery(''); }, [mobileMenuOpen]);
 
   const filteredGroups = useMemo(() => {
-    const q = menuQuery.trim().toLowerCase();
-    return DRAWER_GROUPS.map((g) => ({
-      ...g,
-      items: g.items.filter(
-        (it) =>
-          (!it.moduleId || isModuleEnabled(it.moduleId)) &&
-          (!q || it.label.toLowerCase().includes(q) || g.title.toLowerCase().includes(q))
-      ),
-    })).filter((g) => g.items.length > 0);
-  }, [menuQuery, isModuleEnabled]);
+    if (!mobileMenuOpen) return [];
+    const words = menuQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return visibleGroups.map((g) => ({ ...g, items: g.items.filter((it) => {
+      const text = `${it.label} ${g.title} ${it.view.replace(/_/g, ' ')}`.toLowerCase();
+      return words.every((word) => text.includes(word));
+    }) })).filter((g) => g.items.length > 0);
+  }, [menuQuery, visibleGroups, mobileMenuOpen]);
+  const matchingCustom = useMemo(() => mobileMenuOpen ? settings.customTabs.filter((ct) =>
+    menuQuery.trim().toLowerCase().split(/\s+/).every((word) => `${ct.name} ${ct.emoji}`.toLowerCase().includes(word))) : [],
+    [settings.customTabs, menuQuery, mobileMenuOpen]);
 
   const navigate = (v: NavView) => {
     setActiveView(v);
@@ -258,6 +268,7 @@ export const MobileNav: React.FC = () => {
               key={view}
               type="button"
               className={`dp-mobile-tab ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => navigate(view)}
             >
               <span className="dp-mobile-tab-pill">{meta.icon}</span>
@@ -268,6 +279,8 @@ export const MobileNav: React.FC = () => {
         <button
           type="button"
           className={`dp-mobile-tab ${mobileMenuOpen ? 'active' : ''}`}
+          aria-expanded={mobileMenuOpen}
+          aria-haspopup="dialog"
           onClick={() => setMobileMenuOpen(true)}
         >
           <span className="dp-mobile-tab-pill">
@@ -286,6 +299,7 @@ export const MobileNav: React.FC = () => {
             <input
               className="dp-input"
               style={{ flex: 1 }}
+              aria-label="Search navigation"
               placeholder="Jump to any module (e.g. Meds, Chores, Notes, Budget)…"
               value={menuQuery}
               onChange={(e) => setMenuQuery(e.target.value)}
@@ -353,13 +367,13 @@ export const MobileNav: React.FC = () => {
           )}
 
           {/* My Custom Tabs */}
-          {!menuQuery && (
+          {(!menuQuery || matchingCustom.length > 0) && (
             <div className="dp-stack" style={{ gap: 6 }}>
               <strong style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--dp-muted)' }}>
                 My Custom Tabs
               </strong>
               <div className="dp-grid-2" style={{ gap: 8 }}>
-                {settings.customTabs.map((ct) => (
+                {matchingCustom.map((ct) => (
                   <button
                     key={ct.id}
                     type="button"
@@ -375,14 +389,16 @@ export const MobileNav: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <form
+              {!menuQuery && <form
                 className="dp-row"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
                   const nm = newTabName.trim();
-                  if (!nm) return;
+                  if (!nm || creatingRef.current) return;
+                  creatingRef.current = true; setCreating(true);
+                  try {
                   const id = `ctab_${Date.now().toString(36)}`;
-                  void patchSettings({
+                  await patchSettings({
                     customTabs: [
                       ...settings.customTabs,
                       {
@@ -402,21 +418,25 @@ export const MobileNav: React.FC = () => {
                   openCustomTab(id);
                   setMobileMenuOpen(false);
                   pushToast(`Created custom tab "${nm}"!`);
+                  } catch { pushToast('Could not create tab. Please try again.', { tone: 'warn' }); }
+                  finally { creatingRef.current = false; setCreating(false); }
                 }}
               >
                 <input
                   className="dp-input"
                   style={{ flex: 1 }}
+                  aria-label="New custom tab name"
                   placeholder="+ Create new custom tab…"
                   value={newTabName}
                   onChange={(e) => setNewTabName(e.target.value)}
                 />
-                <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm">Add</button>
-              </form>
+                <button type="submit" className="dp-btn dp-btn-primary dp-btn-sm" disabled={creating || !newTabName.trim()}>{creating ? 'Adding…' : 'Add'}</button>
+              </form>}
             </div>
           )}
 
           {/* Categorized Native App Tiles */}
+          {menuQuery.trim() && !filteredGroups.length && !matchingCustom.length && <p className="dp-muted" role="status">No matching modules or custom tabs.</p>}
           {filteredGroups.map((group) => (
             <div key={group.title} className="dp-stack" style={{ gap: 6 }}>
               <div className="dp-row" style={{ gap: 6 }}>
@@ -436,6 +456,7 @@ export const MobileNav: React.FC = () => {
                       minHeight: 44,
                       borderInlineStart: activeView === item.view ? undefined : `3px solid ${group.color}`,
                     }}
+                    aria-current={activeView === item.view ? 'page' : undefined}
                     onClick={() => navigate(item.view)}
                   >
                     {item.icon}
