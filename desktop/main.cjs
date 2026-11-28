@@ -2,16 +2,22 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const { app, BrowserWindow, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage } = require('electron');
 
 const LOCAL_PORT = 41932;
 let mainWindow = null;
+const secondaryWindows = new Set();
 let tray = null;
 let isQuitting = false;
+let localServerUrl = null;
+let pendingOpenFiles = [];
+
+const SUPPORTED_OPEN_EXTS = new Set(['.pdf', '.dmtheme']);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -19,6 +25,7 @@ const MIME_TYPES = {
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json',
   '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
 };
 
 /** Build a genuine 32x32 amber & cream Planaday "P" PNG buffer for Windows/macOS/Linux Tray & Window icons. */
@@ -81,7 +88,38 @@ function buildPlanadayIconPng() {
   ]);
 }
 
+function extractSupportedFilesFromArgv(argv) {
+  const out = [];
+  for (const arg of argv || []) {
+    if (!arg || arg.startsWith('-')) continue;
+    const ext = path.extname(arg).toLowerCase();
+    if (SUPPORTED_OPEN_EXTS.has(ext) && fs.existsSync(arg)) {
+      out.push(path.resolve(arg));
+    }
+  }
+  return out;
+}
+
+function deliverFileToRenderer(targetWin, filePath) {
+  try {
+    if (!targetWin || targetWin.isDestroyed()) return;
+    const ext = path.extname(filePath).toLowerCase();
+    if (!SUPPORTED_OPEN_EXTS.has(ext)) return;
+    const stat = fs.statSync(filePath);
+    if (stat.size > 64 * 1024 * 1024) return;
+    const bytes = fs.readFileSync(filePath);
+    targetWin.webContents.send('planaday:open-file', {
+      fileName: path.basename(filePath),
+      ext,
+      base64: bytes.toString('base64'),
+    });
+  } catch {
+    // Non-fatal if file is unreadable
+  }
+}
+
 function startLocalStaticServer() {
+  if (localServerUrl) return Promise.resolve(localServerUrl);
   const webRoot = fs.existsSync(path.join(__dirname, 'web'))
     ? path.join(__dirname, 'web')
     : path.resolve(__dirname, '../dist');
@@ -91,7 +129,12 @@ function startLocalStaticServer() {
       const reqPath = (req.url || '/').split('?')[0];
       if (reqPath.startsWith('/api/')) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Local desktop bundle has no built-in sync API. Set your Docker LAN or Tailscale Server URL in Settings → 3-Mode Sync.' }));
+        res.end(
+          JSON.stringify({
+            error:
+              'Local desktop bundle has no built-in sync API. Set your Docker LAN or Tailscale Server URL in Settings → 3-Mode Sync.',
+          })
+        );
         return;
       }
       let filePath = path.join(webRoot, reqPath === '/' ? 'index.html' : reqPath);
@@ -111,18 +154,53 @@ function startLocalStaticServer() {
     });
 
     server.on('error', () => {
-      // Fallback to an ephemeral port if LOCAL_PORT is already occupied
       server.listen(0, '127.0.0.1', () => {
         const addr = server.address();
         const port = typeof addr === 'object' && addr ? addr.port : LOCAL_PORT;
-        resolve(`http://127.0.0.1:${port}`);
+        localServerUrl = `http://127.0.0.1:${port}`;
+        resolve(localServerUrl);
       });
     });
 
     server.listen(LOCAL_PORT, '127.0.0.1', () => {
-      resolve(`http://127.0.0.1:${LOCAL_PORT}`);
+      localServerUrl = `http://127.0.0.1:${LOCAL_PORT}`;
+      resolve(localServerUrl);
     });
   });
+}
+
+function attachWindowSecurityGuards(win, allowedOrigin) {
+  // PD-020: Restrict external window opens & unexpected top-level navigations away from local bundle
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event, targetUrl) => {
+    if (!targetUrl.startsWith(allowedOrigin)) {
+      event.preventDefault();
+    }
+  });
+}
+
+async function openAdditionalWindow(appIcon) {
+  const localUrl = await startLocalStaticServer();
+  const win = new BrowserWindow({
+    width: 1240,
+    height: 820,
+    minWidth: 380,
+    minHeight: 560,
+    icon: appIcon,
+    title: 'Planaday — Workspace Window',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  attachWindowSecurityGuards(win, localUrl);
+  secondaryWindows.add(win);
+  win.on('closed', () => secondaryWindows.delete(win));
+  await win.loadURL(localUrl);
+  return win;
 }
 
 function createTray(appIcon) {
@@ -131,6 +209,7 @@ function createTray(appIcon) {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Planaday', click: () => showMainWindow() },
+      { label: 'New Workspace Window', click: () => void openAdditionalWindow(appIcon) },
       { type: 'separator' },
       {
         label: 'Quit Planaday',
@@ -171,15 +250,15 @@ async function createWindow(appIcon) {
     },
   });
 
-  // PD-020: Restrict external window opens & unexpected top-level navigations away from local bundle
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
-    if (!targetUrl.startsWith(localUrl)) {
-      event.preventDefault();
-    }
-  });
-
+  attachWindowSecurityGuards(mainWindow, localUrl);
   await mainWindow.loadURL(localUrl);
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    for (const fp of pendingOpenFiles) {
+      deliverFileToRenderer(mainWindow, fp);
+    }
+    pendingOpenFiles = [];
+  });
 
   // Minimize to background tray instead of quitting so alarms & timers fire without Chrome open
   mainWindow.on('close', (e) => {
@@ -190,17 +269,33 @@ async function createWindow(appIcon) {
   });
 }
 
+pendingOpenFiles = extractSupportedFilesFromArgv(process.argv);
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     showMainWindow();
+    const files = extractSupportedFilesFromArgv(argv);
+    for (const fp of files) {
+      deliverFileToRenderer(mainWindow, fp);
+    }
   });
 
   app.whenReady().then(async () => {
     const appIcon = nativeImage.createFromBuffer(buildPlanadayIconPng());
     createTray(appIcon);
+
+    ipcMain.handle('planaday:new-window', async () => {
+      await openAdditionalWindow(appIcon);
+      return { ok: true };
+    });
+    ipcMain.handle('planaday:print', (event) => {
+      event.sender.print({ silent: false, printBackground: true });
+      return { ok: true };
+    });
+
     await createWindow(appIcon);
     app.on('activate', () => showMainWindow());
   });

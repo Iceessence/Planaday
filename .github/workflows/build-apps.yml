@@ -4,6 +4,12 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      build_release_aab:
+        description: "Build signed Android App Bundle (.aab) when repository signing secrets are configured"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   android-apk:
@@ -47,7 +53,7 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Enable exact alarm, notification & LAN/Tailscale cleartext permissions in AndroidManifest
+      - name: Configure Android 4.2.0 version, R8 release shrinking, permissions & PDF/Image intent filters
         run: |
           node -e '
             const fs = require("fs");
@@ -67,20 +73,54 @@ jobs:
               "android.permission.SCHEDULE_EXACT_ALARM",
               "android.permission.RECEIVE_BOOT_COMPLETED",
               "android.permission.VIBRATE",
-              "android.permission.WAKE_LOCK"
+              "android.permission.WAKE_LOCK",
+              "android.permission.CAMERA"
             ].filter((perm) => !xml.includes(perm))
              .map((perm) => `<uses-permission android:name="${perm}" />`)
              .join("\n    ");
-            if (perms) {
-              xml = xml.replace("<application", perms + "\n    <application");
+            const camFeature = xml.includes("android.hardware.camera")
+              ? ""
+              : `<uses-feature android:name="android.hardware.camera" android:required="false" />`;
+            if (perms || camFeature) {
+              xml = xml.replace("<application", [perms, camFeature].filter(Boolean).join("\n    ") + "\n    <application");
             }
             if (!xml.includes("usesCleartextTraffic")) {
               xml = xml.replace("<application", "<application android:usesCleartextTraffic=\"true\" android:networkSecurityConfig=\"@xml/network_security_config\"");
             }
+            if (!xml.includes("application/pdf")) {
+              const pdfAndScanIntents = `
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>`;
+              xml = xml.replace("</activity>", pdfAndScanIntents + "\n        </activity>");
+            }
             fs.writeFileSync(p, xml);
+
+            // Update versionCode / versionName to 4.2.0 & enable R8 shrinking on release builds
+            const gradlePath = "android/app/build.gradle";
+            if (fs.existsSync(gradlePath)) {
+              let g = fs.readFileSync(gradlePath, "utf8");
+              g = g.replace(/versionCode\s+\d+/, "versionCode 420");
+              g = g.replace(/versionName\s+"[^"]+"/, "versionName \"4.2.0\"");
+              g = g.replace(/minifyEnabled\s+false/, "minifyEnabled true\n            shrinkResources true");
+              fs.writeFileSync(gradlePath, g);
+            }
           '
 
-      - name: Build Android APK
+      - name: Build Android Debug APK
         working-directory: android
         run: |
           chmod +x ./gradlew
@@ -91,6 +131,30 @@ jobs:
         with:
           name: Planaday-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build Signed Android App Bundle (.aab) for Google Play (Optional, Secret-Gated)
+        if: ${{ inputs.build_release_aab == true && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release-keystore.jks
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$PWD/release-keystore.jks" \
+            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+          rm -f release-keystore.jks
+
+      - name: Upload Signed Android App Bundle (.aab)
+        if: ${{ inputs.build_release_aab == true && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planaday-Android-Release-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
 
   desktop-windows:
     runs-on: windows-latest

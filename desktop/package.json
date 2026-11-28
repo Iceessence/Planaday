@@ -1,11 +1,13 @@
 {
   "name": "planaday-desktop",
-  "version": "4.1.0",
-  "description": "Planaday Native Desktop App — Standalone Offline Life Planner with Background Alarms & Docker Sync",
+  "version": "4.2.0",
+  "description": "Planaday Native Desktop App — Standalone Offline Life Planner, Scanner, PDF Studio & Docker Sync",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win portable --x64",
+    "dist:win:installer": "electron-builder --win nsis portable --x64",
+    "dist:win:msix": "electron-builder --win appx --x64",
     "dist:mac": "electron-builder --mac dmg",
     "dist:linux": "electron-builder --linux AppImage"
   },
@@ -20,6 +22,20 @@
       "preload.cjs",
       "web/**/*"
     ],
+    "fileAssociations": [
+      {
+        "ext": "pdf",
+        "name": "PDF Document",
+        "description": "Open PDF in Planaday PDF Studio",
+        "role": "Editor"
+      },
+      {
+        "ext": "dmtheme",
+        "name": "Planaday Theme Pack",
+        "description": "Planaday Custom Theme Pack",
+        "role": "Editor"
+      }
+    ],
     "win": {
       "target": [
         {
@@ -27,6 +43,18 @@
           "arch": ["x64"]
         }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "appx": {
+      "identityName": "Planaday.Desktop",
+      "publisherDisplayName": "Planaday",
+      "applicationId": "PlanadayDesktop",
+      "displayName": "Planaday"
     }
   },
   "devDependencies": {

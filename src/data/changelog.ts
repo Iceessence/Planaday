@@ -14,6 +14,41 @@ export interface ChangelogRelease {
 
 export const PLANADAY_CHANGELOG: ChangelogRelease[] = [
   {
+    version: '4.2.0',
+    date: '2026-11-27',
+    title: 'Performance Overhaul, Activity-Aware Offline-First Sync, Unified Daily Notes Archive, Physical Note Scanner/OCR, Integrated PDF Studio & Optional RTX 5050 GPU Service',
+    highlights: [
+      '§2 Comprehensive Performance Overhaul: Lazy-loaded all 28+ non-initial views in App.tsx & AllInOneView.tsx (drastically cutting cold-start JS parse), added non-destructive Dexie v3 compound indexes & searchIndex table, built an incremental inverted trigram FTS index (`InvertedSearchIndex`) searching 100,000+ records well under 300ms p95, added bounded LRU ObjectURL caching (`blobCache.ts`), added `VirtualList`, optimized `AppContext.tsx` notification polling (60× fewer idle scans), and added SQLite composite indexes + 16 MB page cache PRAGMAs.',
+      '§3 True Offline-First + Activity-Aware Intelligent Sync: All local edits save immediately to IndexedDB; routine sync detects active user interaction (`keydown`, `input`, `pointerdown`, `pointermove`, `wheel`, `touchstart`) and defers automatically until ~10s of inactivity (configurable up to a max-postponement cap), yields heavy background blob transfers if the user resumes typing, and supports Smart Inactivity, Manual, Scheduled, Continuous, Completely Offline, Wi-Fi Only, Charging Only, and Selective Workspace Sync modes via a live Settings Sync Dashboard.',
+      '§4 Unified Daily Notes Archive (Zero Duplication): Today Spread’s Daily Notes & Margin Scratchpad now saves directly to a canonical `note` record referenced identically by both Today Spread and the new Notes → 📅 Daily Notes Archive tab, featuring month-calendar navigation, daily categories (`daily_specific`, `general_knowledge`, `ideas`, `reminders`, `research`, `uncategorized`), jump-to-daily-planner navigation, 1-click Task/Project/Diary/Permanent-Knowledge conversion, and automatic bidirectional backlinks.',
+      '§5 Physical Note Scanning & Handwriting OCR Studio (`DocumentScannerView` + `documentScanner.ts`): Camera capture, multi-page scanning, automatic Sobel document edge detection, true 4-point projective homography warp, integral-image shadow reduction & B&W cleanup, table-to-CSV extraction, hybrid offline `tesseract.js` Web Worker + optional RTX 5050 GPU OCR, `<70%` low-confidence word flags with mandatory manual review confirmation before saving to Laboratory records, and original scan blob preservation.',
+      '§6 Optional Self-Hosted NVIDIA RTX 5050 GPU Acceleration (`gpu-service/` + `docker-compose.gpu.yml` + `server/gpuBridge.ts`): Optional Dockge-ready FastAPI CUDA microservice with VRAM caps (`GPU_MEMORY_LIMIT_MB=6144`), persistent `/models` volume, priority job queue with cancellation & OOM recovery, authenticated `/api/gpu/*` routes, Settings privacy opt-in & CPU vs. GPU benchmark UI, and seamless offline on-device fallback.',
+      '§7 Integrated PDF Reader, Editor & Secure Redaction Studio (`PdfStudioView` + `pdfEngine.ts`): Offline PDF reading (Single, 2-Page Spread, Continuous Scroll, zoom, bookmarks, reading progress, full-text search), highlights/underlines/strikethroughs/comments/freehand ink/stamps/signatures, AcroForm reading & filling, true structural page rotate/crop/duplicate/add/delete/reorder/merge/split/image-insert (`pdf-lib`), scanned-page OCR indexing into Global Search, and TRUE irreversible secure redaction that replaces redacted pages with rasterized/sanitized output destroying underlying text bytes.',
+      '§8 & §9 Size Audit + Android/Windows Store Readiness: Documented exact APK (~4 MB) vs. Windows Electron (~100 MB) size & 45-module completeness audit (`PLANADAY_SIZE_AND_COMPLETENESS_AUDIT.md`), added Android PDF/image `VIEW`/`SEND` intent filters, R8 release shrinking, optional secret-gated AAB workflow, Windows `.pdf`/`.dmtheme` file associations, multi-window support, native Print, and MSIX/NSIS packaging metadata.',
+    ],
+    bugFixes: [
+      'Eliminated 4×/second idle full-record filter scans in `AppContext.tsx` by pre-memoizing alarm/event/chore/medication slices and gating minute-level triggers to once per minute boundary.',
+      'Eliminated premature `URL.revokeObjectURL` conflicts in `NotesView.tsx` by managing blob URL lifecycles centrally through the bounded LRU `blobUrlCache`.',
+      'Eliminated duplication between Today Spread daily notes and Notes by unifying both views onto one canonical `note` record ID with non-destructive fallback for legacy `diary.dailyNotes`.',
+    ],
+    performanceAndSync: [
+      'Isolated `pdf-lib`, `pdfjs-dist`, `tesseract.js`, `PdfStudioView`, and `DocumentScannerView` into dedicated on-demand lazy chunks so zero bytes are added to initial startup.',
+      'Added real 100,000-record search benchmark and local action latency regression suite (`tests/performance-benchmarks.test.ts`).',
+    ],
+    mobileAndUx: [
+      'Added Note Scanner & OCR and PDF Reader & Editor directly into Desktop Sidebar, Mobile Drawer, bottom navigation labels, Notes header, and Universal File Hub.',
+      'Added Activity-Aware Sync Policy Dashboard and Self-Hosted GPU Acceleration controls in Settings → 3-Mode Sync.',
+    ],
+    storageAndData: [
+      'Non-destructive additive Dexie v3 schema adding compound record indexes (`[workspaceId+deletedAt]`, `[workspaceId+type+updatedAt]`, `[type+updatedAt]`) and `searchIndex` table while preserving `dayplana-v2`, `/data/dayplana.sqlite`, `dayplana_db`, and `com.dayplana.app`.',
+    ],
+    knownLimitations: [
+      'NVIDIA RTX 5050 CUDA acceleration requires deploying the optional `docker-compose.gpu.yml` overlay on a Docker host with the NVIDIA Container Toolkit; without it, Planaday uses on-device `tesseract.js` OCR and Canvas enhancement automatically.',
+      'On-device `tesseract.js` requires initial language model fetch (or browser cache) the first time a language is used; if completely offline with no cached traineddata, Scanner cleanly enters Manual Transcription mode beside the preserved scan image.',
+      'Real-device Android APK, Windows `.exe` installer, physical camera capture, and RTX 5050 CUDA hardware benchmarks must be confirmed on the owner’s hardware after deployment.',
+    ],
+  },
+  {
     version: '4.1.0',
     date: '2026-11-24',
     title: 'Comprehensive Integrity, Sync, Security, Mobile Layout, Calculation & Recovery Overhaul',
