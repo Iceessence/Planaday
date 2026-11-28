@@ -43,6 +43,20 @@ export function isPrivateOrReservedIp(ip: string): boolean {
   }
   if (net.isIPv6(clean)) {
     if (clean === '::' || clean === '::1') return true;
+    // Detect IPv4-mapped IPv6 in hex form (e.g. ::ffff:7f00:1 or 0:0:0:0:0:ffff:7f00:1)
+    const mappedHex = clean.match(/(?:^|:)ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (mappedHex) {
+      const hi = parseInt(mappedHex[1], 16);
+      const lo = parseInt(mappedHex[2], 16);
+      const v4 = `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+      return isPrivateOrReservedIp(v4);
+    }
+    // Detect full zero-padded IPv4-mapped or loopback forms (e.g. 0:0:0:0:0:0:0:1 or 0:0:0:0:0:ffff:127.0.0.1)
+    if (/^(?:0+:){5}ffff:/i.test(clean)) {
+      return isPrivateOrReservedIp(clean.replace(/^(?:0+:){5}ffff:/i, ''));
+    }
+    if (/^(?:0+:){7}0*1$/i.test(clean) || /^(?:0+:){7}0+$/i.test(clean)) return true;
+    if (clean.startsWith('64:ff9b:') || clean.startsWith('100::')) return true; // NAT64 & RFC 6666 discard
     if (clean.startsWith('fc') || clean.startsWith('fd')) return true; // Unique local fc00::/7
     if (clean.startsWith('fe8') || clean.startsWith('fe9') || clean.startsWith('fea') || clean.startsWith('feb')) {
       return true; // Link-local fe80::/10

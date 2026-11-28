@@ -225,7 +225,12 @@ export class ServerAuthStore {
     if (!row || row.used_at || new Date(row.expires_at).getTime() < Date.now()) {
       throw new Error('Pairing code is invalid, already used, or expired.');
     }
-    this.db.prepare('UPDATE auth_pairing_codes SET used_at = ? WHERE code_hash = ?').run(new Date().toISOString(), ch);
+    const upd = this.db
+      .prepare('UPDATE auth_pairing_codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL')
+      .run(new Date().toISOString(), ch);
+    if (upd.changes !== 1) {
+      throw new Error('Pairing code was already redeemed.');
+    }
     const workspaces = row.allowed_workspaces ? (JSON.parse(row.allowed_workspaces) as string[]) : null;
     const issued = this.issueDeviceToken(deviceId, deviceLabel || row.label, row.role, workspaces);
     this.logAudit('device_paired', issued.tokenId, `device=${deviceId}, role=${row.role}`);

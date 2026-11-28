@@ -1,9 +1,12 @@
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# CUDA 12.8+ runtime is required for NVIDIA Blackwell architecture (RTX 5050 / 5060 / 5070 / 5080, sm_120)
+# while remaining backward-compatible with Ampere/Ada (RTX 30xx/40xx).
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     MODEL_CACHE_DIR=/models \
     GPU_MEMORY_LIMIT_MB=6144 \
+    GPU_MAX_IMAGE_BYTES=26214400 \
     PORT=8100
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -211,6 +211,22 @@ export class SyncDatabase {
     return { recordCount: countRow.c, seq: this.getCurrentSeq() };
   }
 
+  public getRecordWorkspaceId(recordId: string): string | null {
+    const row = this.db.prepare('SELECT workspace_id FROM records WHERE id = ?').get(recordId) as
+      | { workspace_id: string }
+      | undefined;
+    return row ? row.workspace_id : null;
+  }
+
+  public getRecordCountForWorkspaces(workspaceIds: string[]): number {
+    if (!workspaceIds.length) return 0;
+    const placeholders = workspaceIds.map(() => '?').join(', ');
+    const row = this.db
+      .prepare(`SELECT COUNT(*) as c FROM records WHERE workspace_id IN (${placeholders})`)
+      .get(...workspaceIds) as { c: number };
+    return row ? row.c : 0;
+  }
+
   public getActiveRecordsByType(type: string): ServerLifeRecord[] {
     const rows = this.db
       .prepare('SELECT json_data FROM records WHERE type = ? AND deleted_at IS NULL')

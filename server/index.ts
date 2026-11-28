@@ -75,25 +75,57 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     }
   );
 
-  // Extract & verify Bearer token on protected routes (PD-004)
-  function extractToken(req: FastifyRequest): string | null {
+  // Extract & verify Bearer token on protected routes (PD-004).
+  // Query-string ?token= is accepted ONLY on SSE /api/sync/events where EventSource cannot send custom headers.
+  function extractToken(req: FastifyRequest, allowQueryToken = false): string | null {
     const authHeader = req.headers.authorization;
     if (typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
       return authHeader.slice(7).trim();
     }
-    const q = req.query as Record<string, unknown> | undefined;
-    if (q && typeof q.token === 'string' && q.token.trim()) {
-      return q.token.trim();
+    if (allowQueryToken) {
+      const q = req.query as Record<string, unknown> | undefined;
+      if (q && typeof q.token === 'string' && q.token.trim()) {
+        return q.token.trim();
+      }
     }
     return null;
   }
 
-  async function requireAuthGuard(req: FastifyRequest, reply: FastifyReply, ownerOnly = false): Promise<boolean> {
+  // Sliding-window brute-force guard for unauthenticated auth endpoints (signin / pair / setup)
+  const authRateHits = new Map<string, number[]>();
+  function checkAuthRateLimit(req: FastifyRequest, reply: FastifyReply, bucket: string, maxAttempts = 20, windowMs = 60_000): boolean {
+    const key = `${bucket}:${req.ip || 'local'}`;
+    const now = Date.now();
+    const recent = (authRateHits.get(key) ?? []).filter((ts) => now - ts < windowMs);
+    if (recent.length >= maxAttempts) {
+      authRateHits.set(key, recent);
+      reply.code(429).send({
+        ok: false,
+        error: 'Too many authentication attempts. Please wait a minute and try again.',
+        code: 'RATE_LIMITED',
+      });
+      return false;
+    }
+    recent.push(now);
+    authRateHits.set(key, recent);
+    if (authRateHits.size > 500) {
+      const oldest = authRateHits.keys().next().value;
+      if (oldest) authRateHits.delete(oldest);
+    }
+    return true;
+  }
+
+  async function requireAuthGuard(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    ownerOnly = false,
+    allowQueryToken = false
+  ): Promise<boolean> {
     if (!authStore.isAuthEnforced()) {
       req.principal = null;
       return true;
     }
-    const token = extractToken(req);
+    const token = extractToken(req, allowQueryToken);
     const principal = authStore.verifyBearerToken(token);
     if (!principal) {
       reply.code(401).send({
@@ -115,8 +147,8 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     return true;
   }
 
-  // Connected SSE clients for live LAN/Tailscale sync push
-  const sseClients = new Set<{ deviceId: string; write: (msg: string) => void }>();
+  // Connected SSE clients for live LAN/Tailscale sync push (with explicit shutdown cleanup)
+  const sseClients = new Set<{ deviceId: string; write: (msg: string) => void; close: () => void }>();
 
   function broadcastSyncUpdate(sourceDeviceId: string, seq: number) {
     const payload = `event: sync-update\ndata: ${JSON.stringify({ sourceDeviceId, seq })}\n\n`;
@@ -181,6 +213,7 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
   app.post<{ Body: { ownerName?: string; passphrase: string; deviceId?: string; deviceLabel?: string } }>(
     '/api/auth/setup',
     async (req, reply) => {
+      if (!checkAuthRateLimit(req, reply, 'setup', 15, 60_000)) return;
       try {
         const { ownerName = 'Owner', passphrase, deviceId = 'owner-device', deviceLabel = 'Primary Device' } = req.body ?? {};
         const result = authStore.setupOwner(ownerName, passphrase, deviceId, deviceLabel);
@@ -192,6 +225,7 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
   );
 
   app.post<{ Body: { passphrase: string; deviceId?: string; deviceLabel?: string } }>('/api/auth/signin', async (req, reply) => {
+    if (!checkAuthRateLimit(req, reply, 'signin', 20, 60_000)) return;
     try {
       const { passphrase, deviceId = 'owner-device', deviceLabel = 'Signed-in Device' } = req.body ?? {};
       const result = authStore.signInOwner(passphrase, deviceId, deviceLabel);
@@ -212,6 +246,7 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
   );
 
   app.post<{ Body: { code: string; deviceId: string; deviceLabel?: string } }>('/api/auth/pair', async (req, reply) => {
+    if (!checkAuthRateLimit(req, reply, 'pair', 20, 60_000)) return;
     try {
       const { code, deviceId, deviceLabel } = req.body ?? {};
       if (!code || !deviceId) return reply.code(400).send({ ok: false, error: 'Missing pairing code or deviceId' });
@@ -311,17 +346,31 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     const { deviceId, operations } = req.body ?? { deviceId: 'unknown', operations: [] };
     const ops = Array.isArray(operations) ? operations : [];
 
-    // Enforce workspace authorization for scoped non-owner tokens
+    // Enforce strict workspace authorization for scoped non-owner tokens:
+    // 1. Target record MUST declare an explicit allowed workspaceId (no default fallback to ws_personal).
+    // 2. If the record already exists on the server, its existing workspace_id MUST ALSO be in allowedWorkspaces
+    //    so a scoped token cannot reassign or overwrite a record belonging to a forbidden workspace!
     const allowed = req.principal?.allowedWorkspaces;
     if (allowed && allowed.length > 0) {
       for (const op of ops) {
-        const ws = op.record?.workspaceId;
-        if (ws && !allowed.includes(ws)) {
+        const ws = typeof op.record?.workspaceId === 'string' ? op.record.workspaceId.trim() : '';
+        if (op.record && (!ws || !allowed.includes(ws))) {
           return reply.code(403).send({
             ok: false,
-            error: `Device token is not authorized to modify workspace "${ws}".`,
+            error: `Device token is not authorized to modify workspace "${ws || '(unspecified)'}".`,
             code: 'WORKSPACE_FORBIDDEN',
           });
+        }
+        const targetId = op.record?.id ?? op.recordId;
+        if (targetId) {
+          const existingWs = syncDb.getRecordWorkspaceId(targetId);
+          if (existingWs && !allowed.includes(existingWs)) {
+            return reply.code(403).send({
+              ok: false,
+              error: `Device token is not authorized to overwrite record "${targetId}" in workspace "${existingWs}".`,
+              code: 'WORKSPACE_FORBIDDEN',
+            });
+          }
         }
       }
     }
@@ -339,22 +388,22 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     const since = Number(req.query?.since ?? 0);
     const pulled = syncDb.pullSince(Number.isFinite(since) ? since : 0);
     const allowed = req.principal?.allowedWorkspaces;
-    const records =
-      allowed && allowed.length > 0
-        ? pulled.records.filter((r) => allowed.includes(r.workspaceId))
-        : pulled.records;
+    const isScoped = Boolean(allowed && allowed.length > 0);
+    const records = isScoped
+      ? pulled.records.filter((r) => allowed!.includes(r.workspaceId))
+      : pulled.records;
     const identity = syncDb.getServerIdentity();
     return reply.send({
       seq: pulled.seq,
       records,
-      recordCount: syncDb.getStats().recordCount,
+      recordCount: isScoped ? syncDb.getRecordCountForWorkspaces(allowed!) : syncDb.getStats().recordCount,
       serverId: identity.serverId,
       syncEpoch: identity.syncEpoch,
     });
   });
 
   app.get<{ Querystring: { deviceId?: string; token?: string } }>('/api/sync/events', async (req, reply) => {
-    if (!(await requireAuthGuard(req, reply, false))) return;
+    if (!(await requireAuthGuard(req, reply, false, true))) return;
     const deviceId = req.query?.deviceId ?? 'unknown';
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -366,12 +415,6 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
       `event: connected\ndata: ${JSON.stringify({ seq: syncDb.getCurrentSeq(), serverId: identity.serverId, syncEpoch: identity.syncEpoch })}\n\n`
     );
 
-    const client = {
-      deviceId,
-      write: (msg: string) => reply.raw.write(msg),
-    };
-    sseClients.add(client);
-
     const ping = setInterval(() => {
       try {
         reply.raw.write(': keepalive\n\n');
@@ -380,6 +423,17 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
         sseClients.delete(client);
       }
     }, 25000);
+
+    const client = {
+      deviceId,
+      write: (msg: string) => reply.raw.write(msg),
+      close: () => {
+        clearInterval(ping);
+        sseClients.delete(client);
+        try { reply.raw.end(); } catch { /* ignore */ }
+      },
+    };
+    sseClients.add(client);
 
     req.raw.on('close', () => {
       clearInterval(ping);
@@ -401,7 +455,13 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
       : typeof rawBody === 'string'
         ? Buffer.from(rawBody)
         : Buffer.from(JSON.stringify(rawBody ?? ''));
-    const name = decodeURIComponent(String(req.headers['x-blob-name'] || 'attachment'));
+    const rawNameHeader = String(req.headers['x-blob-name'] || 'attachment');
+    let name = rawNameHeader;
+    try {
+      name = decodeURIComponent(rawNameHeader);
+    } catch {
+      name = rawNameHeader.replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 120) || 'attachment';
+    }
     try {
       const meta = blobStore.putBlob(hash, buf, mimeType, name);
       return reply.code(200).send({ ok: true, meta });
@@ -564,6 +624,9 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
 
   app.addHook('onClose', async () => {
     clearInterval(dailyBackupTimer);
+    for (const client of Array.from(sseClients)) {
+      client.close();
+    }
     alarmScheduler.stop();
     syncDb.close();
   });

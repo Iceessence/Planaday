@@ -22,7 +22,13 @@ export class GpuServiceBridge {
   private fetchImpl: typeof fetch;
 
   constructor(opts: GpuBridgeOptions = {}) {
-    this.gpuUrl = (opts.gpuUrl ?? process.env.PLANADAY_GPU_URL ?? '').trim().replace(/\/+$/, '');
+    const rawUrl = (opts.gpuUrl ?? process.env.PLANADAY_GPU_URL ?? '').trim().replace(/\/+$/, '');
+    // Reject non-HTTP(S) schemes on GPU worker URL
+    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
+      this.gpuUrl = '';
+    } else {
+      this.gpuUrl = rawUrl;
+    }
     this.internalToken = (opts.internalToken ?? process.env.PLANADAY_GPU_INTERNAL_TOKEN ?? '').trim();
     this.timeoutMs = opts.timeoutMs ?? 45_000;
     this.fetchImpl = opts.fetchImpl ?? fetch;
@@ -70,7 +76,25 @@ export class GpuServiceBridge {
       ]);
       if (timer) clearTimeout(timer);
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      return { ok: res.ok, status: res.status, data: json };
+      if (!res.ok) {
+        const isAuthErr = res.status === 401 || res.status === 403;
+        return {
+          ok: false,
+          status: res.status,
+          data: {
+            ok: false,
+            available: false,
+            fallback: 'local',
+            authError: isAuthErr,
+            reason: isAuthErr
+              ? `GPU worker rejected internal token (HTTP ${res.status}) — verify PLANADAY_GPU_INTERNAL_TOKEN matches between containers.`
+              : typeof json.detail === 'string'
+                ? json.detail
+                : `GPU worker returned HTTP ${res.status} — falling back to on-device processing.`,
+          },
+        };
+      }
+      return { ok: true, status: res.status, data: json };
     } catch (err) {
       if (timer) clearTimeout(timer);
       return {

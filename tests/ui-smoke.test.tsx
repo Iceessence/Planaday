@@ -49,8 +49,14 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
 
     await act(async () => {
       openBtn!.click();
-      await new Promise((r) => setTimeout(r, 120));
     });
+    // TodaySpread is lazy-loaded (Batch 6) — wait cleanly for Suspense chunk to resolve
+    for (let t = 0; t < 60; t++) {
+      if (container.textContent?.includes('Add to Today:')) break;
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 25));
+      });
+    }
 
     // Today Open-Book Spread renders with inline Add-to-Today, Still Upcoming Today & Daily Learning Fact
     expect(container.textContent).toContain('Add to Today:');
@@ -79,6 +85,8 @@ describe('Full App UI Smoke & Zero-Stub Navigation Check', () => {
       ['Book Studio', 'Book Writing & Story Studio'],
       ['Code Sandbox', 'Sandboxed Code & Testing Studio'],
       ['Camera & Photos', 'Camera, Photo Library & Non-Destructive Editor'],
+      ['Note Scanner & OCR', 'Physical Note Scanner'],
+      ['PDF Reader & Editor', 'Integrated PDF Reader, Editor'],
       ['Universal Files', 'Universal Document & File Hub'],
       ['Flow Calendar', 'Flow Calendar'],
       ['Tasks', 'Tasks & Nested Subtasks'],

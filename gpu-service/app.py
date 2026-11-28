@@ -13,13 +13,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import hmac
 import io
 import os
 import subprocess
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -28,6 +30,9 @@ MODEL_CACHE_DIR = os.environ.get("MODEL_CACHE_DIR", "/models")
 GPU_MEMORY_LIMIT_MB = int(os.environ.get("GPU_MEMORY_LIMIT_MB", "6144"))
 INTERNAL_TOKEN = os.environ.get("PLANADAY_GPU_INTERNAL_TOKEN", "").strip()
 MAX_CONCURRENT_JOBS = max(1, int(os.environ.get("GPU_MAX_CONCURRENT_JOBS", "2")))
+MAX_IMAGE_BYTES = max(1024 * 1024, int(os.environ.get("GPU_MAX_IMAGE_BYTES", str(25 * 1024 * 1024))))
+MAX_IMAGE_PIXELS = 40_000_000
+MAX_STORED_JOBS = 200
 
 os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
 os.environ.setdefault("HF_HOME", os.path.join(MODEL_CACHE_DIR, "hf"))
@@ -52,6 +57,54 @@ class GpuJob:
 
 JOBS: Dict[str, GpuJob] = {}
 JOB_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
+_OCR_ENGINE_CACHE: Dict[Tuple[str, bool], Any] = {}
+_OCR_ENGINE_LOCK = threading.Lock()
+_TORCH_VRAM_CONFIGURED = False
+
+
+def prune_jobs() -> None:
+    if len(JOBS) <= MAX_STORED_JOBS:
+        return
+    finished = sorted(
+        (j for j in JOBS.values() if j.status in ("completed", "canceled", "failed")),
+        key=lambda j: j.created_at,
+    )
+    excess = len(JOBS) - MAX_STORED_JOBS
+    for j in finished[:excess]:
+        JOBS.pop(j.job_id, None)
+
+
+def decode_validated_image_bytes(image_base64: str) -> bytes:
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="Missing imageBase64 payload")
+    # Fast pre-decode base64 length check before allocating decoded buffer
+    if len(image_base64) > int(MAX_IMAGE_BYTES * 1.4):
+        raise HTTPException(status_code=413, detail=f"Image payload exceeds {MAX_IMAGE_BYTES // (1024 * 1024)} MiB limit")
+    try:
+        raw = base64.b64decode(image_base64, validate=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid base64 image payload: {exc}")
+    if len(raw) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail=f"Image exceeds {MAX_IMAGE_BYTES // (1024 * 1024)} MiB limit")
+    return raw
+
+
+def enforce_torch_vram_limit() -> None:
+    global _TORCH_VRAM_CONFIGURED
+    if _TORCH_VRAM_CONFIGURED:
+        return
+    try:
+        import torch  # type: ignore
+
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            total_mb = props.total_memory / (1024 * 1024)
+            if total_mb > 0 and GPU_MEMORY_LIMIT_MB < total_mb:
+                frac = max(0.1, min(0.95, GPU_MEMORY_LIMIT_MB / total_mb))
+                torch.cuda.set_per_process_memory_fraction(frac, 0)
+            _TORCH_VRAM_CONFIGURED = True
+    except Exception:
+        pass
 
 
 def verify_internal_auth(authorization: Optional[str]) -> None:
@@ -60,7 +113,7 @@ def verify_internal_auth(authorization: Optional[str]) -> None:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing internal GPU service token")
     token = authorization[7:].strip()
-    if token != INTERNAL_TOKEN:
+    if not hmac.compare_digest(token.encode("utf-8"), INTERNAL_TOKEN.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Invalid internal GPU service token")
 
 
@@ -231,9 +284,50 @@ def cancel_job(job_id: str, authorization: Optional[str] = Header(default=None))
     return {"ok": True, "jobId": job_id, "status": job.status}
 
 
+def _get_cached_paddle_ocr(paddle_lang: str, use_gpu: bool) -> Any:
+    from paddleocr import PaddleOCR  # type: ignore
+
+    key = (paddle_lang, use_gpu)
+    with _OCR_ENGINE_LOCK:
+        engine = _OCR_ENGINE_CACHE.get(key)
+        if engine is None:
+            if len(_OCR_ENGINE_CACHE) >= 3:
+                oldest = next(iter(_OCR_ENGINE_CACHE))
+                _OCR_ENGINE_CACHE.pop(oldest, None)
+            engine = PaddleOCR(use_angle_cls=True, lang=paddle_lang, use_gpu=use_gpu, show_log=False)
+            _OCR_ENGINE_CACHE[key] = engine
+        return engine
+
+
+def _run_paddle_ocr_sync(img_bytes: bytes, language: str, model: str, hw: Dict[str, Any]) -> Dict[str, Any]:
+    import numpy as np  # type: ignore
+    from PIL import Image  # type: ignore
+
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    enforce_torch_vram_limit()
+    lang_map = {"eng": "en", "spa": "es", "fra": "fr", "deu": "de", "chi_sim": "ch", "jpn": "japan"}
+    paddle_lang = lang_map.get(language, "en")
+    ocr = _get_cached_paddle_ocr(paddle_lang, bool(hw["cudaAvailable"]))
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    result = ocr.ocr(np.array(img), cls=True)
+    lines: List[str] = []
+    words: List[Dict[str, Any]] = []
+    for block in result or []:
+        for line in block or []:
+            txt, conf = line[1][0], float(line[1][1]) * 100.0
+            lines.append(txt)
+            for tok in txt.split():
+                words.append({"text": tok, "confidence": round(conf, 1)})
+    text = "\n".join(lines).strip()
+    engine = "gpu-vlm" if model == "vlm_handwriting" else "gpu-paddleocr"
+    return {"text": text, "words": words, "engine": engine}
+
+
 @app.post("/ocr")
 async def run_ocr(req: OcrRequest, authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     verify_internal_auth(authorization)
+    img_bytes = decode_validated_image_bytes(req.imageBase64)
+    prune_jobs()
     job_id = f"gpu_{uuid.uuid4().hex[:10]}"
     job = GpuJob(job_id=job_id, kind="ocr", priority=req.priority)
     JOBS[job_id] = job
@@ -246,34 +340,10 @@ async def run_ocr(req: OcrRequest, authorization: Optional[str] = Header(default
         job.started_at = time.time()
         job.progress = 15
         try:
-            img_bytes = base64.b64decode(req.imageBase64)
-            hw = detect_gpu_hardware()
-            text = ""
-            words: List[Dict[str, Any]] = []
-            engine = "gpu-paddleocr"
-
-            # Attempt PaddleOCR (uses RTX 5050 CUDA when installed, CPU fallback otherwise)
+            hw = await asyncio.to_thread(detect_gpu_hardware)
             try:
-                from paddleocr import PaddleOCR  # type: ignore
-                import numpy as np  # type: ignore
-                from PIL import Image  # type: ignore
-
-                lang_map = {"eng": "en", "spa": "es", "fra": "fr", "deu": "de", "chi_sim": "ch", "jpn": "japan"}
-                paddle_lang = lang_map.get(req.language, "en")
-                ocr = PaddleOCR(use_angle_cls=True, lang=paddle_lang, use_gpu=hw["cudaAvailable"], show_log=False)
-                img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-                result = ocr.ocr(np.array(img), cls=True)
-                lines: List[str] = []
-                for block in result or []:
-                    for line in block or []:
-                        txt, conf = line[1][0], float(line[1][1]) * 100.0
-                        lines.append(txt)
-                        for tok in txt.split():
-                            words.append({"text": tok, "confidence": round(conf, 1)})
-                text = "\n".join(lines).strip()
-                engine = "gpu-vlm" if req.model == "vlm_handwriting" else "gpu-paddleocr"
+                ocr_out = await asyncio.to_thread(_run_paddle_ocr_sync, img_bytes, req.language, req.model, hw)
             except ImportError:
-                # Graceful explicit signal if PaddleOCR weights are not installed in this container
                 job.status = "completed"
                 job.progress = 100
                 job.finished_at = time.time()
@@ -285,6 +355,8 @@ async def run_ocr(req: OcrRequest, authorization: Optional[str] = Header(default
                     "error": "PaddleOCR runtime not installed in GPU container — falling back to on-device OCR.",
                 }
 
+            if job.canceled:
+                return {"ok": False, "jobId": job_id, "canceled": True}
             job.status = "completed"
             job.progress = 100
             job.finished_at = time.time()
@@ -292,12 +364,14 @@ async def run_ocr(req: OcrRequest, authorization: Optional[str] = Header(default
                 "ok": True,
                 "available": True,
                 "jobId": job_id,
-                "text": text,
-                "words": words,
-                "engine": engine,
+                "text": ocr_out["text"],
+                "words": ocr_out["words"],
+                "engine": ocr_out["engine"],
                 "deviceUsed": hw["deviceName"],
                 "durationMs": round((time.perf_counter() - started) * 1000, 1),
             }
+        except HTTPException:
+            raise
         except Exception as exc:
             release_gpu_memory()
             job.status = "failed"
@@ -306,29 +380,40 @@ async def run_ocr(req: OcrRequest, authorization: Optional[str] = Header(default
             raise HTTPException(status_code=500, detail=f"GPU OCR failed (recovered cleanly): {exc}")
 
 
+def _run_enhance_sync(raw: bytes, shadow_reduction: bool, contrast_boost: int) -> str:
+    from PIL import Image, ImageEnhance, ImageFilter, ImageOps  # type: ignore
+
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    if shadow_reduction:
+        img = ImageOps.autocontrast(img, cutoff=2)
+    factor = 1.0 + max(0, min(100, contrast_boost)) / 80.0
+    img = ImageEnhance.Contrast(img).enhance(factor)
+    img = img.filter(ImageFilter.SHARPEN)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 @app.post("/enhance")
 async def run_enhance(req: EnhanceRequest, authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     verify_internal_auth(authorization)
+    raw = decode_validated_image_bytes(req.imageBase64)
+    prune_jobs()
     job_id = f"gpu_{uuid.uuid4().hex[:10]}"
     job = GpuJob(job_id=job_id, kind="enhance", priority=req.priority)
     JOBS[job_id] = job
     started = time.perf_counter()
 
     async with JOB_SEMAPHORE:
+        if job.canceled:
+            return {"ok": False, "jobId": job_id, "canceled": True}
         job.status = "running"
         job.started_at = time.time()
         try:
-            from PIL import Image, ImageEnhance, ImageOps  # type: ignore
-
-            raw = base64.b64decode(req.imageBase64)
-            img = Image.open(io.BytesIO(raw)).convert("RGB")
-            if req.shadowReduction:
-                img = ImageOps.autocontrast(img, cutoff=2)
-            factor = 1.0 + max(0, min(100, req.contrastBoost)) / 80.0
-            img = ImageEnhance.Contrast(img).enhance(factor)
-            buf = io.BytesIO()
-            img.save(buf, format="PNG")
-            encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+            encoded = await asyncio.to_thread(_run_enhance_sync, raw, req.shadowReduction, req.contrastBoost)
+            if job.canceled:
+                return {"ok": False, "jobId": job_id, "canceled": True}
             job.status = "completed"
             job.progress = 100
             job.finished_at = time.time()
@@ -369,12 +454,10 @@ async def run_embed(req: EmbedRequest, authorization: Optional[str] = Header(def
     }
 
 
-@app.post("/benchmark")
-async def run_benchmark(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
-    verify_internal_auth(authorization)
+def _run_benchmark_sync() -> Tuple[Dict[str, Any], float, Optional[float]]:
     hw = detect_gpu_hardware()
+    enforce_torch_vram_limit()
 
-    # CPU micro-benchmark (1024x1024 matmul or pure-Python fallback)
     cpu_ms: float
     gpu_ms: Optional[float] = None
     try:
@@ -402,6 +485,13 @@ async def run_benchmark(authorization: Optional[str] = Header(default=None)) -> 
         for i in range(250_000):
             acc += (i * 31) % 97
         cpu_ms = round((time.perf_counter() - t0) * 1000, 2)
+    return hw, cpu_ms, gpu_ms
+
+
+@app.post("/benchmark")
+async def run_benchmark(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    verify_internal_auth(authorization)
+    hw, cpu_ms, gpu_ms = await asyncio.to_thread(_run_benchmark_sync)
 
     speedup = round(cpu_ms / gpu_ms, 2) if gpu_ms and gpu_ms > 0 else None
     return {

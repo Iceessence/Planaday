@@ -137,9 +137,25 @@ function startLocalStaticServer() {
         );
         return;
       }
-      let filePath = path.join(webRoot, reqPath === '/' ? 'index.html' : reqPath);
+      const resolvedWebRoot = path.resolve(webRoot);
+      let decodedPath = '/';
+      try {
+        decodedPath = decodeURIComponent(reqPath);
+      } catch {
+        res.writeHead(400);
+        res.end('Bad request');
+        return;
+      }
+      const relativeReq = decodedPath === '/' ? 'index.html' : decodedPath.replace(/^\/+/, '');
+      let filePath = path.resolve(resolvedWebRoot, relativeReq);
+      // Enforce strict directory containment so path-traversal URLs cannot read host files
+      if (filePath !== resolvedWebRoot && !filePath.startsWith(resolvedWebRoot + path.sep)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+      }
       if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        filePath = path.join(webRoot, 'index.html');
+        filePath = path.join(resolvedWebRoot, 'index.html');
       }
       const ext = path.extname(filePath).toLowerCase();
       fs.readFile(filePath, (err, data) => {
