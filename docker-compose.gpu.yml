@@ -1,0 +1,40 @@
+# Optional NVIDIA RTX 5050 / CUDA GPU Acceleration Overlay for Planaday (v4.2.0 §6)
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# Preserves all existing dayplana_data volumes & ports without altering base behavior.
+
+services:
+  dayplana:
+    environment:
+      - PLANADAY_GPU_URL=http://planaday-gpu:8100
+      - PLANADAY_GPU_INTERNAL_TOKEN=${PLANADAY_GPU_INTERNAL_TOKEN:-planaday-local-gpu-token}
+    depends_on:
+      - planaday-gpu
+
+  planaday-gpu:
+    build:
+      context: ./gpu-service
+      dockerfile: Dockerfile
+      args:
+        BUILD_WITH_PADDLEOCR: ${BUILD_WITH_PADDLEOCR:-0}
+    container_name: planaday-gpu
+    restart: unless-stopped
+    environment:
+      - MODEL_CACHE_DIR=/models
+      - GPU_MEMORY_LIMIT_MB=${GPU_MEMORY_LIMIT_MB:-6144}
+      - GPU_MAX_CONCURRENT_JOBS=${GPU_MAX_CONCURRENT_JOBS:-2}
+      - PLANADAY_GPU_INTERNAL_TOKEN=${PLANADAY_GPU_INTERNAL_TOKEN:-planaday-local-gpu-token}
+    volumes:
+      - planaday_gpu_models:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  planaday_gpu_models:
+    driver: local

@@ -36,7 +36,8 @@ import {
   syncPushConfigToServer,
 } from '../../core/nativeAlarms';
 import { PLANADAY_RELEASE } from '../../core/releaseInfo';
-import type { ChimeStyle, FamilyProfile, ModuleId, NavView, OperatingMode } from '../../core/types';
+import { DEFAULT_GPU_CONFIG, DEFAULT_SYNC_POLICY } from '../../core/db';
+import type { ChimeStyle, FamilyProfile, ModuleId, NavView, OperatingMode, SyncMode } from '../../core/types';
 
 const PAPER_OPTIONS: Array<{ id: PaperMaterial; label: string }> = [
   { id: 'dot-grid-5mm', label: '5mm Dot-Grid' },
@@ -77,6 +78,8 @@ const MODULE_META: Array<{ id: ModuleId; label: string; group: string; optional?
   { id: 'book_writing', label: 'Book Writing & Story Continuity Studio', group: 'Create & Math' },
   { id: 'code_studio', label: 'Sandboxed Code Editor & Unit Test Runner', group: 'Create & Math' },
   { id: 'photo_studio', label: 'Camera, Photo Library & Non-Destructive Editor', group: 'Create & Math' },
+  { id: 'scanner', label: 'Physical Note Scanner & Handwriting OCR Studio', group: 'Create & Math' },
+  { id: 'pdf_studio', label: 'Integrated PDF Reader, Editor & Secure Redaction Studio', group: 'Create & Math' },
   { id: 'files', label: 'Universal Document & File Hub', group: 'Create & Math' },
   { id: 'tasks', label: 'Tasks & Subtasks', group: 'Core' },
   { id: 'chores', label: 'Completion-Based Chores', group: 'Core' },
@@ -130,6 +133,9 @@ export const SettingsView: React.FC = () => {
   const [syncTesting, setSyncTesting] = useState(false);
   const [serverStorage, setServerStorage] = useState<ServerStorageInfo | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [gpuStatus, setGpuStatus] = useState<Record<string, unknown> | null>(null);
+  const [gpuBenchmark, setGpuBenchmark] = useState<Record<string, unknown> | null>(null);
+  const [gpuBusy, setGpuBusy] = useState(false);
 
   // Server Security & Device Pairing state (PD-004 / PF-04)
   const [authStatus, setAuthStatus] = useState<{
@@ -1396,6 +1402,279 @@ export const SettingsView: React.FC = () => {
               </pre>
             )}
           </div>
+
+          {/* v4.2.0 §3 Activity-Aware Intelligent Sync Policy & Constraints Dashboard */}
+          {(() => {
+            const sp = { ...DEFAULT_SYNC_POLICY, ...(settings.syncPolicy ?? {}) };
+            const updatePolicy = (patch: Partial<typeof sp>) =>
+              void patchSettings({ syncPolicy: { ...sp, ...patch } });
+            return (
+              <div className="dp-card dp-stack" style={{ padding: 14, gap: 10 }}>
+                <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <h4>⚡ Intelligent Activity-Aware Sync Policy (True Offline-First)</h4>
+                    <p className="dp-muted" style={{ margin: '2px 0 0', fontSize: '0.8rem' }}>
+                      All edits save instantly to on-device IndexedDB first. Background sync waits until you pause interacting so typing and drawing never lag.
+                    </p>
+                  </div>
+                  <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    <span className="dp-pill" style={{ borderColor: 'var(--dp-ok)' }}>Local Save: Instant ✓</span>
+                    <span className="dp-pill">Mode: {sp.mode}</span>
+                    {syncState.nextAutoSyncAt && (
+                      <span className="dp-pill highlight">
+                        Next Auto-Sync: {new Date(syncState.nextAutoSyncAt).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {syncState.syncDeferredReason && (
+                  <div className="dp-card" style={{ padding: '8px 10px', background: 'var(--dp-surface-2)', fontSize: '0.8rem' }}>
+                    <strong>Sync Scheduler Status:</strong> {syncState.syncDeferredReason}
+                  </div>
+                )}
+
+                <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  {(
+                    [
+                      ['smart', 'Smart Inactivity (Recommended)'],
+                      ['manual', 'Manual Sync Only'],
+                      ['scheduled', 'Scheduled Interval'],
+                      ['continuous', 'Continuous (Instant)'],
+                      ['offline', 'Completely Offline'],
+                    ] as Array<[SyncMode, string]>
+                  ).map(([modeId, label]) => (
+                    <button
+                      key={modeId}
+                      type="button"
+                      className={`dp-btn dp-btn-sm ${sp.mode === modeId ? 'dp-btn-primary' : ''}`}
+                      onClick={() => updatePolicy({ mode: modeId })}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="dp-grid-3" style={{ gap: 10, fontSize: '0.82rem' }}>
+                  <label className="dp-stack" style={{ gap: 4 }}>
+                    <span className="dp-muted">Inactivity wait before sync: <strong>{sp.inactivityDelaySec}s</strong></span>
+                    <input
+                      type="range"
+                      min={3}
+                      max={60}
+                      value={sp.inactivityDelaySec}
+                      onChange={(e) => updatePolicy({ inactivityDelaySec: Number(e.target.value) || 10 })}
+                    />
+                  </label>
+                  <label className="dp-stack" style={{ gap: 4 }}>
+                    <span className="dp-muted">Max postponement cap: <strong>{sp.maxDelaySec}s</strong></span>
+                    <input
+                      type="range"
+                      min={30}
+                      max={600}
+                      step={15}
+                      value={sp.maxDelaySec}
+                      onChange={(e) => updatePolicy({ maxDelaySec: Number(e.target.value) || 120 })}
+                    />
+                  </label>
+                  <label className="dp-stack" style={{ gap: 4 }}>
+                    <span className="dp-muted">Scheduled interval: <strong>{sp.scheduledIntervalMin} min</strong></span>
+                    <input
+                      type="range"
+                      min={5}
+                      max={120}
+                      step={5}
+                      value={sp.scheduledIntervalMin}
+                      onChange={(e) => updatePolicy({ scheduledIntervalMin: Number(e.target.value) || 15 })}
+                    />
+                  </label>
+                </div>
+
+                <div className="dp-row" style={{ gap: 14, flexWrap: 'wrap', fontSize: '0.83rem' }}>
+                  <label className="dp-row" style={{ gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={sp.wifiOnly}
+                      onChange={(e) => updatePolicy({ wifiOnly: e.target.checked })}
+                    />
+                    <span>Wi-Fi Only (defer background sync on cellular)</span>
+                  </label>
+                  <label className="dp-row" style={{ gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={sp.chargingOnly}
+                      onChange={(e) => updatePolicy({ chargingOnly: e.target.checked })}
+                    />
+                    <span>Charging Only (defer background sync on battery)</span>
+                  </label>
+                </div>
+
+                <div className="dp-stack" style={{ gap: 4, fontSize: '0.8rem' }}>
+                  <span className="dp-muted">
+                    Selective Workspace Sync ({sp.selectiveWorkspaceIds.length === 0 ? 'All Workspaces Synced' : `${sp.selectiveWorkspaceIds.length} Selected`}):
+                  </span>
+                  <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className={`dp-btn dp-btn-sm ${sp.selectiveWorkspaceIds.length === 0 ? 'dp-btn-primary' : ''}`}
+                      onClick={() => updatePolicy({ selectiveWorkspaceIds: [] })}
+                    >
+                      All Workspaces
+                    </button>
+                    {settings.workspaces.map((ws) => {
+                      const selected = sp.selectiveWorkspaceIds.includes(ws.id);
+                      return (
+                        <button
+                          key={ws.id}
+                          type="button"
+                          className={`dp-btn dp-btn-sm ${selected ? 'dp-btn-primary' : ''}`}
+                          onClick={() => {
+                            const next = selected
+                              ? sp.selectiveWorkspaceIds.filter((id) => id !== ws.id)
+                              : [...sp.selectiveWorkspaceIds, ws.id];
+                            updatePolicy({ selectiveWorkspaceIds: next });
+                          }}
+                        >
+                          {ws.emoji} {ws.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* v4.2.0 §6 Optional Self-Hosted NVIDIA RTX 5050 GPU Acceleration & Privacy Controls */}
+          {(() => {
+            const gpu = { ...DEFAULT_GPU_CONFIG, ...(settings.gpuConfig ?? {}) };
+            const updateGpu = (patch: Partial<typeof gpu>) =>
+              void patchSettings({ gpuConfig: { ...gpu, ...patch } });
+            const fetchGpu = async (path: string, method: 'GET' | 'POST' = 'GET') => {
+              const base = activeSyncBase();
+              const headers: Record<string, string> = {};
+              if (settings.syncAuthToken) headers.Authorization = `Bearer ${settings.syncAuthToken}`;
+              const res = await fetch(`${base}${path}`, { method, headers });
+              return (await res.json()) as Record<string, unknown>;
+            };
+            return (
+              <div className="dp-card dp-stack" style={{ padding: 14, gap: 10 }}>
+                <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <h4>🚀 Optional Self-Hosted GPU Acceleration (NVIDIA RTX 5050 / CUDA)</h4>
+                    <p className="dp-muted" style={{ margin: '2px 0 0', fontSize: '0.8rem' }}>
+                      Accelerates heavy handwriting OCR, document enhancement, and embeddings via <code>docker-compose.gpu.yml</code>. Routine typing &amp; local database work never touch the GPU. Always falls back gracefully to offline on-device execution.
+                    </p>
+                  </div>
+                  <div className="dp-row" style={{ gap: 6 }}>
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-sm"
+                      disabled={gpuBusy}
+                      onClick={async () => {
+                        setGpuBusy(true);
+                        try {
+                          const data = await fetchGpu('/api/gpu/status', 'GET');
+                          setGpuStatus(data);
+                          pushToast(data.available ? `GPU Ready: ${String(data.deviceName ?? 'CUDA')}` : 'GPU service offline — local fallback active');
+                        } catch {
+                          setGpuStatus({ available: false, reason: 'Sync server unreachable — using local device mode.' });
+                        } finally {
+                          setGpuBusy(false);
+                        }
+                      }}
+                    >
+                      Check GPU Status
+                    </button>
+                    <button
+                      type="button"
+                      className="dp-btn dp-btn-primary dp-btn-sm"
+                      disabled={gpuBusy}
+                      onClick={async () => {
+                        setGpuBusy(true);
+                        try {
+                          const data = await fetchGpu('/api/gpu/benchmark', 'POST');
+                          setGpuBenchmark(data);
+                          pushToast(data.available === false ? 'GPU unavailable — benchmark skipped' : 'Completed CPU vs. GPU benchmark!');
+                        } catch {
+                          pushToast('Could not reach GPU benchmark endpoint', { tone: 'warn' });
+                        } finally {
+                          setGpuBusy(false);
+                        }
+                      }}
+                    >
+                      Run CPU vs. GPU Benchmark
+                    </button>
+                  </div>
+                </div>
+
+                <div className="dp-row" style={{ gap: 14, flexWrap: 'wrap', fontSize: '0.82rem' }}>
+                  <label className="dp-row" style={{ gap: 6, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={gpu.enabled} onChange={(e) => updateGpu({ enabled: e.target.checked })} />
+                    <strong>Enable Self-Hosted GPU Offloading</strong>
+                  </label>
+                  <label className="dp-row" style={{ gap: 6, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={gpu.privacyOptIn} onChange={(e) => updateGpu({ privacyOptIn: e.target.checked })} />
+                    <span>Privacy Opt-In: allow sending scans/PDF pages to my self-hosted GPU container</span>
+                  </label>
+                  <label className="dp-row" style={{ gap: 6, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={gpu.preferLocalFallback} onChange={(e) => updateGpu({ preferLocalFallback: e.target.checked })} />
+                    <span>Auto-fallback to offline on-device OCR if GPU is offline</span>
+                  </label>
+                </div>
+
+                <div className="dp-grid-2" style={{ gap: 10, fontSize: '0.82rem' }}>
+                  <label className="dp-stack" style={{ gap: 4 }}>
+                    <span className="dp-muted">Preferred GPU OCR Model</span>
+                    <select
+                      className="dp-select"
+                      value={gpu.preferredModel}
+                      onChange={(e) => updateGpu({ preferredModel: e.target.value as typeof gpu.preferredModel })}
+                    >
+                      <option value="auto">Auto (PaddleOCR → VLM fallback)</option>
+                      <option value="paddleocr">PaddleOCR (Fast printed + structured tables)</option>
+                      <option value="vlm_handwriting">VLM Document / Messy Handwriting Mode</option>
+                    </select>
+                  </label>
+                  <label className="dp-stack" style={{ gap: 4 }}>
+                    <span className="dp-muted">VRAM Memory Cap: <strong>{gpu.memoryLimitMb} MB</strong> (recommended 6144 MB for 8GB RTX 5050)</span>
+                    <input
+                      type="range"
+                      min={2048}
+                      max={8192}
+                      step={512}
+                      value={gpu.memoryLimitMb}
+                      onChange={(e) => updateGpu({ memoryLimitMb: Number(e.target.value) || 6144 })}
+                    />
+                  </label>
+                </div>
+
+                {gpuStatus && (
+                  <div className="dp-card" style={{ padding: 10, background: 'var(--dp-surface-2)', fontSize: '0.8rem' }}>
+                    {gpuStatus.available ? (
+                      <span>
+                        <strong>✓ GPU Online:</strong> {String(gpuStatus.deviceName ?? 'NVIDIA GPU')} · CUDA:{' '}
+                        {gpuStatus.cudaAvailable ? `Active (${String(gpuStatus.cudaVersion ?? 'detected')})` : 'CPU Fallback'} · VRAM:{' '}
+                        {String(gpuStatus.vramUsedMb ?? 0)} / {String(gpuStatus.vramTotalMb ?? 0)} MB · Active Jobs:{' '}
+                        {String(gpuStatus.activeJobs ?? 0)}
+                      </span>
+                    ) : (
+                      <span>
+                        <strong>On-Device Mode:</strong> {String(gpuStatus.reason ?? 'GPU container not configured — on-device offline OCR active.')}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {gpuBenchmark && gpuBenchmark.available !== false && (
+                  <div className="dp-card" style={{ padding: 10, background: 'var(--dp-surface-2)', fontSize: '0.8rem' }}>
+                    <strong>Benchmark ({String(gpuBenchmark.deviceName ?? 'Host')}):</strong> CPU: {String(gpuBenchmark.cpuMs ?? '—')} ms
+                    {gpuBenchmark.gpuMs != null ? ` · GPU: ${String(gpuBenchmark.gpuMs)} ms (${String(gpuBenchmark.speedupFactor ?? '—')}× speedup)` : ' · GPU CUDA unavailable on host'}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Server Authentication, Device Pairing & Token Revocation (PD-004 / PF-04) */}
           <div className="dp-card dp-stack" style={{ padding: 14 }}>

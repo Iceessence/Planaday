@@ -12,11 +12,12 @@ import { fetchRemoteIcs, lookupBarcodeOpenFoodFacts } from './icsProxy.js';
 import { ServerAlarmScheduler } from './alarmScheduler.js';
 import { ServerAuthStore, type AuthenticatedPrincipal } from './auth.js';
 import { safeOutboundFetch } from './outboundPolicy.js';
+import { GpuServiceBridge } from './gpuBridge.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const PLANADAY_SERVER_VERSION = '4.1.0';
+export const PLANADAY_SERVER_VERSION = '4.2.0';
 export const PLANADAY_SYNC_PROTOCOL_VERSION = 2;
 
 const ALLOWED_BLOB_MIME_RE =
@@ -26,6 +27,8 @@ export interface BuildServerOptions {
   dataDir?: string;
   staticDir?: string;
   requireAuth?: boolean;
+  gpuServiceUrl?: string;
+  gpuInternalToken?: string;
 }
 
 declare module 'fastify' {
@@ -41,6 +44,10 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
   const syncDb = new SyncDatabase(dataDir);
   const blobStore = new ServerBlobStore(dataDir);
   const authStore = new ServerAuthStore(syncDb.getRawDb(), options.requireAuth ?? false);
+  const gpuBridge = new GpuServiceBridge({
+    gpuUrl: options.gpuServiceUrl,
+    internalToken: options.gpuInternalToken,
+  });
   const alarmScheduler = new ServerAlarmScheduler(syncDb);
   alarmScheduler.start();
 
@@ -494,6 +501,49 @@ export async function buildDayplanaServer(options: BuildServerOptions = {}) {
     } catch (err) {
       return reply.code(403).send({ ok: false, error: err instanceof Error ? err.message : 'Push test blocked by policy' });
     }
+  });
+
+  // --- Optional Self-Hosted NVIDIA GPU Acceleration Bridge Routes (v4.2.0 §6, Protected by Auth) ---
+  app.get('/api/gpu/status', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    return reply.send(await gpuBridge.getStatus());
+  });
+
+  app.get('/api/gpu/jobs', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    return reply.send(await gpuBridge.listJobs());
+  });
+
+  app.post<{ Params: { id: string } }>('/api/gpu/jobs/:id/cancel', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    return reply.send(await gpuBridge.cancelJob(req.params.id));
+  });
+
+  app.post<{
+    Body: { imageBase64: string; mimeType?: string; language?: string; model?: string; priority?: string };
+  }>('/api/gpu/ocr', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    if (!req.body?.imageBase64) return reply.code(400).send({ ok: false, error: 'Missing imageBase64 payload' });
+    return reply.send(await gpuBridge.runOcr(req.body));
+  });
+
+  app.post<{
+    Body: { imageBase64: string; mimeType?: string; shadowReduction?: boolean; contrastBoost?: number; priority?: string };
+  }>('/api/gpu/enhance', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    if (!req.body?.imageBase64) return reply.code(400).send({ ok: false, error: 'Missing imageBase64 payload' });
+    return reply.send(await gpuBridge.runEnhance(req.body));
+  });
+
+  app.post<{ Body: { texts: string[]; priority?: string } }>('/api/gpu/embed', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    if (!Array.isArray(req.body?.texts)) return reply.code(400).send({ ok: false, error: 'Missing texts array' });
+    return reply.send(await gpuBridge.runEmbed(req.body));
+  });
+
+  app.post('/api/gpu/benchmark', async (req, reply) => {
+    if (!(await requireAuthGuard(req, reply, false))) return;
+    return reply.send(await gpuBridge.runBenchmark());
   });
 
   // Serve built Vite PWA statically when dist/ exists

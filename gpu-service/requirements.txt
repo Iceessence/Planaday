@@ -1,0 +1,9 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+pillow>=10.4.0
+numpy>=1.26.4
+# Optional GPU OCR / PyTorch packages — installed in CUDA image builds:
+# paddleocr>=2.9.0
+# paddlepaddle-gpu>=2.6.2
+# torch>=2.5.0
