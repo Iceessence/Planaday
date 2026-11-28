@@ -1,0 +1,6744 @@
+{
+  "checks": [
+    {
+      "name": "service worker controls the built application",
+      "status": "pass",
+      "details": [
+        "planaday-shell-v4-0"
+      ]
+    },
+    {
+      "name": "unvisited lazy studio opens after the server shuts down",
+      "status": "fail",
+      "error": "The input did not match the regular expression /whiteboard/i. Input:\n\n''\n",
+      "buttons": [
+        [
+          "",
+          "Collapse sidebar",
+          ""
+        ],
+        [
+          "",
+          "New Custom Tab",
+          "Create a brand-new custom sidebar tab"
+        ],
+        [
+          "PLAN",
+          null,
+          ""
+        ],
+        [
+          "All-in-One Scroll",
+          null,
+          ""
+        ],
+        [
+          "Quick Glance",
+          null,
+          ""
+        ],
+        [
+          "Home",
+          null,
+          ""
+        ],
+        [
+          "Today Spread",
+          null,
+          ""
+        ],
+        [
+          "Physical Planner",
+          null,
+          ""
+        ],
+        [
+          "Week / Month / Year",
+          null,
+          ""
+        ],
+        [
+          "Flow Calendar",
+          null,
+          ""
+        ],
+        [
+          "Task Calendar",
+          null,
+          ""
+        ],
+        [
+          "Tasks",
+          null,
+          ""
+        ],
+        [
+          "Chores",
+          null,
+          ""
+        ],
+        [
+          "History & Reviews",
+          null,
+          ""
+        ],
+        [
+          "Reports & Analytics",
+          null,
+          ""
+        ],
+        [
+          "Life Events",
+          null,
+          ""
+        ],
+        [
+          "LABORATORY",
+          null,
+          ""
+        ],
+        [
+          "Lab Management",
+          null,
+          ""
+        ],
+        [
+          "CREATE & MATH",
+          null,
+          ""
+        ],
+        [
+          "Calculator & Graph",
+          null,
+          ""
+        ],
+        [
+          "Spreadsheets",
+          null,
+          ""
+        ],
+        [
+          "Presentations",
+          null,
+          ""
+        ],
+        [
+          "Kanban Boards",
+          null,
+          ""
+        ],
+        [
+          "Whiteboard Canvas",
+          null,
+          ""
+        ],
+        [
+          "Projects & Records",
+          null,
+          ""
+        ],
+        [
+          "Game Dev Studio",
+          null,
+          ""
+        ],
+        [
+          "Book Studio",
+          null,
+          ""
+        ],
+        [
+          "Code Sandbox",
+          null,
+          ""
+        ],
+        [
+          "Camera & Photos",
+          null,
+          ""
+        ],
+        [
+          "Universal Files",
+          null,
+          ""
+        ],
+        [
+          "MIND",
+          null,
+          ""
+        ],
+        [
+          "Notes & Graph",
+          null,
+          ""
+        ],
+        [
+          "Thought Inbox",
+          null,
+          ""
+        ],
+        [
+          "Diary & Mood",
+          null,
+          ""
+        ],
+        [
+          "TIME",
+          null,
+          ""
+        ],
+        [
+          "Clock & World",
+          null,
+          ""
+        ],
+        [
+          "Smart Alarms",
+          null,
+          ""
+        ],
+        [
+          "Timers & Pomodoro",
+          null,
+          ""
+        ],
+        [
+          "Stopwatch & Ledger",
+          null,
+          ""
+        ],
+        [
+          "Countdowns",
+          null,
+          ""
+        ],
+        [
+          "KITCHEN",
+          null,
+          ""
+        ],
+        [
+          "Recipes",
+          null,
+          ""
+        ],
+        [
+          "Pantry Lots",
+          null,
+          ""
+        ],
+        [
+          "Meal Planner",
+          null,
+          ""
+        ],
+        [
+          "Groceries",
+          null,
+          ""
+        ],
+        [
+          "LIFE-OS",
+          null,
+          ""
+        ],
+        [
+          "Goals",
+          null,
+          ""
+        ],
+        [
+          "Habits & Routines",
+          null,
+          ""
+        ],
+        [
+          "STUDIO",
+          null,
+          ""
+        ],
+        [
+          "Custom Spaces",
+          null,
+          ""
+        ],
+        [
+          "Rituals & Contexts",
+          null,
+          ""
+        ],
+        [
+          "Insights & Heatmaps",
+          null,
+          ""
+        ],
+        [
+          "Automations",
+          null,
+          ""
+        ],
+        [
+          "Guide & Help",
+          null,
+          ""
+        ],
+        [
+          "Trash (30d)",
+          null,
+          ""
+        ],
+        [
+          "Settings & Themes",
+          null,
+          ""
+        ],
+        [
+          "Search",
+          null,
+          "Global Fuzzy Search (/)"
+        ],
+        [
+          "Capture",
+          null,
+          "Quick Capture (N)"
+        ],
+        [
+          "",
+          "Open Command Palette",
+          "Command Palette (Ctrl/Cmd+K)"
+        ],
+        [
+          "Install App",
+          null,
+          "Install Planaday as a standalone app"
+        ],
+        [
+          "",
+          "Undo",
+          "Undo (Ctrl/Cmd+Z)"
+        ],
+        [
+          "",
+          "Redo",
+          "Redo (Ctrl/Cmd+Shift+Z)"
+        ],
+        [
+          "Calm",
+          null,
+          "Toggle Low-Energy / Overwhelmed Mode"
+        ],
+        [
+          "",
+          "Open Zen Sheet",
+          "Distraction-Free Zen Sheet"
+        ],
+        [
+          "Synced",
+          null,
+          "Sync Status & Server Connection Settings"
+        ],
+        [
+          "",
+          "Open App Guide",
+          "App Guide & Documentation"
+        ],
+        [
+          "",
+          "Open Settings",
+          "Settings & Theme Studio"
+        ],
+        [
+          "Today Spread Settings",
+          null,
+          ""
+        ],
+        [
+          "←",
+          null,
+          ""
+        ],
+        [
+          "→",
+          null,
+          ""
+        ],
+        [
+          "Open-Book",
+          null,
+          ""
+        ],
+        [
+          "+ Event",
+          null,
+          ""
+        ],
+        [
+          "+ Task",
+          null,
+          ""
+        ],
+        [
+          "+ Chore",
+          null,
+          ""
+        ],
+        [
+          "+ Meal",
+          null,
+          ""
+        ],
+        [
+          "+ Timer",
+          null,
+          ""
+        ],
+        [
+          "+ Note",
+          null,
+          ""
+        ],
+        [
+          "+ Thought",
+          null,
+          ""
+        ],
+        [
+          "Add",
+          null,
+          ""
+        ],
+        [
+          "0\nStill Upcoming Today",
+          null,
+          ""
+        ],
+        [
+          "0\nOverdue Chores",
+          null,
+          ""
+        ],
+        [
+          "0\nDue Chores",
+          null,
+          ""
+        ],
+        [
+          "0\nOpen Tasks",
+          null,
+          ""
+        ],
+        [
+          "Decor",
+          null,
+          "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+        ],
+        [
+          "Ink",
+          null,
+          "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+        ],
+        [
+          "Planned View",
+          null,
+          "Planned View shows your intended schedule. Planned vs. Actual lets you record when events really started & finished so you can see schedule drift."
+        ],
+        [
+          "Flow Calendar →",
+          null,
+          ""
+        ],
+        [
+          "Add",
+          null,
+          ""
+        ],
+        [
+          "Decor",
+          null,
+          "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+        ],
+        [
+          "Ink",
+          null,
+          "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+        ]
+      ]
+    },
+    {
+      "name": "create or open a synthetic note",
+      "status": "pass",
+      "details": [
+        [
+          "",
+          "Collapse sidebar",
+          ""
+        ],
+        [
+          "",
+          "New Custom Tab",
+          "Create a brand-new custom sidebar tab"
+        ],
+        [
+          "PLAN",
+          null,
+          ""
+        ],
+        [
+          "All-in-One Scroll",
+          null,
+          ""
+        ],
+        [
+          "Quick Glance",
+          null,
+          ""
+        ],
+        [
+          "Home",
+          null,
+          ""
+        ],
+        [
+          "Today Spread",
+          null,
+          ""
+        ],
+        [
+          "Physical Planner",
+          null,
+          ""
+        ],
+        [
+          "Week / Month / Year",
+          null,
+          ""
+        ],
+        [
+          "Flow Calendar",
+          null,
+          ""
+        ],
+        [
+          "Task Calendar",
+          null,
+          ""
+        ],
+        [
+          "Tasks",
+          null,
+          ""
+        ],
+        [
+          "Chores",
+          null,
+          ""
+        ],
+        [
+          "History & Reviews",
+          null,
+          ""
+        ],
+        [
+          "Reports & Analytics",
+          null,
+          ""
+        ],
+        [
+          "Life Events",
+          null,
+          ""
+        ],
+        [
+          "LABORATORY",
+          null,
+          ""
+        ],
+        [
+          "Lab Management",
+          null,
+          ""
+        ],
+        [
+          "CREATE & MATH",
+          null,
+          ""
+        ],
+        [
+          "Calculator & Graph",
+          null,
+          ""
+        ],
+        [
+          "Spreadsheets",
+          null,
+          ""
+        ],
+        [
+          "Presentations",
+          null,
+          ""
+        ],
+        [
+          "Kanban Boards",
+          null,
+          ""
+        ],
+        [
+          "Whiteboard Canvas",
+          null,
+          ""
+        ],
+        [
+          "Projects & Records",
+          null,
+          ""
+        ],
+        [
+          "Game Dev Studio",
+          null,
+          ""
+        ],
+        [
+          "Book Studio",
+          null,
+          ""
+        ],
+        [
+          "Code Sandbox",
+          null,
+          ""
+        ],
+        [
+          "Camera & Photos",
+          null,
+          ""
+        ],
+        [
+          "Universal Files",
+          null,
+          ""
+        ],
+        [
+          "MIND",
+          null,
+          ""
+        ],
+        [
+          "Notes & Graph",
+          null,
+          ""
+        ],
+        [
+          "Thought Inbox",
+          null,
+          ""
+        ],
+        [
+          "Diary & Mood",
+          null,
+          ""
+        ],
+        [
+          "TIME",
+          null,
+          ""
+        ],
+        [
+          "Clock & World",
+          null,
+          ""
+        ],
+        [
+          "Smart Alarms",
+          null,
+          ""
+        ],
+        [
+          "Timers & Pomodoro",
+          null,
+          ""
+        ],
+        [
+          "Stopwatch & Ledger",
+          null,
+          ""
+        ],
+        [
+          "Countdowns",
+          null,
+          ""
+        ],
+        [
+          "KITCHEN",
+          null,
+          ""
+        ],
+        [
+          "Recipes",
+          null,
+          ""
+        ],
+        [
+          "Pantry Lots",
+          null,
+          ""
+        ],
+        [
+          "Meal Planner",
+          null,
+          ""
+        ],
+        [
+          "Groceries",
+          null,
+          ""
+        ],
+        [
+          "LIFE-OS",
+          null,
+          ""
+        ],
+        [
+          "Goals",
+          null,
+          ""
+        ],
+        [
+          "Habits & Routines",
+          null,
+          ""
+        ],
+        [
+          "STUDIO",
+          null,
+          ""
+        ],
+        [
+          "Custom Spaces",
+          null,
+          ""
+        ],
+        [
+          "Rituals & Contexts",
+          null,
+          ""
+        ],
+        [
+          "Insights & Heatmaps",
+          null,
+          ""
+        ],
+        [
+          "Automations",
+          null,
+          ""
+        ],
+        [
+          "Guide & Help",
+          null,
+          ""
+        ],
+        [
+          "Trash (30d)",
+          null,
+          ""
+        ],
+        [
+          "Settings & Themes",
+          null,
+          ""
+        ],
+        [
+          "Search",
+          null,
+          "Global Fuzzy Search (/)"
+        ],
+        [
+          "Capture",
+          null,
+          "Quick Capture (N)"
+        ],
+        [
+          "",
+          "Open Command Palette",
+          "Command Palette (Ctrl/Cmd+K)"
+        ],
+        [
+          "Install App",
+          null,
+          "Install Planaday as a standalone app"
+        ],
+        [
+          "",
+          "Undo",
+          "Undo (Ctrl/Cmd+Z)"
+        ],
+        [
+          "",
+          "Redo",
+          "Redo (Ctrl/Cmd+Shift+Z)"
+        ],
+        [
+          "Calm",
+          null,
+          "Toggle Low-Energy / Overwhelmed Mode"
+        ],
+        [
+          "",
+          "Open Zen Sheet",
+          "Distraction-Free Zen Sheet"
+        ],
+        [
+          "Synced",
+          null,
+          "Sync Status & Server Connection Settings"
+        ],
+        [
+          "",
+          "Open App Guide",
+          "App Guide & Documentation"
+        ],
+        [
+          "",
+          "Open Settings",
+          "Settings & Theme Studio"
+        ],
+        [
+          "New Note",
+          null,
+          ""
+        ],
+        [
+          "Connection Graph",
+          null,
+          ""
+        ],
+        [
+          "Notes Editor Settings",
+          null,
+          ""
+        ],
+        [
+          "All (1)",
+          null,
+          ""
+        ],
+        [
+          "📓 Personal",
+          null,
+          ""
+        ],
+        [
+          "🏡 Family",
+          null,
+          ""
+        ],
+        [
+          "💼 Work",
+          null,
+          ""
+        ],
+        [
+          "📚 Learning",
+          null,
+          ""
+        ],
+        [
+          "💻 Technology",
+          null,
+          ""
+        ],
+        [
+          "💡 Ideas",
+          null,
+          ""
+        ],
+        [
+          "🌿 Wellbeing",
+          null,
+          ""
+        ],
+        [
+          "🧾 Finances",
+          null,
+          ""
+        ],
+        [
+          "🗂️ Other",
+          null,
+          ""
+        ],
+        [
+          "",
+          "Sort descending",
+          "Descending (click to reverse)"
+        ],
+        [
+          "All Notes",
+          null,
+          ""
+        ],
+        [
+          "📌 Pinned Only",
+          null,
+          ""
+        ],
+        [
+          "+",
+          null,
+          "Add nested sub-note inside this note"
+        ],
+        [
+          "Save",
+          null,
+          "Save immediately & create version snapshot (Ctrl+S)"
+        ],
+        [
+          "",
+          null,
+          "Pin note"
+        ],
+        [
+          "History",
+          null,
+          ""
+        ],
+        [
+          "Preview",
+          null,
+          ""
+        ],
+        [
+          "",
+          null,
+          "Move note to Trash"
+        ],
+        [
+          "Untitled Note",
+          null,
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "mobile menu exposes Tasks and a created task survives reload",
+      "status": "pass",
+      "details": "Task created through the mobile form and reopened on desktop layout in the same profile."
+    },
+    {
+      "name": "note input and selected-text replacement at approximately 1000 words",
+      "status": "pass",
+      "details": {
+        "words": 1000,
+        "initialLoadMethod": "Input.insertText",
+        "initialLoadMs": 88.26460000000043,
+        "medianEditMs": 1.944999999999709,
+        "p95EditMs": 7.834000000000742,
+        "heap": {
+          "usedSize": 15450952,
+          "totalSize": 24522752,
+          "embedderHeapUsedSize": 15816696,
+          "backingStorageSize": 2085348
+        },
+        "immediate": {
+          "size": 6214,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterDebounce": {
+          "size": 6214,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterManual": {
+          "size": 6214,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        }
+      }
+    },
+    {
+      "name": "note input and selected-text replacement at approximately 10000 words",
+      "status": "pass",
+      "details": {
+        "words": 10000,
+        "initialLoadMethod": "Input.insertText",
+        "initialLoadMs": 4444.829299999999,
+        "medianEditMs": 5.592499999998836,
+        "p95EditMs": 11.642299999999523,
+        "heap": {
+          "usedSize": 13736888,
+          "totalSize": 21901312,
+          "embedderHeapUsedSize": 48769472,
+          "backingStorageSize": 2266514
+        },
+        "immediate": {
+          "size": 62014,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterDebounce": {
+          "size": 62014,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterManual": {
+          "size": 62014,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        }
+      }
+    },
+    {
+      "name": "note input and selected-text replacement at approximately 50000 words",
+      "status": "pass",
+      "details": {
+        "words": 50000,
+        "initialLoadMethod": "seed + reload",
+        "initialLoadMs": 191.80229999999938,
+        "medianEditMs": 12.358799999998155,
+        "p95EditMs": 19.830900000000838,
+        "heap": {
+          "usedSize": 24409072,
+          "totalSize": 42446848,
+          "embedderHeapUsedSize": 40326984,
+          "backingStorageSize": 3104959
+        },
+        "immediate": {
+          "size": 310014,
+          "start": 102,
+          "end": 102,
+          "scroll": 0,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterDebounce": {
+          "size": 310014,
+          "start": 102,
+          "end": 102,
+          "scroll": 0,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterManual": {
+          "size": 310014,
+          "start": 102,
+          "end": 102,
+          "scroll": 0,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        }
+      }
+    },
+    {
+      "name": "note input and selected-text replacement at approximately 100000 words",
+      "status": "pass",
+      "details": {
+        "words": 100000,
+        "initialLoadMethod": "seed + reload",
+        "initialLoadMs": 462.000799999998,
+        "medianEditMs": 27.405400000003283,
+        "p95EditMs": 35.336999999999534,
+        "heap": {
+          "usedSize": 43633672,
+          "totalSize": 69435392,
+          "embedderHeapUsedSize": 193438744,
+          "backingStorageSize": 4545681
+        },
+        "immediate": {
+          "size": 620014,
+          "start": 102,
+          "end": 102,
+          "scroll": 0,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterDebounce": {
+          "size": 620014,
+          "start": 102,
+          "end": 102,
+          "scroll": 0,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterManual": {
+          "size": 620014,
+          "start": 102,
+          "end": 102,
+          "scroll": 0,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        }
+      }
+    },
+    {
+      "name": "100k-word saved note survives browser reload",
+      "status": "pass",
+      "details": {
+        "size": 620014
+      }
+    },
+    {
+      "name": "note remains editable after emulated orientation change",
+      "status": "pass",
+      "details": {
+        "size": 620014,
+        "start": 116,
+        "end": 116,
+        "scroll": 0,
+        "windowScroll": 1063,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDiloorientationa g"
+      }
+    }
+  ],
+  "viewports": [
+    {
+      "route": "All-in-One Scroll",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 48,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 6,
+          "smallButtons": 35,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Quick Glance",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "⚡ Quick Glance",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Home",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Good afternoon · Planaday",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Today Spread",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 4,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Tue, Nov 24, 2026",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Physical Planner",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 10,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": [
+            [
+              "BUTTON",
+              "Decor",
+              48
+            ]
+          ]
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Physical-Style Digital Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 4,
+          "smallButtons": 2,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Week / Month / Year",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Period Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Flow Calendar",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 9,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Flow Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 7,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Task Calendar",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Intelligent Task Calendar",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Tasks",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Tasks & Nested Subtasks",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Chores",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Completion-Based Chores & Room Health",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "History & Reviews",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Completion History, Chore Punctuality & Event Reviews",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Reports & Analytics",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Statistics, Reports & Historical Analytics",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Life Events",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Lab Management",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Laboratory Management Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Calculator & Graph",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Mathematical & Analytical Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Spreadsheets",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Integrated Spreadsheets",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Presentations",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Presentation Creator",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Kanban Boards",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Universal Kanban Boards",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Whiteboard Canvas",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Infinite Whiteboard & Visual Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Projects & Records",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 21,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 21,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 21,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 6,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Creative Projects & Custom Record Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Game Dev Studio",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Game Development Workspace",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Book Studio",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Book Writing & Story Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Code Sandbox",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Sandboxed Code & Testing Studio",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Camera & Photos",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 32,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 32,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 21,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 6,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Camera, Photo Library & Non-Destructive Editor",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Universal Files",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 146,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": [
+            [
+              "INPUT",
+              "Filter documents by title, type, or tag...",
+              466
+            ]
+          ]
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 106,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": [
+            [
+              "INPUT",
+              "Filter documents by title, type, or tag...",
+              466
+            ]
+          ]
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 91,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": [
+            [
+              "INPUT",
+              "Filter documents by title, type, or tag...",
+              466
+            ]
+          ]
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 76,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": [
+            [
+              "INPUT",
+              "Filter documents by title, type, or tag...",
+              466
+            ]
+          ]
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 54,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": [
+            [
+              "INPUT",
+              "Filter documents by title, type, or tag...",
+              466
+            ]
+          ]
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 36,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": [
+            [
+              "INPUT",
+              "Filter documents by title, type, or tag...",
+              466
+            ]
+          ]
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Universal Document & File Hub",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Notes & Graph",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Rich Block / Live-Markdown Notes & Knowledge Graph",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Thought Inbox",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Thought Inbox & Selected-Passage Filing",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Diary & Mood",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Diary & Personal Reflection",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 5,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Clock & World",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Smart Alarms",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Timers & Pomodoro",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Stopwatch & Ledger",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Complete Time Suite",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Countdowns",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Life Events, Birthdays, Anniversaries & Countdowns",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Recipes",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Recipe Library & Smart Clipper",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Pantry Lots",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Lot-Based Pantry, Fridge & Freezer Inventory",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 1,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Meal Planner",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Weekly Meal Planner",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 28,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Groceries",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Smart Aisle-Sorted Grocery List",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Goals",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Goals & Milestones",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Habits & Routines",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Gentle Habits & Step Routines",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Custom Spaces",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Unlimited Custom Spaces",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Rituals & Contexts",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Planning Rituals, Context Modes & Layout Builder",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Insights & Heatmaps",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Honest Review Analytics & Heatmaps",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Automations",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Local Automation Engine & Optional Local/BYOK AI",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Guide & Help",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Planaday Guide, Feature Directory & Changelog",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Trash (30d)",
+      "rows": [
+        {
+          "width": 1440,
+          "height": 900,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "30-Day Trash Bin",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 0,
+          "smallButtons": 0,
+          "outside": []
+        }
+      ]
+    },
+    {
+      "route": "Settings & Themes",
+      "rows": [
+        {
+          "width": 1425,
+          "height": 900,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 320,
+          "height": 700,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 360,
+          "height": 800,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 375,
+          "height": 812,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 412,
+          "height": 900,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 430,
+          "height": 932,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 480,
+          "height": 900,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        },
+        {
+          "width": 844,
+          "height": 390,
+          "title": "Settings, Notifications, Family Profiles & Personalization",
+          "documentOverflow": 0,
+          "mainOverflow": 0,
+          "unnamedButtons": 2,
+          "smallButtons": 19,
+          "outside": []
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "words": 1000,
+      "initialLoadMethod": "Input.insertText",
+      "initialLoadMs": 88.26460000000043,
+      "medianEditMs": 1.944999999999709,
+      "p95EditMs": 7.834000000000742,
+      "heap": {
+        "usedSize": 15450952,
+        "totalSize": 24522752,
+        "embedderHeapUsedSize": 15816696,
+        "backingStorageSize": 2085348
+      },
+      "immediate": {
+        "size": 6214,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterDebounce": {
+        "size": 6214,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterManual": {
+        "size": 6214,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      }
+    },
+    {
+      "words": 10000,
+      "initialLoadMethod": "Input.insertText",
+      "initialLoadMs": 4444.829299999999,
+      "medianEditMs": 5.592499999998836,
+      "p95EditMs": 11.642299999999523,
+      "heap": {
+        "usedSize": 13736888,
+        "totalSize": 21901312,
+        "embedderHeapUsedSize": 48769472,
+        "backingStorageSize": 2266514
+      },
+      "immediate": {
+        "size": 62014,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterDebounce": {
+        "size": 62014,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterManual": {
+        "size": 62014,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      }
+    },
+    {
+      "words": 50000,
+      "initialLoadMethod": "seed + reload",
+      "initialLoadMs": 191.80229999999938,
+      "medianEditMs": 12.358799999998155,
+      "p95EditMs": 19.830900000000838,
+      "heap": {
+        "usedSize": 24409072,
+        "totalSize": 42446848,
+        "embedderHeapUsedSize": 40326984,
+        "backingStorageSize": 3104959
+      },
+      "immediate": {
+        "size": 310014,
+        "start": 102,
+        "end": 102,
+        "scroll": 0,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterDebounce": {
+        "size": 310014,
+        "start": 102,
+        "end": 102,
+        "scroll": 0,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterManual": {
+        "size": 310014,
+        "start": 102,
+        "end": 102,
+        "scroll": 0,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      }
+    },
+    {
+      "words": 100000,
+      "initialLoadMethod": "seed + reload",
+      "initialLoadMs": 462.000799999998,
+      "medianEditMs": 27.405400000003283,
+      "p95EditMs": 35.336999999999534,
+      "heap": {
+        "usedSize": 43633672,
+        "totalSize": 69435392,
+        "embedderHeapUsedSize": 193438744,
+        "backingStorageSize": 4545681
+      },
+      "immediate": {
+        "size": 620014,
+        "start": 102,
+        "end": 102,
+        "scroll": 0,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterDebounce": {
+        "size": 620014,
+        "start": 102,
+        "end": 102,
+        "scroll": 0,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterManual": {
+        "size": 620014,
+        "start": 102,
+        "end": 102,
+        "scroll": 0,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      }
+    }
+  ],
+  "browserErrors": [
+    "net::ERR_FAILED",
+    "TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:52964/assets/visualCodeMedia-T-S5jP3M.js"
+  ],
+  "requests": [
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/visualCodeMedia-T-S5jP3M.js",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/digitalPlanner-DBb385iv.js",
+    "/assets/lab-OuiMVkN7.js",
+    "/assets/mathOffice-DTzRjkae.js",
+    "/assets/visualCodeMedia-T-S5jP3M.js",
+    "/assets/creativeStudios-XgyMwRVf.js",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events"
+  ],
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+  "navigation": {
+    "frameId": "990965126BA6653F0A637D656BB0C558",
+    "loaderId": "A84C0613A43D9E441A28DDA868879F1E",
+    "isDownload": false
+  },
+  "onboarding": [
+    [
+      "PLAN",
+      null,
+      ""
+    ],
+    [
+      "All-in-One Scroll",
+      null,
+      ""
+    ],
+    [
+      "Quick Glance",
+      null,
+      ""
+    ],
+    [
+      "Home",
+      null,
+      ""
+    ],
+    [
+      "Today Spread",
+      null,
+      ""
+    ],
+    [
+      "Physical Planner",
+      null,
+      ""
+    ],
+    [
+      "Week / Month / Year",
+      null,
+      ""
+    ],
+    [
+      "Flow Calendar",
+      null,
+      ""
+    ],
+    [
+      "Task Calendar",
+      null,
+      ""
+    ],
+    [
+      "Tasks",
+      null,
+      ""
+    ],
+    [
+      "Chores",
+      null,
+      ""
+    ],
+    [
+      "History & Reviews",
+      null,
+      ""
+    ],
+    [
+      "Reports & Analytics",
+      null,
+      ""
+    ],
+    [
+      "Life Events",
+      null,
+      ""
+    ],
+    [
+      "LABORATORY",
+      null,
+      ""
+    ],
+    [
+      "Lab Management",
+      null,
+      ""
+    ],
+    [
+      "CREATE & MATH",
+      null,
+      ""
+    ],
+    [
+      "Calculator & Graph",
+      null,
+      ""
+    ],
+    [
+      "Spreadsheets",
+      null,
+      ""
+    ],
+    [
+      "Presentations",
+      null,
+      ""
+    ],
+    [
+      "Kanban Boards",
+      null,
+      ""
+    ],
+    [
+      "Whiteboard Canvas",
+      null,
+      ""
+    ],
+    [
+      "Projects & Records",
+      null,
+      ""
+    ],
+    [
+      "Game Dev Studio",
+      null,
+      ""
+    ],
+    [
+      "Book Studio",
+      null,
+      ""
+    ],
+    [
+      "Code Sandbox",
+      null,
+      ""
+    ],
+    [
+      "Camera & Photos",
+      null,
+      ""
+    ],
+    [
+      "Universal Files",
+      null,
+      ""
+    ],
+    [
+      "MIND",
+      null,
+      ""
+    ],
+    [
+      "Notes & Graph",
+      null,
+      ""
+    ],
+    [
+      "Thought Inbox",
+      null,
+      ""
+    ],
+    [
+      "Diary & Mood",
+      null,
+      ""
+    ],
+    [
+      "TIME",
+      null,
+      ""
+    ],
+    [
+      "Clock & World",
+      null,
+      ""
+    ],
+    [
+      "Smart Alarms",
+      null,
+      ""
+    ],
+    [
+      "Timers & Pomodoro",
+      null,
+      ""
+    ],
+    [
+      "Stopwatch & Ledger",
+      null,
+      ""
+    ],
+    [
+      "Countdowns",
+      null,
+      ""
+    ],
+    [
+      "KITCHEN",
+      null,
+      ""
+    ],
+    [
+      "Recipes",
+      null,
+      ""
+    ],
+    [
+      "Pantry Lots",
+      null,
+      ""
+    ],
+    [
+      "Meal Planner",
+      null,
+      ""
+    ],
+    [
+      "Groceries",
+      null,
+      ""
+    ],
+    [
+      "LIFE-OS",
+      null,
+      ""
+    ],
+    [
+      "Goals",
+      null,
+      ""
+    ],
+    [
+      "Habits & Routines",
+      null,
+      ""
+    ],
+    [
+      "STUDIO",
+      null,
+      ""
+    ],
+    [
+      "Custom Spaces",
+      null,
+      ""
+    ],
+    [
+      "Rituals & Contexts",
+      null,
+      ""
+    ],
+    [
+      "Insights & Heatmaps",
+      null,
+      ""
+    ],
+    [
+      "Automations",
+      null,
+      ""
+    ],
+    [
+      "Guide & Help",
+      null,
+      ""
+    ],
+    [
+      "Trash (30d)",
+      null,
+      ""
+    ],
+    [
+      "Settings & Themes",
+      null,
+      ""
+    ],
+    [
+      "Search",
+      null,
+      "Global Fuzzy Search (/)"
+    ],
+    [
+      "Capture",
+      null,
+      "Quick Capture (N)"
+    ],
+    [
+      "Install App",
+      null,
+      "Install Planaday as a standalone app"
+    ],
+    [
+      "Calm",
+      null,
+      "Toggle Low-Energy / Overwhelmed Mode"
+    ],
+    [
+      "Local Only",
+      null,
+      "Sync Status & Server Connection Settings"
+    ],
+    [
+      "Today Spread Settings",
+      null,
+      ""
+    ],
+    [
+      "←",
+      null,
+      ""
+    ],
+    [
+      "→",
+      null,
+      ""
+    ],
+    [
+      "Open-Book",
+      null,
+      ""
+    ],
+    [
+      "+ Event",
+      null,
+      ""
+    ],
+    [
+      "+ Task",
+      null,
+      ""
+    ],
+    [
+      "+ Chore",
+      null,
+      ""
+    ],
+    [
+      "+ Meal",
+      null,
+      ""
+    ],
+    [
+      "+ Timer",
+      null,
+      ""
+    ],
+    [
+      "+ Note",
+      null,
+      ""
+    ],
+    [
+      "+ Thought",
+      null,
+      ""
+    ],
+    [
+      "Add",
+      null,
+      ""
+    ],
+    [
+      "0\nStill Upcoming Today",
+      null,
+      ""
+    ],
+    [
+      "0\nOverdue Chores",
+      null,
+      ""
+    ],
+    [
+      "0\nDue Chores",
+      null,
+      ""
+    ],
+    [
+      "0\nOpen Tasks",
+      null,
+      ""
+    ],
+    [
+      "Decor",
+      null,
+      "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+    ],
+    [
+      "Ink",
+      null,
+      "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+    ],
+    [
+      "Planned View",
+      null,
+      "Planned View shows your intended schedule. Planned vs. Actual lets you record when events really started & finished so you can see schedule drift."
+    ],
+    [
+      "Flow Calendar →",
+      null,
+      ""
+    ],
+    [
+      "Add",
+      null,
+      ""
+    ],
+    [
+      "Decor",
+      null,
+      "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+    ],
+    [
+      "Ink",
+      null,
+      "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+    ]
+  ],
+  "desktopNav": [
+    "PLAN",
+    "All-in-One Scroll",
+    "Quick Glance",
+    "Home",
+    "Today Spread",
+    "Physical Planner",
+    "Week / Month / Year",
+    "Flow Calendar",
+    "Task Calendar",
+    "Tasks",
+    "Chores",
+    "History & Reviews",
+    "Reports & Analytics",
+    "Life Events",
+    "LABORATORY",
+    "Lab Management",
+    "CREATE & MATH",
+    "Calculator & Graph",
+    "Spreadsheets",
+    "Presentations",
+    "Kanban Boards",
+    "Whiteboard Canvas",
+    "Projects & Records",
+    "Game Dev Studio",
+    "Book Studio",
+    "Code Sandbox",
+    "Camera & Photos",
+    "Universal Files",
+    "MIND",
+    "Notes & Graph",
+    "Thought Inbox",
+    "Diary & Mood",
+    "TIME",
+    "Clock & World",
+    "Smart Alarms",
+    "Timers & Pomodoro",
+    "Stopwatch & Ledger",
+    "Countdowns",
+    "KITCHEN",
+    "Recipes",
+    "Pantry Lots",
+    "Meal Planner",
+    "Groceries",
+    "LIFE-OS",
+    "Goals",
+    "Habits & Routines",
+    "STUDIO",
+    "Custom Spaces",
+    "Rituals & Contexts",
+    "Insights & Heatmaps",
+    "Automations",
+    "Guide & Help",
+    "Trash (30d)",
+    "Settings & Themes"
+  ],
+  "offlineStudio": {
+    "cacheBefore": [
+      "/",
+      "/index.html",
+      "/manifest.webmanifest",
+      "/icons/icon.svg"
+    ],
+    "outcome": {
+      "main": "Loading Planaday studio…",
+      "banner": "P\nPlanaday\nMY CUSTOM TABS\nPLAN\nAll-in-One Scroll\nQuick Glance\nHome\nToday Spread\nPhysical Planner\nWeek / Month / Year\nFlow Calendar"
+    },
+    "final": null
+  }
+}

@@ -1,0 +1,23 @@
+pass WF-001 Tasks create and retain across reload
+pass WF-002 Chores create and retain across reload
+pass WF-003 Goals create and retain across reload
+pass WF-004 Habits & Routines create and retain across reload
+pass WF-005 Pantry Lots create and retain across reload
+pass WF-006 Groceries create and retain across reload
+pass WF-007 Task edit retains long description and save
+pass WF-008 Project description, template milestones and reload
+pass WF-009 Book and chapter persisted together
+pass WF-010 Game project create and reload
+pass WF-011 Laboratory sample with assay and client persists
+fail EX-001 Book Studio .MD filename and payload
+fail EX-002 Book Studio .DOC filename and payload
+fail EX-003 Whiteboard Canvas SVG filename and payload
+fail EX-004 Code Sandbox Download filename and payload
+fail EX-005 Presentations HTML Deck filename and payload
+fail EX-006 Spreadsheets CSV filename and payload
+fail EX-007 Spreadsheets Excel (.xls) filename and payload
+pass WF-012 Ordinary task CSV or calendar ICS export control with body
+pass BR-001 Two independent browser profiles exchange a saved synthetic note
+fail BR-002 Two profiles receive matching attachment bytes with a normal Notes upload
+fail BR-003 Dirty note switch without blur preserves record ownership locally and remotely
+pass BR-004 Network-offline edit is saved locally and pushes when restored

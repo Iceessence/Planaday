@@ -1,0 +1,75 @@
+{
+  "firstID": "c9552d591e57f440dbae504359e60cc06810aaf737f0c8e7f3c38a2a45310476",
+  "before": {
+    "ok": true,
+    "app": "planaday",
+    "legacyApp": "dayplana",
+    "version": "4.0.0",
+    "dataDir": "/data",
+    "recordCount": 0,
+    "seq": 0,
+    "timestamp": "2026-11-25T01:51:16.591Z"
+  },
+  "mounts": [
+    {
+      "Type": "volume",
+      "Name": "planaday_d82_audit_db_1795571473786",
+      "Source": "/var/lib/planaday-audit-docker/volumes/planaday_d82_audit_db_1795571473786/_data",
+      "Destination": "/data",
+      "Driver": "local",
+      "Mode": "z",
+      "RW": true,
+      "Propagation": ""
+    },
+    {
+      "Type": "bind",
+      "Source": "/var/lib/planaday-audit-blobs-1795571473786",
+      "Destination": "/data/blobs",
+      "Mode": "",
+      "RW": true,
+      "Propagation": "rprivate"
+    }
+  ],
+  "uid": "1000",
+  "beforeReplacement": {
+    "ok": true,
+    "app": "planaday",
+    "dataDir": "/data",
+    "sqlitePath": "/data/dayplana.sqlite",
+    "sqliteSizeBytes": 4096,
+    "blobsDir": "/data/blobs",
+    "blobCount": 1,
+    "blobTotalBytes": 41,
+    "recordCount": 1,
+    "seq": 1,
+    "sseClientCount": 0,
+    "uptimeSec": 1,
+    "backupsDir": "/data/blobs/db-backups",
+    "backups": [
+      {
+        "name": "planaday-sqlite-2026-11-25T01-51-17.sqlite",
+        "sizeBytes": 32768,
+        "modifiedAt": "2026-11-25T01:51:17.049Z"
+      }
+    ]
+  },
+  "bindFiles": [
+    "4a0b899a92915c2ae1536e31a0e50fe5d8cfa364ab447eef0c063c5ae3eeceaa.bin",
+    "4a0b899a92915c2ae1536e31a0e50fe5d8cfa364ab447eef0c063c5ae3eeceaa.json",
+    "db-backups"
+  ],
+  "replacementID": "30a77694adb5747e79faa8ff8d3352c3dce0b4f74ac51ca6caa0da784fa0e26f",
+  "after": {
+    "ok": true,
+    "app": "planaday",
+    "legacyApp": "dayplana",
+    "version": "4.0.0",
+    "dataDir": "/data",
+    "recordCount": 1,
+    "seq": 1,
+    "timestamp": "2026-11-25T01:51:30.380Z"
+  },
+  "backupRetained": true,
+  "blobSha256": "4a0b899a92915c2ae1536e31a0e50fe5d8cfa364ab447eef0c063c5ae3eeceaa",
+  "success": true
+}

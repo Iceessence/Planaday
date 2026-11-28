@@ -1,0 +1,1086 @@
+{
+  "checks": [
+    {
+      "name": "service worker controls the built application",
+      "status": "pass",
+      "details": [
+        "planaday-shell-v4-0"
+      ]
+    },
+    {
+      "name": "Calculator evaluates a parenthetical expression and displays the fraction",
+      "status": "pass",
+      "details": "Rendered fraction 5/2 in the real Calculator view."
+    },
+    {
+      "name": "Calendar event created through the dialog survives reload in Agenda",
+      "status": "pass",
+      "details": "Reopened the same timed appointment after browser reload."
+    },
+    {
+      "name": "Laboratory sample creation and status survive reload",
+      "status": "pass",
+      "details": "Sample and assay list stayed visible and the status was QA Review."
+    },
+    {
+      "name": "Whiteboard creates a board with its starter nodes and preserves them on reload",
+      "status": "pass",
+      "details": "The two starter board elements remained in the same local profile."
+    },
+    {
+      "name": "Whiteboard SVG download contains valid SVG content and the requested filename",
+      "status": "fail",
+      "error": "The expression evaluated to a falsy value:\n\n  assert.ok(dl.filenameEndsWithSvg && dl.text.startsWith('<svg'))\n",
+      "buttons": [
+        [
+          "",
+          "Collapse sidebar",
+          ""
+        ],
+        [
+          "",
+          "New Custom Tab",
+          "Create a brand-new custom sidebar tab"
+        ],
+        [
+          "PLAN",
+          null,
+          ""
+        ],
+        [
+          "All-in-One Scroll",
+          null,
+          ""
+        ],
+        [
+          "Quick Glance",
+          null,
+          ""
+        ],
+        [
+          "Home",
+          null,
+          ""
+        ],
+        [
+          "Today Spread",
+          null,
+          ""
+        ],
+        [
+          "Physical Planner",
+          null,
+          ""
+        ],
+        [
+          "Week / Month / Year",
+          null,
+          ""
+        ],
+        [
+          "Flow Calendar",
+          null,
+          ""
+        ],
+        [
+          "Task Calendar",
+          null,
+          ""
+        ],
+        [
+          "Tasks",
+          null,
+          ""
+        ],
+        [
+          "Chores",
+          null,
+          ""
+        ],
+        [
+          "History & Reviews",
+          null,
+          ""
+        ],
+        [
+          "Reports & Analytics",
+          null,
+          ""
+        ],
+        [
+          "Life Events",
+          null,
+          ""
+        ],
+        [
+          "LABORATORY",
+          null,
+          ""
+        ],
+        [
+          "Lab Management",
+          null,
+          ""
+        ],
+        [
+          "CREATE & MATH",
+          null,
+          ""
+        ],
+        [
+          "Calculator & Graph",
+          null,
+          ""
+        ],
+        [
+          "Spreadsheets",
+          null,
+          ""
+        ],
+        [
+          "Presentations",
+          null,
+          ""
+        ],
+        [
+          "Kanban Boards",
+          null,
+          ""
+        ],
+        [
+          "Whiteboard Canvas",
+          null,
+          ""
+        ],
+        [
+          "Projects & Records",
+          null,
+          ""
+        ],
+        [
+          "Game Dev Studio",
+          null,
+          ""
+        ],
+        [
+          "Book Studio",
+          null,
+          ""
+        ],
+        [
+          "Code Sandbox",
+          null,
+          ""
+        ],
+        [
+          "Camera & Photos",
+          null,
+          ""
+        ],
+        [
+          "Universal Files",
+          null,
+          ""
+        ],
+        [
+          "MIND",
+          null,
+          ""
+        ],
+        [
+          "Notes & Graph",
+          null,
+          ""
+        ],
+        [
+          "Thought Inbox",
+          null,
+          ""
+        ],
+        [
+          "Diary & Mood",
+          null,
+          ""
+        ],
+        [
+          "TIME",
+          null,
+          ""
+        ],
+        [
+          "Clock & World",
+          null,
+          ""
+        ],
+        [
+          "Smart Alarms",
+          null,
+          ""
+        ],
+        [
+          "Timers & Pomodoro",
+          null,
+          ""
+        ],
+        [
+          "Stopwatch & Ledger",
+          null,
+          ""
+        ],
+        [
+          "Countdowns",
+          null,
+          ""
+        ],
+        [
+          "KITCHEN",
+          null,
+          ""
+        ],
+        [
+          "Recipes",
+          null,
+          ""
+        ],
+        [
+          "Pantry Lots",
+          null,
+          ""
+        ],
+        [
+          "Meal Planner",
+          null,
+          ""
+        ],
+        [
+          "Groceries",
+          null,
+          ""
+        ],
+        [
+          "LIFE-OS",
+          null,
+          ""
+        ],
+        [
+          "Goals",
+          null,
+          ""
+        ],
+        [
+          "Habits & Routines",
+          null,
+          ""
+        ],
+        [
+          "STUDIO",
+          null,
+          ""
+        ],
+        [
+          "Custom Spaces",
+          null,
+          ""
+        ],
+        [
+          "Rituals & Contexts",
+          null,
+          ""
+        ],
+        [
+          "Insights & Heatmaps",
+          null,
+          ""
+        ],
+        [
+          "Automations",
+          null,
+          ""
+        ],
+        [
+          "Guide & Help",
+          null,
+          ""
+        ],
+        [
+          "Trash (30d)",
+          null,
+          ""
+        ],
+        [
+          "Settings & Themes",
+          null,
+          ""
+        ],
+        [
+          "Search",
+          null,
+          "Global Fuzzy Search (/)"
+        ],
+        [
+          "Capture",
+          null,
+          "Quick Capture (N)"
+        ],
+        [
+          "",
+          "Open Command Palette",
+          "Command Palette (Ctrl/Cmd+K)"
+        ],
+        [
+          "Install App",
+          null,
+          "Install Planaday as a standalone app"
+        ],
+        [
+          "",
+          "Undo",
+          "Undo (Ctrl/Cmd+Z)"
+        ],
+        [
+          "",
+          "Redo",
+          "Redo (Ctrl/Cmd+Shift+Z)"
+        ],
+        [
+          "Calm",
+          null,
+          "Toggle Low-Energy / Overwhelmed Mode"
+        ],
+        [
+          "",
+          "Open Zen Sheet",
+          "Distraction-Free Zen Sheet"
+        ],
+        [
+          "Synced",
+          null,
+          "Sync Status & Server Connection Settings"
+        ],
+        [
+          "",
+          "Open App Guide",
+          "App Guide & Documentation"
+        ],
+        [
+          "",
+          "Open Settings",
+          "Settings & Theme Studio"
+        ],
+        [
+          "New Board",
+          null,
+          ""
+        ],
+        [
+          "SVG",
+          null,
+          ""
+        ],
+        [
+          "PDF",
+          null,
+          ""
+        ],
+        [
+          "",
+          null,
+          ""
+        ],
+        [
+          "Move",
+          null,
+          ""
+        ],
+        [
+          "Pan",
+          null,
+          ""
+        ],
+        [
+          "Pen",
+          null,
+          ""
+        ],
+        [
+          "🖍 Hi-Lite",
+          null,
+          ""
+        ],
+        [
+          "Marker",
+          null,
+          ""
+        ],
+        [
+          "Eraser",
+          null,
+          ""
+        ],
+        [
+          "Connect Nodes",
+          null,
+          ""
+        ],
+        [
+          "Sticky",
+          null,
+          ""
+        ],
+        [
+          "▢ Frame",
+          null,
+          ""
+        ],
+        [
+          "Eq",
+          null,
+          ""
+        ],
+        [
+          "Code",
+          null,
+          ""
+        ],
+        [
+          "✨ Sticker",
+          null,
+          ""
+        ],
+        [
+          "",
+          null,
+          "Undo last stroke"
+        ],
+        [
+          "",
+          null,
+          ""
+        ],
+        [
+          "Snap",
+          null,
+          ""
+        ],
+        [
+          "",
+          null,
+          ""
+        ],
+        [
+          "",
+          null,
+          ""
+        ],
+        [
+          "Reset",
+          null,
+          ""
+        ],
+        [
+          "Save View",
+          null,
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "Code Studio executes its built-in arithmetic example",
+      "status": "pass",
+      "details": "Built-in JavaScript produced the expected result. This is a functionality check."
+    },
+    {
+      "name": "Spreadsheet creates a workbook, evaluates a cell and retains the formula",
+      "status": "pass",
+      "details": "A1 remained formula =2*21 with display value 42."
+    }
+  ],
+  "viewports": [],
+  "notes": [],
+  "browserErrors": [],
+  "requests": [
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/mathOffice-DTzRjkae.js",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/lab-OuiMVkN7.js",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/lab-OuiMVkN7.js",
+    "/assets/visualCodeMedia-T-S5jP3M.js",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/visualCodeMedia-T-S5jP3M.js",
+    "http://127.0.0.1:53935/c9e9a451-00e7-4b07-8e89-a8e06d3badbb",
+    "http://127.0.0.1:53935/c5eb92dc-9971-419e-9b58-2427351efd56",
+    "/assets/mathOffice-DTzRjkae.js",
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/assets/mathOffice-DTzRjkae.js"
+  ],
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36 Edg/158.0.0.0",
+  "navigation": {
+    "frameId": "329F8CC793744E5DCDACD1BDA0E0687F",
+    "loaderId": "90CA9E1F8FBE1AFD53FEB75675D5EAA8",
+    "isDownload": false
+  },
+  "onboarding": [
+    [
+      "PLAN",
+      null,
+      ""
+    ],
+    [
+      "All-in-One Scroll",
+      null,
+      ""
+    ],
+    [
+      "Quick Glance",
+      null,
+      ""
+    ],
+    [
+      "Home",
+      null,
+      ""
+    ],
+    [
+      "Today Spread",
+      null,
+      ""
+    ],
+    [
+      "Physical Planner",
+      null,
+      ""
+    ],
+    [
+      "Week / Month / Year",
+      null,
+      ""
+    ],
+    [
+      "Flow Calendar",
+      null,
+      ""
+    ],
+    [
+      "Task Calendar",
+      null,
+      ""
+    ],
+    [
+      "Tasks",
+      null,
+      ""
+    ],
+    [
+      "Chores",
+      null,
+      ""
+    ],
+    [
+      "History & Reviews",
+      null,
+      ""
+    ],
+    [
+      "Reports & Analytics",
+      null,
+      ""
+    ],
+    [
+      "Life Events",
+      null,
+      ""
+    ],
+    [
+      "LABORATORY",
+      null,
+      ""
+    ],
+    [
+      "Lab Management",
+      null,
+      ""
+    ],
+    [
+      "CREATE & MATH",
+      null,
+      ""
+    ],
+    [
+      "Calculator & Graph",
+      null,
+      ""
+    ],
+    [
+      "Spreadsheets",
+      null,
+      ""
+    ],
+    [
+      "Presentations",
+      null,
+      ""
+    ],
+    [
+      "Kanban Boards",
+      null,
+      ""
+    ],
+    [
+      "Whiteboard Canvas",
+      null,
+      ""
+    ],
+    [
+      "Projects & Records",
+      null,
+      ""
+    ],
+    [
+      "Game Dev Studio",
+      null,
+      ""
+    ],
+    [
+      "Book Studio",
+      null,
+      ""
+    ],
+    [
+      "Code Sandbox",
+      null,
+      ""
+    ],
+    [
+      "Camera & Photos",
+      null,
+      ""
+    ],
+    [
+      "Universal Files",
+      null,
+      ""
+    ],
+    [
+      "MIND",
+      null,
+      ""
+    ],
+    [
+      "Notes & Graph",
+      null,
+      ""
+    ],
+    [
+      "Thought Inbox",
+      null,
+      ""
+    ],
+    [
+      "Diary & Mood",
+      null,
+      ""
+    ],
+    [
+      "TIME",
+      null,
+      ""
+    ],
+    [
+      "Clock & World",
+      null,
+      ""
+    ],
+    [
+      "Smart Alarms",
+      null,
+      ""
+    ],
+    [
+      "Timers & Pomodoro",
+      null,
+      ""
+    ],
+    [
+      "Stopwatch & Ledger",
+      null,
+      ""
+    ],
+    [
+      "Countdowns",
+      null,
+      ""
+    ],
+    [
+      "KITCHEN",
+      null,
+      ""
+    ],
+    [
+      "Recipes",
+      null,
+      ""
+    ],
+    [
+      "Pantry Lots",
+      null,
+      ""
+    ],
+    [
+      "Meal Planner",
+      null,
+      ""
+    ],
+    [
+      "Groceries",
+      null,
+      ""
+    ],
+    [
+      "LIFE-OS",
+      null,
+      ""
+    ],
+    [
+      "Goals",
+      null,
+      ""
+    ],
+    [
+      "Habits & Routines",
+      null,
+      ""
+    ],
+    [
+      "STUDIO",
+      null,
+      ""
+    ],
+    [
+      "Custom Spaces",
+      null,
+      ""
+    ],
+    [
+      "Rituals & Contexts",
+      null,
+      ""
+    ],
+    [
+      "Insights & Heatmaps",
+      null,
+      ""
+    ],
+    [
+      "Automations",
+      null,
+      ""
+    ],
+    [
+      "Guide & Help",
+      null,
+      ""
+    ],
+    [
+      "Trash (30d)",
+      null,
+      ""
+    ],
+    [
+      "Settings & Themes",
+      null,
+      ""
+    ],
+    [
+      "Search",
+      null,
+      "Global Fuzzy Search (/)"
+    ],
+    [
+      "Capture",
+      null,
+      "Quick Capture (N)"
+    ],
+    [
+      "Install App",
+      null,
+      "Install Planaday as a standalone app"
+    ],
+    [
+      "Calm",
+      null,
+      "Toggle Low-Energy / Overwhelmed Mode"
+    ],
+    [
+      "Syncing…",
+      null,
+      "Sync Status & Server Connection Settings"
+    ],
+    [
+      "Today Spread Settings",
+      null,
+      ""
+    ],
+    [
+      "←",
+      null,
+      ""
+    ],
+    [
+      "→",
+      null,
+      ""
+    ],
+    [
+      "Open-Book",
+      null,
+      ""
+    ],
+    [
+      "+ Event",
+      null,
+      ""
+    ],
+    [
+      "+ Task",
+      null,
+      ""
+    ],
+    [
+      "+ Chore",
+      null,
+      ""
+    ],
+    [
+      "+ Meal",
+      null,
+      ""
+    ],
+    [
+      "+ Timer",
+      null,
+      ""
+    ],
+    [
+      "+ Note",
+      null,
+      ""
+    ],
+    [
+      "+ Thought",
+      null,
+      ""
+    ],
+    [
+      "Add",
+      null,
+      ""
+    ],
+    [
+      "0\nStill Upcoming Today",
+      null,
+      ""
+    ],
+    [
+      "0\nOverdue Chores",
+      null,
+      ""
+    ],
+    [
+      "0\nDue Chores",
+      null,
+      ""
+    ],
+    [
+      "0\nOpen Tasks",
+      null,
+      ""
+    ],
+    [
+      "Decor",
+      null,
+      "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+    ],
+    [
+      "Ink",
+      null,
+      "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+    ],
+    [
+      "Planned View",
+      null,
+      "Planned View shows your intended schedule. Planned vs. Actual lets you record when events really started & finished so you can see schedule drift."
+    ],
+    [
+      "Flow Calendar →",
+      null,
+      ""
+    ],
+    [
+      "Add",
+      null,
+      ""
+    ],
+    [
+      "Decor",
+      null,
+      "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+    ],
+    [
+      "Ink",
+      null,
+      "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+    ]
+  ],
+  "desktopNav": [
+    "PLAN",
+    "All-in-One Scroll",
+    "Quick Glance",
+    "Home",
+    "Today Spread",
+    "Physical Planner",
+    "Week / Month / Year",
+    "Flow Calendar",
+    "Task Calendar",
+    "Tasks",
+    "Chores",
+    "History & Reviews",
+    "Reports & Analytics",
+    "Life Events",
+    "LABORATORY",
+    "Lab Management",
+    "CREATE & MATH",
+    "Calculator & Graph",
+    "Spreadsheets",
+    "Presentations",
+    "Kanban Boards",
+    "Whiteboard Canvas",
+    "Projects & Records",
+    "Game Dev Studio",
+    "Book Studio",
+    "Code Sandbox",
+    "Camera & Photos",
+    "Universal Files",
+    "MIND",
+    "Notes & Graph",
+    "Thought Inbox",
+    "Diary & Mood",
+    "TIME",
+    "Clock & World",
+    "Smart Alarms",
+    "Timers & Pomodoro",
+    "Stopwatch & Ledger",
+    "Countdowns",
+    "KITCHEN",
+    "Recipes",
+    "Pantry Lots",
+    "Meal Planner",
+    "Groceries",
+    "LIFE-OS",
+    "Goals",
+    "Habits & Routines",
+    "STUDIO",
+    "Custom Spaces",
+    "Rituals & Contexts",
+    "Insights & Heatmaps",
+    "Automations",
+    "Guide & Help",
+    "Trash (30d)",
+    "Settings & Themes"
+  ],
+  "whiteboardDownload": {
+    "filenameStartsWithSvg": true,
+    "filenameEndsWithSvg": false,
+    "text": "Whiteboard 1.svg"
+  },
+  "sheetStages": [
+    {
+      "stage": "raw formula entered",
+      "cell": "=2*21",
+      "formula": "=2*21",
+      "active": "<input class=\"dp-input\" aria-label=\"Formula bar\" placeholder=\"Enter value or formula starting with = (e.g. =SUM(B2:B5), =Sheet2!A1)\" value=\"=2*21\" style=\"flex: 1 1 0%; min-width: 2"
+    },
+    {
+      "stage": "computed display",
+      "cell": "42",
+      "formula": "Quantity",
+      "active": "<input class=\"dp-input\" aria-label=\"Formula bar\" placeholder=\"Enter value or formula starting with = (e.g. =SUM(B2:B5), =Sheet2!A1)\" value=\"Quantity\" style=\"flex: 1 1 0%; min-width"
+    },
+    {
+      "stage": "raw formula after reload",
+      "cell": "=2*21",
+      "formula": "=2*21",
+      "active": "<body>\n    <div id=\"root\"><div class=\"dp-app \" style=\"\"><aside class=\"dp-sidebar\" aria-label=\"Primary Planner Navigation\"><div class=\"dp-brand\"><div class=\"dp-brand-mark\"><span cla"
+    },
+    {
+      "stage": "computed display after reload",
+      "cell": "42",
+      "formula": "Quantity",
+      "active": "<body>\n    <div id=\"root\"><div class=\"dp-app \" style=\"\"><aside class=\"dp-sidebar\" aria-label=\"Primary Planner Navigation\"><div class=\"dp-brand\"><div class=\"dp-brand-mark\"><span cla"
+    }
+  ]
+}

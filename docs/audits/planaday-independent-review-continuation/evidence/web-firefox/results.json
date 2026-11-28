@@ -1,0 +1,34 @@
+{
+  "engine": "firefox",
+  "version": "153.0",
+  "routeMatrix": [],
+  "interactions": [],
+  "errors": [],
+  "requests": [],
+  "cases": [
+    {
+      "id": "FF-BOOT-D",
+      "status": "fail",
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.dp-app') to be visible\u001b[22m\n",
+      "surface": ""
+    },
+    {
+      "id": "FF-NOTE-D",
+      "status": "fail",
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.dp-sidebar .dp-nav-btn').filter({ has: getByText('Notes & Graph', { exact: true }) }).first()\u001b[22m\n",
+      "surface": ""
+    },
+    {
+      "id": "FF-BOOT-M",
+      "status": "fail",
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.dp-app') to be visible\u001b[22m\n",
+      "surface": ""
+    },
+    {
+      "id": "FF-NOTE-M",
+      "status": "fail",
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Open navigation menu', exact: true })\u001b[22m\n",
+      "surface": ""
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "engine": "webkit",
+  "version": "26.5",
+  "routeMatrix": [],
+  "interactions": [],
+  "errors": [
+    {
+      "kind": "request",
+      "url": "/api/sync/events",
+      "message": "Load request cancelled"
+    },
+    {
+      "kind": "request",
+      "url": "/api/sync/events",
+      "message": "Load request cancelled"
+    }
+  ],
+  "requests": [],
+  "cases": [
+    {
+      "id": "WK-BOOT-D",
+      "status": "pass",
+      "details": {
+        "width": 1440,
+        "height": 960,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+        "serviceWorker": true
+      }
+    },
+    {
+      "id": "WK-NOTE-D",
+      "status": "pass",
+      "details": {
+        "noteId": "note_27f0d326-278e-445f-ac09-e90e97e57a31",
+        "verified": "create, edit, save, reload"
+      }
+    },
+    {
+      "id": "WK-BOOT-M",
+      "status": "pass",
+      "details": {
+        "width": 393,
+        "height": 852,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+        "serviceWorker": true
+      }
+    },
+    {
+      "id": "WK-NOTE-M",
+      "status": "pass",
+      "details": {
+        "noteId": "note_7d35bdbd-b1d9-4043-b831-735aa12611e9",
+        "verified": "create, edit, save, reload"
+      }
+    }
+  ]
+}

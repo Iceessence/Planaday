@@ -1,0 +1,26 @@
+
+ RUN  v3.2.7 C:/Platz Apps/Planaday/node_modules/.audit-planaday-d82bdc7
+
+ ✓ tests/expansion-v4.test.ts (6 tests) 27ms
+ ✓ tests/phase3.test.ts (2 tests) 51ms
+ ✓ tests/phase1.test.ts (4 tests) 56ms
+ ✓ tests/phases3-10.test.ts (5 tests) 31ms
+ ✓ tests/phase2.test.ts (4 tests) 65ms
+stdout | tests/phase1-reliability.test.ts > Phase 1 & Phase 2 — Sync Stress Coalescing, SQLite Backups, Mobile IME & Cursor Safety > coalesces 200 rapid note edits into 1 single outbox operation without bloating note revisions
+[Benchmark] 200 rapid note edits -> 1 outbox op in 134.0ms
+
+ ✓ tests/phase0.test.ts (7 tests) 245ms
+ ✓ tests/phase4.test.ts (4 tests) 192ms
+ ✓ tests/upgrades.test.ts (9 tests) 198ms
+stdout | tests/phase1-reliability.test.ts > Phase 1 & Phase 2 — Sync Stress Coalescing, SQLite Backups, Mobile IME & Cursor Safety > compacts a legacy 2,000-op backlog down to 1 op and syncs cleanly to live SQLite server
+[Benchmark] 2,000-op legacy backlog -> compacted to 1 op in 49.8ms, synced to SQLite in 20.4ms, backup verified (36864 bytes)
+
+ ✓ tests/phase1-reliability.test.ts (5 tests) 470ms
+ ✓ tests/ui-smoke.test.tsx (1 test) 1467ms
+   ✓ Full App UI Smoke & Zero-Stub Navigation Check > mounts App, completes 30-second onboarding with sample data, navigates all core views with zero localStorage  1466ms
+
+ Test Files  10 passed (10)
+      Tests  47 passed (47)
+   Start at  16:12:05
+   Duration  3.62s (transform 1.81s, setup 544ms, collect 4.72s, tests 2.80s, environment 5.75s, prepare 1.86s)
+

@@ -1,0 +1,29 @@
+{
+  "owner": {
+    "VERIFIED COMPLETE": 0,
+    "MOSTLY COMPLETE": 2,
+    "PARTIALLY IMPLEMENTED": 125,
+    "UI ONLY": 0,
+    "BROKEN": 16,
+    "NOT IMPLEMENTED": 3,
+    "REGRESSION": 0,
+    "BLOCKED — ENVIRONMENT": 0,
+    "BLOCKED — REQUIREMENT": 3,
+    "NOT VERIFIED": 345
+  },
+  "discovered": {
+    "VERIFIED COMPLETE": 4,
+    "MOSTLY COMPLETE": 51,
+    "PARTIALLY IMPLEMENTED": 25,
+    "UI ONLY": 0,
+    "BROKEN": 8,
+    "NOT IMPLEMENTED": 0,
+    "REGRESSION": 0,
+    "BLOCKED — ENVIRONMENT": 0,
+    "BLOCKED — REQUIREMENT": 0,
+    "NOT VERIFIED": 70
+  },
+  "total": 652,
+  "ownerContinuationMapped": 108,
+  "baseline": 494
+}

@@ -1,0 +1,10 @@
+file:///C:/Platz%20Apps/Planaday/docs/audits/planaday-independent-review-continuation/evidence/tools/android-native.mjs:26
+  throw new Error('Timed out: '+JSON.stringify(result)?.slice(0,270));
+        ^
+
+Error: Timed out: false
+    at until (file:///C:/Platz%20Apps/Planaday/docs/audits/planaday-independent-review-continuation/evidence/tools/android-native.mjs:26:9)
+    at async attach (file:///C:/Platz%20Apps/Planaday/docs/audits/planaday-independent-review-continuation/evidence/tools/android-native.mjs:65:3)
+    at async file:///C:/Platz%20Apps/Planaday/docs/audits/planaday-independent-review-continuation/evidence/tools/android-native.mjs:111:2
+
+Node.js v24.22.3

@@ -1,0 +1,54 @@
+{
+  "response": 200,
+  "observation": {
+    "loc": "http://127.0.0.1:49723/",
+    "root": "Opening Planaday workspace…",
+    "page": "Opening Planaday workspace…",
+    "scripts": [
+      "http://127.0.0.1:49723/assets/index-DyeBixqe.js"
+    ],
+    "temporal": "object"
+  },
+  "items": [
+    {
+      "resource": "http://127.0.0.1:49723/",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/index-DyeBixqe.js",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/mindTime-CE4Acib2.js",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/plan-DXnJakOx.js",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/archive-BoQ23Qv2.js",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/vendor-BXbLIbeB.js",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/kitchenLife-CFK4mFCp.js",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/assets/index-_IZoqLsr.css",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/icons/icon.svg",
+      "status": 200
+    },
+    {
+      "resource": "http://127.0.0.1:49723/icons/icon.svg",
+      "status": 200
+    }
+  ]
+}

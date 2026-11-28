@@ -1,0 +1,8 @@
+pass service worker controls the built application
+pass Calculator evaluates a parenthetical expression and displays the fraction
+pass Calendar event created through the dialog survives reload in Agenda
+pass Laboratory sample creation and status survive reload
+pass Whiteboard creates a board with its starter nodes and preserves them on reload
+fail Whiteboard SVG download contains valid SVG content and the requested filename
+pass Code Studio executes its built-in arithmetic example
+pass Spreadsheet creates a workbook, evaluates a cell and retains the formula

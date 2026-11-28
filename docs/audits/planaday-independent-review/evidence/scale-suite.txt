@@ -1,0 +1,24 @@
+
+ RUN  v3.2.7 C:/Platz Apps/Planaday/node_modules/.audit-planaday-d82bdc7
+
+stdout | tests/scale.audit.test.ts > profiles synthetic 30,000-record search, SQLite synchronization and a 10,000-cell worksheet
+full pull bytes: 10043365
+┌─────────┬────────────────────────────────────────────┬────────┬───────┬──────────────┐
+│ (index) │ case                                       │ wallMs │ cpuMs │ rssChangeMiB │
+├─────────┼────────────────────────────────────────────┼────────┼───────┼──────────────┤
+│ 0       │ 'full text and fuzzy search, first run'    │ 31.2   │ 77    │ 43.9         │
+│ 1       │ 'full text and fuzzy search, repeat'       │ 17.3   │ 31    │ 2            │
+│ 2       │ 'SQLite writes in 600 batches of 50'       │ 511.5  │ 516   │ 76.4         │
+│ 3       │ 'SQLite pull of all 30,000 records'        │ 57     │ 62    │ -58.2        │
+│ 4       │ 'serialize entire pull to JSON'            │ 15.9   │ 16    │ 10.6         │
+│ 5       │ '10,000-cell workbook with 9,500 formulas' │ 20.8   │ 47    │ -4.3         │
+└─────────┴────────────────────────────────────────────┴────────┴───────┴──────────────┘
+
+ ✓ tests/scale.audit.test.ts (1 test) 680ms
+   ✓ profiles synthetic 30,000-record search, SQLite synchronization and a 10,000-cell worksheet  679ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:44:03
+   Duration  1.95s (transform 65ms, setup 77ms, collect 61ms, tests 680ms, environment 515ms, prepare 100ms)
+

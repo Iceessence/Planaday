@@ -1,0 +1,15 @@
+
+package: name='org.planaday.audit.d82bdc7' versionCode='1' versionName='1.0' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+sdkVersion:'23'
+targetSdkVersion:'35'
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+uses-permission: name='android.permission.SCHEDULE_EXACT_ALARM'
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+launchable-activity: name='org.planaday.audit.d82bdc7.MainActivity'  label='Planaday Audit' icon=''
+
+
+Algorithm : SHA256
+Hash      : 1F9F493186C6740984D319A35A4A210C945265F896A269FC8A193335E8A15721
+Path      : C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\native-audit\android\app\build\outputs\apk\debug\app-debug.apk
+
+

@@ -1,0 +1,6 @@
+{"type":"application/octet-stream","put":200,"get":200,"identical":true}
+{"type":"image/png","put":415,"get":404,"identical":false}
+{"type":"image/jpeg","put":415,"get":404,"identical":false}
+{"type":"audio/wav","put":415,"get":404,"identical":false}
+{"type":"application/pdf","put":200,"get":200,"identical":true}
+{"type":"image/svg+xml","put":200,"get":200,"identical":true}

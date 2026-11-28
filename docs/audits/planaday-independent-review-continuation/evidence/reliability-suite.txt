@@ -1,0 +1,82 @@
+
+ RUN  v3.2.7 C:/Platz Apps/Planaday/node_modules/.continuation-audit-d82bdc7
+
+stdout | tests/reliability.audit.test.ts > SY-S-10 compacts and drains real HTTP queue
+{"id":"SY-S-10","input":10,"desktopRecords":1,"compacted":1,"compactMs":1.6,"syncMs":22,"push":1,"pull":1,"requestBytes":429,"responseBytes":341,"maxRequestMs":16.3,"cpuMs":16,"rssDeltaMiB":4.2}
+
+stdout | tests/reliability.audit.test.ts > SY-D-10 compacts and drains real HTTP queue
+{"id":"SY-D-10","input":10,"desktopRecords":10,"compacted":10,"compactMs":0.2,"syncMs":5.9,"push":1,"pull":1,"requestBytes":4021,"responseBytes":2905,"maxRequestMs":2.6,"cpuMs":0,"rssDeltaMiB":0.4}
+
+stdout | tests/reliability.audit.test.ts > SY-S-100 compacts and drains real HTTP queue
+{"id":"SY-S-100","input":100,"desktopRecords":1,"compacted":1,"compactMs":4.1,"syncMs":6.5,"push":1,"pull":1,"requestBytes":433,"responseBytes":345,"maxRequestMs":3.2,"cpuMs":16,"rssDeltaMiB":1.9}
+
+stdout | tests/reliability.audit.test.ts > SY-D-100 compacts and drains real HTTP queue
+{"id":"SY-D-100","input":100,"desktopRecords":100,"compacted":100,"compactMs":0.7,"syncMs":13.6,"push":2,"pull":1,"requestBytes":40342,"responseBytes":28880,"maxRequestMs":4.4,"cpuMs":31,"rssDeltaMiB":10.3}
+
+stdout | tests/reliability.audit.test.ts > SY-S-1000 compacts and drains real HTTP queue
+{"id":"SY-S-1000","input":1000,"desktopRecords":1,"compacted":1,"compactMs":15.7,"syncMs":5.2,"push":1,"pull":1,"requestBytes":437,"responseBytes":349,"maxRequestMs":2.4,"cpuMs":63,"rssDeltaMiB":3.6}
+
+stdout | tests/reliability.audit.test.ts > SY-D-1000 compacts and drains real HTTP queue
+{"id":"SY-D-1000","input":1000,"desktopRecords":1000,"compacted":1000,"compactMs":4.1,"syncMs":84.9,"push":20,"pull":1,"requestBytes":408380,"responseBytes":292574,"maxRequestMs":23.1,"cpuMs":125,"rssDeltaMiB":14}
+
+stdout | tests/reliability.audit.test.ts > SY-S-2000 compacts and drains real HTTP queue
+{"id":"SY-S-2000","input":2000,"desktopRecords":1,"compacted":1,"compactMs":27.2,"syncMs":3.9,"push":1,"pull":1,"requestBytes":438,"responseBytes":350,"maxRequestMs":1.9,"cpuMs":62,"rssDeltaMiB":15.9}
+
+stdout | tests/reliability.audit.test.ts > SY-D-2000 compacts and drains real HTTP queue
+{"id":"SY-D-2000","input":2000,"desktopRecords":2000,"compacted":2000,"compactMs":9.4,"syncMs":110.6,"push":40,"pull":1,"requestBytes":821200,"responseBytes":588474,"maxRequestMs":5.4,"cpuMs":140,"rssDeltaMiB":35.8}
+
+stdout | tests/reliability.audit.test.ts > SY-S-5000 compacts and drains real HTTP queue
+{"id":"SY-S-5000","input":5000,"desktopRecords":1,"compacted":1,"compactMs":69.7,"syncMs":3.7,"push":1,"pull":1,"requestBytes":438,"responseBytes":350,"maxRequestMs":1.8,"cpuMs":93,"rssDeltaMiB":16.3}
+
+stdout | tests/reliability.audit.test.ts > SY-D-5000 compacts and drains real HTTP queue
+{"id":"SY-D-5000","input":5000,"desktopRecords":5000,"compacted":5000,"compactMs":22.5,"syncMs":292.9,"push":100,"pull":1,"requestBytes":2059660,"responseBytes":1476174,"maxRequestMs":11.9,"cpuMs":312,"rssDeltaMiB":50.3}
+
+stdout | tests/reliability.audit.test.ts > SY-S-10000 compacts and drains real HTTP queue
+{"id":"SY-S-10000","input":10000,"desktopRecords":1,"compacted":1,"compactMs":126.8,"syncMs":3.5,"push":1,"pull":1,"requestBytes":441,"responseBytes":353,"maxRequestMs":1.7,"cpuMs":125,"rssDeltaMiB":38.9}
+
+stdout | tests/reliability.audit.test.ts > SY-D-10000 compacts and drains real HTTP queue
+{"id":"SY-D-10000","input":10000,"desktopRecords":10000,"compacted":10000,"compactMs":50.4,"syncMs":593.2,"push":200,"pull":1,"requestBytes":4133760,"responseBytes":2965676,"maxRequestMs":28.8,"cpuMs":688,"rssDeltaMiB":59.9}
+
+stdout | tests/reliability.audit.test.ts > SY-014 failed blob PUT must prevent a fully-synced status
+SY-014 has remote bytes false sync status synced remaining pending 0
+
+ ❯ tests/reliability.audit.test.ts (17 tests | 1 failed) 2319ms
+   ✓ SY-S-10 compacts and drains real HTTP queue 159ms
+   ✓ SY-D-10 compacts and drains real HTTP queue 34ms
+   ✓ SY-S-100 compacts and drains real HTTP queue 35ms
+   ✓ SY-D-100 compacts and drains real HTTP queue 35ms
+   ✓ SY-S-1000 compacts and drains real HTTP queue 49ms
+   ✓ SY-D-1000 compacts and drains real HTTP queue 117ms
+   ✓ SY-S-2000 compacts and drains real HTTP queue 65ms
+   ✓ SY-D-2000 compacts and drains real HTTP queue 157ms
+   ✓ SY-S-5000 compacts and drains real HTTP queue 127ms
+   ✓ SY-D-5000 compacts and drains real HTTP queue  369ms
+   ✓ SY-S-10000 compacts and drains real HTTP queue 222ms
+   ✓ SY-D-10000 compacts and drains real HTTP queue  732ms
+   ✓ SY-013 retry after 503 retains queued records, then sends once 25ms
+   × SY-014 failed blob PUT must prevent a fully-synced status 25ms
+     → expected 'synced' not to be 'synced' // Object.is equality
+   ✓ SY-015 record edits, deletion, restore and types on the real HTTP server 37ms
+   ✓ SY-016 server accepts stable idempotency for retry of the same operation 18ms
+   ✓ ST-001 close and re-open selected SQLite snapshot and pre-existing synthetic file 110ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reliability.audit.test.ts > SY-014 failed blob PUT must prevent a fully-synced status
+AssertionError: expected 'synced' not to be 'synced' // Object.is equality
+ ❯ tests/reliability.audit.test.ts:102:28
+    100|   console.log('SY-014 has remote bytes',remote.ok,'sync status',state.…
+    101|   expect(remote.ok).toBe(false);
+    102|   expect(state.status).not.toBe('synced');
+       |                            ^
+    103|  }finally{await srv.stop();}
+    104| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  17:35:25
+   Duration  3.51s (transform 108ms, setup 64ms, collect 253ms, tests 2.32s, environment 353ms, prepare 100ms)
+

@@ -1,0 +1,173 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            BuildKit is currently disabled; enable it by removing the DOCKER_BUILDKIT=0
+            environment-variable.
+
+Sending build context to Docker daemon  2.652MB
+
+Step 1/25 : FROM node:24-alpine AS builder
+24-alpine: Pulling from library/node
+881fc932939e: Pulling fs layer
+86781d25d398: Pulling fs layer
+7eb569707982: Pulling fs layer
+7bb632bc9bd7: Pulling fs layer
+7bb632bc9bd7: Waiting
+7eb569707982: Verifying Checksum
+7eb569707982: Download complete
+7bb632bc9bd7: Download complete
+881fc932939e: Verifying Checksum
+881fc932939e: Download complete
+86781d25d398: Download complete
+881fc932939e: Pull complete
+86781d25d398: Pull complete
+7eb569707982: Pull complete
+7bb632bc9bd7: Pull complete
+Digest: sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
+Status: Downloaded newer image for node:24-alpine
+ ---> b791832e17c3
+Step 2/25 : WORKDIR /app
+ ---> Running in 865c49a5e255
+ ---> Removed intermediate container 865c49a5e255
+ ---> 00a3ef9988b3
+Step 3/25 : COPY package.json package-lock.json* ./
+ ---> 596313207e99
+Step 4/25 : RUN npm ci || npm install
+ ---> Running in 8363a4f3a2c4
+[91mnpm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+[0m[91mnpm warn deprecated @types/dompurify@3.2.0: This is a stub types definition. dompurify provides its own type definitions, so you do not need this installed.
+[0m[91mnpm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+[0m
+added 237 packages, and audited 238 packages in 4s
+
+59 packages are looking for funding
+  run `npm fund` for details
+
+6 vulnerabilities (3 moderate, 1 high, 2 critical)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[91mnpm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   esbuild@0.28.2 (postinstall: node install.js)
+npm warn install-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+[0m[91mnpm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.3
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.3
+npm notice To update run: npm install -g npm@12.2.3
+npm notice
+[0m ---> Removed intermediate container 8363a4f3a2c4
+ ---> de6a19607117
+Step 5/25 : COPY tsconfig.json tsconfig.server.json vite.config.ts index.html ./
+ ---> 52d38d18020c
+Step 6/25 : COPY public ./public
+ ---> 7b58bea5a10a
+Step 7/25 : COPY src ./src
+ ---> 836059f64085
+Step 8/25 : COPY server ./server
+ ---> 50d95dbe42c0
+Step 9/25 : RUN npm run build
+ ---> Running in ed5ca9a69f6d
+
+> dayplana@2.0.0 build
+> tsc --noEmit && vite build && tsc -p tsconfig.server.json
+
+vite v6.4.6 building for production...
+transforming...
+✓ 1703 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                              1.50 kB │ gzip:   0.66 kB
+dist/assets/index-_IZoqLsr.css              26.67 kB │ gzip:   5.96 kB
+dist/assets/archive-BoQ23Qv2.js             12.43 kB │ gzip:   6.07 kB
+dist/assets/purify.es-BKvm9NlY.js           31.55 kB │ gzip:  12.23 kB
+dist/assets/digitalPlanner-jVpMV3Pe.js      34.94 kB │ gzip:   9.79 kB
+dist/assets/creativeStudios-D8hZ-Kdr.js     44.91 kB │ gzip:  11.19 kB
+dist/assets/temporal-polyfill-Dz9imr3U.js   58.52 kB │ gzip:  21.31 kB
+dist/assets/visualCodeMedia-DxnFbgtO.js     63.26 kB │ gzip:  17.08 kB
+dist/assets/lab-Cj0XPuWs.js                 71.18 kB │ gzip:  15.87 kB
+dist/assets/mathOffice-D_zXXIt_.js         103.12 kB │ gzip:  30.16 kB
+dist/assets/kitchenLife-B8bEMJS0.js        123.78 kB │ gzip:  30.32 kB
+dist/assets/mindTime-Bq_VJSSf.js           150.59 kB │ gzip:  41.11 kB
+dist/assets/vendor-BXbLIbeB.js             186.33 kB │ gzip:  52.35 kB
+dist/assets/plan-Cc0wYm-P.js               402.56 kB │ gzip: 117.24 kB
+dist/assets/index-_7tzJYm8.js              412.57 kB │ gzip: 120.93 kB
+✓ built in 2.74s
+ ---> Removed intermediate container ed5ca9a69f6d
+ ---> 1c5e44152b6f
+Step 10/25 : FROM node:24-alpine AS runner
+ ---> b791832e17c3
+Step 11/25 : WORKDIR /app
+ ---> Using cache
+ ---> 00a3ef9988b3
+Step 12/25 : ENV NODE_ENV=production
+ ---> Running in a1b694748cf5
+ ---> Removed intermediate container a1b694748cf5
+ ---> bff66c9033ef
+Step 13/25 : ENV PORT=3000
+ ---> Running in c22cc4a85c2b
+ ---> Removed intermediate container c22cc4a85c2b
+ ---> 51de0f339eca
+Step 14/25 : ENV HOST=0.0.0.0
+ ---> Running in dc9c14e8a4fc
+ ---> Removed intermediate container dc9c14e8a4fc
+ ---> 0be03930be35
+Step 15/25 : ENV DATA_DIR=/data
+ ---> Running in 09582eb30e18
+ ---> Removed intermediate container 09582eb30e18
+ ---> fdd1dd98add9
+Step 16/25 : COPY package.json package-lock.json* ./
+ ---> 5959b405541c
+Step 17/25 : RUN npm ci --omit=dev || npm install --omit=dev
+ ---> Running in 08146ad23207
+[91mnpm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+[0m
+added 96 packages, and audited 97 packages in 3s
+
+33 packages are looking for funding
+  run `npm fund` for details
+
+3 vulnerabilities (2 moderate, 1 high)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[91mnpm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.3
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.3
+npm notice To update run: npm install -g npm@12.2.3
+npm notice
+[0m ---> Removed intermediate container 08146ad23207
+ ---> 1cc4ed50c992
+Step 18/25 : COPY --from=builder /app/dist ./dist
+ ---> 194200f24f21
+Step 19/25 : COPY --from=builder /app/dist-server ./dist-server
+ ---> f6488700abc2
+Step 20/25 : RUN mkdir -p /data/blobs && chown -R node:node /data /app && chmod -R a+rX /app && chmod 777 /data /data/blobs
+ ---> Running in abff3fc2ab52
+ ---> Removed intermediate container abff3fc2ab52
+ ---> 258290486947
+Step 21/25 : VOLUME ["/data"]
+ ---> Running in 06d5bdf245b0
+ ---> Removed intermediate container 06d5bdf245b0
+ ---> 6664466de292
+Step 22/25 : EXPOSE 3000
+ ---> Running in a4f349b76b1e
+ ---> Removed intermediate container a4f349b76b1e
+ ---> 55d3ec7fbb68
+Step 23/25 : HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ ---> Running in b93f4293ee02
+ ---> Removed intermediate container b93f4293ee02
+ ---> 2fe78bc7b965
+Step 24/25 : USER node
+ ---> Running in dad3fa71237b
+ ---> Removed intermediate container dad3fa71237b
+ ---> 0fb304d62d50
+Step 25/25 : CMD ["node", "dist-server/index.js"]
+ ---> Running in e5c100d3abb1
+ ---> Removed intermediate container e5c100d3abb1
+ ---> d48653725ea6
+Successfully built d48653725ea6
+Successfully tagged planaday-audit-d82:source

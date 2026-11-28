@@ -1,0 +1,1978 @@
+{
+  "areas": {
+    "10": [
+      "Calendar",
+      "src/modules/plan/FlowCalendarView.tsx; src/modules/plan/TaskCalendarView.tsx; src/core/ics.ts; src/core/recurrence.ts",
+      "Run a seeded calendar case for this option. Include time-zone and recurrence variants if relevant."
+    ],
+    "11": [
+      "Tasks and scheduling",
+      "src/modules/plan/TasksView.tsx; src/modules/plan/ChoresView.tsx; src/core/taskScheduler.ts; src/core/planActions.ts",
+      "Create a task with a fixed due date, run the specific change and verify persisted scheduling and history."
+    ],
+    "12": [
+      "Physical Planner and decoration",
+      "src/modules/planner/DigitalPlannerView.tsx; src/components/Decor/DecorCanvas.tsx",
+      "Use a multi-page spread and verify the operation before and after page switch, zoom and reload."
+    ],
+    "15": [
+      "Notifications",
+      "src/modules/time/TimeSuiteView.tsx; src/core/nativeAlarms.ts; src/core/alarmSchedule.ts; server/alarmScheduler.ts",
+      "Schedule a uniquely named timer and compare due time, native state and delivered ID."
+    ],
+    "19": [
+      "Photos and attachments",
+      "src/modules/studio/PhotoStudioView.tsx; src/modules/studio/FileManagerView.tsx; src/core/sync.ts; server/blobs.ts",
+      "Use a synthetic image with known dimensions and hash. Verify picker, resulting records and bytes as applicable."
+    ],
+    "20": [
+      "Laboratory operations",
+      "src/modules/lab/LabWorkspaceView.tsx; src/modules/lab/LabWetNirView.tsx; src/core/labStats.ts",
+      "Seed a fictional client and samples, attach explicit units and verify this operation against stored records or hand-calculated results."
+    ],
+    "21": [
+      "Cross-workspace integration",
+      "src/core/types.ts; src/core/AppContext.tsx; src/core/repository.ts; src/modules",
+      "Create uniquely named records in both named workspaces, perform the link and verify both views plus reload and deletion."
+    ],
+    "22": [
+      "Customization",
+      "src/components/Settings/SettingsView.tsx; src/components/Shell/Sidebar.tsx; src/components/Common/TabSettingsDrawer.tsx; src/modules/life/CustomTabView.tsx",
+      "Create a customized profile and compare its serialized settings, desktop and phone layouts before and after reload."
+    ],
+    "4.1": [
+      "Personal productivity",
+      "src/modules/plan; src/modules/time/TimeSuiteView.tsx; src/core/planActions.ts",
+      "Open a fresh planning workspace and test creation, transition and retention for the named item."
+    ],
+    "4.2": [
+      "Notes and personal organization",
+      "src/modules/mind; src/modules/kitchen; src/core/mindActions.ts",
+      "Use a synthetic note, diary or meals fixture as named. Exercise the relevant setting or edit then reload."
+    ],
+    "4.3": [
+      "Planner layout and decoration",
+      "src/modules/planner/DigitalPlannerView.tsx; src/components/Decor/DecorCanvas.tsx; src/core/types.ts",
+      "Use multiple named planner pages with independent decoration and exercise the named control."
+    ],
+    "4.4": [
+      "Office and mathematics",
+      "src/modules/studio; src/core/mathEngine.ts; src/core/spreadsheetEngine.ts; src/core/backup.ts",
+      "Run the corresponding studio with a known-input fixture. Compare numeric results, rendered output or downloaded bytes."
+    ],
+    "4.5": [
+      "Creative and project work",
+      "src/modules/creative; src/modules/studio/KanbanView.tsx; src/modules/studio/WhiteboardView.tsx; src/core/types.ts",
+      "Create a project with linked synthetic objects and test the named record or work surface across reload."
+    ],
+    "4.6": [
+      "Laboratory management",
+      "src/modules/lab/LabWorkspaceView.tsx; src/modules/lab/LabWetNirView.tsx; src/core/labStats.ts",
+      "Use a reference lab dataset with known values or state and compare the result with independently calculated expectations."
+    ],
+    "4.7": [
+      "Application-wide systems",
+      "src/App.tsx; src/core/AppContext.tsx; src/components/Shell; src/core/db.ts; src/core/sync.ts",
+      "Exercise the named account-free workflow with a clean workspace, reload and repeat on a separate fixture profile where relevant."
+    ],
+    "16.1": [
+      "Calculator result correctness",
+      "src/modules/studio/CalculatorView.tsx; src/core/mathEngine.ts",
+      "Enter independent fixtures through the calculator UI and compare display formatting and error states."
+    ],
+    "16.3": [
+      "Spreadsheet lifecycle",
+      "src/modules/studio/SpreadsheetView.tsx; src/core/spreadsheetEngine.ts",
+      "Populate cells and sheets with a deterministic workbook. Verify the operation, dependencies, saved state or export bytes."
+    ],
+    "16.4": [
+      "Presentation lifecycle",
+      "src/modules/studio/PresentationView.tsx; src/core/backup.ts",
+      "Open a deck with text, layered shapes and an image. Verify slide state, visual geometry and exported bytes."
+    ],
+    "17.1": [
+      "Game development",
+      "src/modules/creative/GameDevView.tsx; src/core/types.ts; src/core/repository.ts",
+      "Use two synthetic game projects and verify the named record relationship, edit and persistence."
+    ],
+    "17.2": [
+      "Book writing",
+      "src/modules/creative/BookStudioView.tsx; src/core/types.ts; src/core/repository.ts",
+      "Use two books spanning several chapters. Verify the named record relationship, edit and persistence."
+    ],
+    "17.4": [
+      "Whiteboard",
+      "src/modules/studio/WhiteboardView.tsx; src/core/types.ts; src/core/repository.ts",
+      "Use a populated infinite canvas and verify the named object, transformations and save/reopen."
+    ]
+  },
+  "routes": [
+    [
+      "All-in-One Scroll",
+      "src/modules/life/AllInOneView.tsx"
+    ],
+    [
+      "Quick Glance",
+      "src/modules/plan/QuickGlanceView.tsx"
+    ],
+    [
+      "Home",
+      "src/modules/plan/HomeDashboard.tsx"
+    ],
+    [
+      "Today Spread",
+      "src/modules/plan/TodaySpread.tsx"
+    ],
+    [
+      "Physical Planner",
+      "src/modules/planner/DigitalPlannerView.tsx"
+    ],
+    [
+      "Week / Month / Year",
+      "src/modules/plan/PeriodPlannerView.tsx"
+    ],
+    [
+      "Flow Calendar",
+      "src/modules/plan/FlowCalendarView.tsx"
+    ],
+    [
+      "Task Calendar",
+      "src/modules/plan/TaskCalendarView.tsx"
+    ],
+    [
+      "Tasks",
+      "src/modules/plan/TasksView.tsx"
+    ],
+    [
+      "Chores",
+      "src/modules/plan/ChoresView.tsx"
+    ],
+    [
+      "History & Reviews",
+      "src/modules/life/HistoryView.tsx"
+    ],
+    [
+      "Reports & Analytics",
+      "src/modules/life/ReportsView.tsx"
+    ],
+    [
+      "Life Events",
+      "src/modules/mind/LifeEventsView.tsx"
+    ],
+    [
+      "Lab Management",
+      "src/modules/lab/LabWorkspaceView.tsx"
+    ],
+    [
+      "Calculator & Graph",
+      "src/modules/studio/CalculatorView.tsx"
+    ],
+    [
+      "Spreadsheets",
+      "src/modules/studio/SpreadsheetView.tsx"
+    ],
+    [
+      "Presentations",
+      "src/modules/studio/PresentationView.tsx"
+    ],
+    [
+      "Kanban Boards",
+      "src/modules/studio/KanbanView.tsx"
+    ],
+    [
+      "Whiteboard Canvas",
+      "src/modules/studio/WhiteboardView.tsx"
+    ],
+    [
+      "Projects & Records",
+      "src/modules/creative/ProjectsView.tsx"
+    ],
+    [
+      "Game Dev Studio",
+      "src/modules/creative/GameDevView.tsx"
+    ],
+    [
+      "Book Studio",
+      "src/modules/creative/BookStudioView.tsx"
+    ],
+    [
+      "Code Sandbox",
+      "src/modules/studio/CodeStudioView.tsx"
+    ],
+    [
+      "Camera & Photos",
+      "src/modules/studio/PhotoStudioView.tsx"
+    ],
+    [
+      "Universal Files",
+      "src/modules/studio/FileManagerView.tsx"
+    ],
+    [
+      "Notes & Graph",
+      "src/modules/mind/NotesView.tsx"
+    ],
+    [
+      "Thought Inbox",
+      "src/modules/mind/ThoughtInboxView.tsx"
+    ],
+    [
+      "Diary & Mood",
+      "src/modules/mind/DiaryView.tsx"
+    ],
+    [
+      "Spaced Review",
+      "src/modules/life/LearningMediaView.tsx"
+    ],
+    [
+      "Clock & World",
+      "src/modules/time/TimeSuiteView.tsx"
+    ],
+    [
+      "Smart Alarms",
+      "src/modules/time/TimeSuiteView.tsx"
+    ],
+    [
+      "Timers & Pomodoro",
+      "src/modules/time/TimeSuiteView.tsx"
+    ],
+    [
+      "Stopwatch & Ledger",
+      "src/modules/time/TimeSuiteView.tsx"
+    ],
+    [
+      "Countdowns",
+      "src/modules/mind/LifeEventsView.tsx"
+    ],
+    [
+      "Recipes",
+      "src/modules/kitchen/RecipesView.tsx"
+    ],
+    [
+      "Pantry Lots",
+      "src/modules/kitchen/PantryView.tsx"
+    ],
+    [
+      "Meal Planner",
+      "src/modules/kitchen/MealsView.tsx"
+    ],
+    [
+      "Groceries",
+      "src/modules/kitchen/GroceryView.tsx"
+    ],
+    [
+      "Goals",
+      "src/modules/plan/GoalsHabitsView.tsx"
+    ],
+    [
+      "Habits & Routines",
+      "src/modules/plan/GoalsHabitsView.tsx"
+    ],
+    [
+      "Household Fairness",
+      "src/modules/life/HouseholdHealthView.tsx"
+    ],
+    [
+      "People & Gifts",
+      "src/modules/life/TravelPeopleHomeView.tsx"
+    ],
+    [
+      "Health & Meds",
+      "src/modules/life/HouseholdHealthView.tsx"
+    ],
+    [
+      "Finance & Bills",
+      "src/modules/life/FinanceView.tsx"
+    ],
+    [
+      "Media & Hobbies",
+      "src/modules/life/LearningMediaView.tsx"
+    ],
+    [
+      "Travel & Hosting",
+      "src/modules/life/TravelPeopleHomeView.tsx"
+    ],
+    [
+      "Home, Pets & Bins",
+      "src/modules/life/TravelPeopleHomeView.tsx"
+    ],
+    [
+      "Custom Spaces",
+      "src/modules/life/CustomTabView.tsx"
+    ],
+    [
+      "Rituals & Contexts",
+      "src/modules/life/StudioExtrasView.tsx"
+    ],
+    [
+      "Insights & Heatmaps",
+      "src/modules/life/StudioExtrasView.tsx"
+    ],
+    [
+      "Automations",
+      "src/modules/life/StudioExtrasView.tsx"
+    ],
+    [
+      "Guide & Help",
+      "src/modules/life/GuideView.tsx"
+    ],
+    [
+      "Trash (30d)",
+      "src/components/Settings/TrashView.tsx"
+    ],
+    [
+      "Settings & Themes",
+      "src/components/Settings/SettingsView.tsx"
+    ]
+  ],
+  "rules": [
+    [
+      "12,212",
+      "P",
+      "UI-003",
+      "M",
+      "Task Calendar opens in Chromium.",
+      "Verify separate calendars, placement, recurrence and persistence specifics.",
+      {
+        "1": "Found and opened by mobile menu search in both fixtures"
+      }
+    ],
+    [
+      "25,379",
+      "M",
+      "UI-001, UI-003",
+      "M",
+      "Configured desktop navigation exposes 54 tools.",
+      "Exercise direct mobile entry for the other workspaces and keyboard and screen-reader paths.",
+      {
+        "1": "Task Calendar found and opened in both mobile profiles"
+      }
+    ],
+    [
+      "72,233",
+      "Q",
+      "SRC-001",
+      "source-inventory.md",
+      "Reviewed current data structures and reported owner wording.",
+      "Owner acceptance needs a supported capacity and depth bound or concrete workload.",
+      {}
+    ],
+    [
+      "95",
+      "P",
+      "AN-006A",
+      "N",
+      "Web notification path still open.",
+      "Repeat denied permission, reboot, exact alarm off, and other devices.",
+      {
+        "2": "API 35 native matching scheduled and delivered notification ID"
+      }
+    ],
+    [
+      "96,396",
+      "P",
+      "AN-006B, AN-008",
+      "N,android-native/background-sync.json",
+      "Desktop minimized or fully closed modes remain open.",
+      "Repeat changed permissions, forced-stop, battery restrictions and OS variations.",
+      {
+        "2": "API 35 queued edit reached SQLite during sleep after route reconnected."
+      }
+    ],
+    [
+      "97",
+      "P",
+      "AN-006C",
+      "N",
+      "Web delivery path still open.",
+      "Confirm actual lock-screen presentation with a secure lock and physical handset.",
+      {
+        "2": "API 35 screen-sleep variant created matching native notification"
+      }
+    ],
+    [
+      "98,217,218,219",
+      "P",
+      "AN-006A–C",
+      "N",
+      "Desktop Time Suite renders.",
+      "Test calendar reminders as distinct from a single timer and verify recurrence and snooze.",
+      {
+        "2": "API 35 one-shot timers scheduled and delivered in three app states"
+      }
+    ],
+    [
+      "112,123",
+      "P",
+      "BR-002, BL-001",
+      "W,B",
+      "Synthetic Notes PNG accepted by the browser picker.",
+      "Repeat Photo Studio-specific picker and original/edited image variants.",
+      {
+        "4": "Local attachment reference recorded",
+        "5": "Receiving profile got record reference, image bytes unavailable"
+      }
+    ],
+    [
+      "126,128,387",
+      "B",
+      "BR-002, SY-014, BL-001",
+      "W,S,B",
+      "PNG normal path saved an attachment reference, remote bytes failed.",
+      "Retest normal PNG, JPEG, WAV and binary after parser and retry changes.",
+      {
+        "4": "Reference saved",
+        "5": "HTTP 415 on normal media types; a separate 503 path reported synced without bytes",
+        "8": "Sync error not surfaced for the simulated transient failure"
+      }
+    ],
+    [
+      "127",
+      "B",
+      "SY-014",
+      "S",
+      "Synthetic HTTP 503 on attachment leaves sync marked healthy.",
+      "Repeat ordinary network interruption, retry and exact byte recovery.",
+      {
+        "5": "Record accepted and pending zero while attachment upload failed",
+        "8": "False healthy state"
+      }
+    ],
+    [
+      "132,393,397",
+      "P",
+      "ST-001, ST-002, PD-003",
+      "S,D,P",
+      "Isolated record and blob persisted. Backup variations differ.",
+      "Verify scheduled retention and full independent restore with real storage; retest ZIP relationships.",
+      {
+        "4": "Full ZIP restored sampled note and blob. SQLite-only restore did not restore blobs",
+        "5": "ZIP rebind regression persists",
+        "8": "SQLite clone and container replacement retained sampled state"
+      }
+    ],
+    [
+      "133,134,331,332",
+      "P",
+      "WF-011",
+      "W",
+      "Lab sample with one linked client and assay round-tripped.",
+      "Verify status and due-date lifecycles, assignment changes, import/export, multiple clients and native use.",
+      {
+        "4": "Sample, client and assay link verified after reload"
+      }
+    ],
+    [
+      "213",
+      "P",
+      "WF-001, WF-007, NT-002",
+      "W,T",
+      "Created/reloaded task and preserved edited long description.",
+      "Verify full completion/dependency/recurrence variants and other clients.",
+      {
+        "1": "Created task through mobile menu and retained it after reload",
+        "4": "Task and description persisted"
+      }
+    ],
+    [
+      "214",
+      "P",
+      "WF-002",
+      "W",
+      "Created chore and retained it after reload.",
+      "Verify due rules, completing, undo and history.",
+      {
+        "4": "Created chore persisted"
+      }
+    ],
+    [
+      "215",
+      "P",
+      "WF-004",
+      "W",
+      "Created habit and retained it after reload.",
+      "Verify streak and routine transitions, undo and persistence.",
+      {
+        "4": "Created habit persisted"
+      }
+    ],
+    [
+      "216",
+      "P",
+      "WF-003",
+      "W",
+      "Created goal and retained it after reload.",
+      "Verify milestones, completion and cross-device changes.",
+      {
+        "4": "Created goal persisted"
+      }
+    ],
+    [
+      "230,240",
+      "B",
+      "BR-003, NT-004–008, AN-004–005",
+      "W,T,A,I",
+      "The pending Alpha draft was written into Beta after dispatching note selection.",
+      "Verify ordinary pointer schedule variants, note-target binding, save before switch and data repair.",
+      {
+        "1": "Size fixtures, section replacement and orientation exercised",
+        "2": "API 35 Gboard correction and API 36 note reopen passed",
+        "4": "Wrong record saved",
+        "5": "Wrong record reached independently inspected SQLite",
+        "8": "No protection against wrong-record save in scenario"
+      }
+    ],
+    [
+      "235,239",
+      "P",
+      "NT-003–008, LS-001, AN-004–005",
+      "T,L,A,I",
+      "Manual snapshot/save and large editor inputs observed.",
+      "Verify exact displayed word count, tokenization boundaries or resulting version metadata as applicable.",
+      {
+        "2": "Saved note survived force stop on API 35 and 36",
+        "4": "Manual save and reload passed",
+        "10": "Preloaded fixtures through 100,000 words; paste cost rises with size"
+      }
+    ],
+    [
+      "271,272,274,275",
+      "P",
+      "MA-001–049, MA-053–055",
+      "R",
+      "Independent math engine reference fixtures passed for supported operations.",
+      "Verify calculator UI, keyboard input, number format and boundaries.",
+      {}
+    ],
+    [
+      "273,416",
+      "P",
+      "MA-050–052",
+      "R",
+      "Engine found simple roots; pole and tangent cases failed.",
+      "Verify plot/render behavior, discontinuities and calculator UI.",
+      {
+        "8": "False root at a pole, tangent root missed"
+      }
+    ],
+    [
+      "277",
+      "P",
+      "UN-001–024",
+      "R",
+      "All 23 coded unit categories and representative transform inverses matched.",
+      "Verify UI choices, invalid input, locale display and orientation.",
+      {}
+    ],
+    [
+      "278,282,283,442,443,453,454",
+      "P",
+      "EX-005–007",
+      "W",
+      "Export harness created fixture records and rendered controls.",
+      "Independently verify all create/edit/save/reload paths with nonempty user content.",
+      {
+        "8": "Export artifact validation failed"
+      }
+    ],
+    [
+      "279,424",
+      "B",
+      "SH-001–036",
+      "R",
+      "32 of 36 spreadsheet engine checks passed.",
+      "Verify corrected formulas in UI plus persisted formulas and mixed-reference workflows.",
+      {
+        "8": "Composite aggregates, zero-length LEFT/RIGHT and missing-sheet calculation fail"
+      }
+    ],
+    [
+      "281,440",
+      "B",
+      "EX-006–007, PD-006",
+      "W,P",
+      "Browser generated CSV and XLS downloads with filename and content swapped.",
+      "Verify CSV quoted boundary round trip and both corrected downloads.",
+      {
+        "8": "Download byte and filename mismatch"
+      }
+    ],
+    [
+      "285,456",
+      "B",
+      "EX-005, PD-018",
+      "W",
+      "HTML export swapped filename/content. Source flattens slide objects.",
+      "Verify valid exported HTML renders styled layers and assets, and check import separately.",
+      {
+        "8": "Download byte and filename mismatch"
+      }
+    ],
+    [
+      "287",
+      "P",
+      "UI-002, OFF-002",
+      "M,T",
+      "Universal Files workspace renders.",
+      "Verify management, metadata editing, storage and restore with a populated inventory.",
+      {
+        "1": "146 px stage overflow at 320 CSS px",
+        "8": "Unvisited lazy route fails after server shutdown"
+      }
+    ],
+    [
+      "288",
+      "P",
+      "WF-008",
+      "W",
+      "Saved project description and template milestones across reload.",
+      "Exercise links, template edits, status, milestones and multiple projects.",
+      {
+        "4": "Description and milestone persisted"
+      }
+    ],
+    [
+      "307,309",
+      "P",
+      "WF-009, EX-001–002",
+      "W",
+      "Book/chapter create and reload passed.",
+      "Verify multiple books/chapters, sorting, linking and export after fixes.",
+      {
+        "4": "Parent and chapter persisted",
+        "8": "MD and DOC downloads have mismatched filename/content"
+      }
+    ],
+    [
+      "360",
+      "P",
+      "LA-001–002, MA-055",
+      "R",
+      "Reference numeric comparisons for bias, SEP, RMSE and regression passed.",
+      "Verify full application workflow and domain approval of procedures.",
+      {}
+    ],
+    [
+      "373",
+      "Q",
+      "SRC-001",
+      "source-inventory.md",
+      "Enumerated code-derived lab workspaces and current rows.",
+      "Authoritative additional lab requirements are unspecified. Exercise the identifiable rows separately.",
+      {}
+    ],
+    [
+      "374,375,376,377",
+      "P",
+      "UI-001–003, NT-008",
+      "M,T",
+      "Chromium desktop workspaces covered in two sparse profiles.",
+      "Dense fixtures, touch gestures and combined real screen reader/keyboard still open.",
+      {
+        "1": "11 CSS viewport widths plus landscape pairs observed; three small layout overflows",
+        "2": "Android 16 tablet landscape opened and retained a note",
+        "7": "Unvisited lazy routes remain incomplete offline",
+        "8": "Chromium small-layout overflow reproduced"
+      }
+    ],
+    [
+      "385",
+      "P",
+      "WF-007–008",
+      "W",
+      "Long task and project descriptions retained.",
+      "Exercise described fields in remaining record kinds and modes.",
+      {
+        "4": "Task and project sampled"
+      }
+    ],
+    [
+      "392",
+      "P",
+      "ST-001–002",
+      "S,D",
+      "SQLite record and nested blob bind survived isolated restart and replacement.",
+      "Production mount backing device, ownership and health have no process-level proof.",
+      {
+        "4": "Readback pre/post replacement",
+        "5": "One record returned by real sync pull",
+        "8": "SQLite-only restore lacks blobs"
+      }
+    ],
+    [
+      "394",
+      "B",
+      "SY-S/D-*, BR-001–004, PD-001, AN-008",
+      "S,W,P,android-native/background-sync.json",
+      "Sequential sync, retry and multiple kinds passed; current conflict and attachment cases failed.",
+      "Verify deterministic concurrent merge, deletion conflicts, explicit retry and warning semantics.",
+      {
+        "2": "API 35 queued edit reached SQLite during sleep after route reconnected.",
+        "4": "One note round-tripped between independent IndexedDBs",
+        "5": "Concurrent edit loss and absent blob under healthy status confirmed",
+        "6": "One browser disconnect/reconnect case passed",
+        "10": "Two scales from 10 to 10,000 independently tested"
+      }
+    ],
+    [
+      "395",
+      "P",
+      "OFF-002, BR-004",
+      "T,W",
+      "Cached shell opens; a first visit to a lazy chunk failed after server shutdown.",
+      "Test precache policy, install/update lifecycle, large attachments, long disconnect and each target OS.",
+      {
+        "6": "Reconnected note body survived; unvisited studio failed offline"
+      }
+    ],
+    [
+      "398",
+      "P",
+      "SEC-001–006",
+      "../17_UPDATED_SECURITY_AND_PRIVACY_REVIEW.md",
+      "Reviewed current source and permitted deployment indicators.",
+      "Keep production review read-only. Authoritative service access and deployment policy still open.",
+      {}
+    ],
+    [
+      "402",
+      "P",
+      "PR-001, AN-001",
+      "C,A",
+      "Current assets say Planaday 4.0.0; live page responds as Dayplana.",
+      "Identify live digest and reconcile release metadata and labels.",
+      {}
+    ],
+    [
+      "403,404,405,406,407,408,409,410,411,413,414,415,418,419,420,421,422,423",
+      "P",
+      "MA-001–049, MA-053–054 as applicable",
+      "R",
+      "Engine reference coverage includes this operation or domain.",
+      "Play through the connected calculator panel and verify unsupported inputs and display.",
+      {}
+    ],
+    [
+      "417",
+      "B",
+      "MA-050–052",
+      "R",
+      "Engine returns a root for a pole and misses a tangent root.",
+      "Verify real simple and repeated roots, pole rejection and plot/solver agreement.",
+      {
+        "8": "Root algorithm fails two reference fixtures"
+      }
+    ],
+    [
+      "425,427,428,429,430",
+      "P",
+      "SH-028, SH-033–036",
+      "R",
+      "Representative reference, circular arithmetic, malformed expression and recompute cases exercised.",
+      "Verify display errors, dynamic dependency and a seeded workbook across reload.",
+      {}
+    ],
+    [
+      "426",
+      "B",
+      "SH-028, SH-033",
+      "R",
+      "An existing sheet resolves. A missing sheet silently reads active sheet data.",
+      "Verify missing, renamed, quoted and removed sheets with correct error propagation.",
+      {
+        "8": "Reference to missing sheet returned a number"
+      }
+    ],
+    [
+      "439",
+      "B",
+      "PD-006",
+      "P",
+      "CSV quoted-boundary correctness failure reproduced.",
+      "Verify import dialog state, Excel variants, multiline cells and round-trip.",
+      {}
+    ],
+    [
+      "472,473",
+      "P",
+      "WF-009",
+      "W",
+      "One book and its chapter retained on reload.",
+      "Expand to two books and multiple chapters, including reorder and links.",
+      {
+        "4": "Single parent and chapter stored"
+      }
+    ],
+    [
+      "1,2,3,4,24",
+      "P",
+      "CAL-001",
+      "calendar-workflows/results.json",
+      "Chromium controls reached 1 and 240 minutes. Fine view rendered major and minor grids.",
+      "Verify mobile touch, custom spacing and populated geometry. Independent event and date-boundary lifecycles remain open.",
+      {
+        "4": "One-minute setting survived reload",
+        "7": "Grid height 384px at 240 minutes and 17,280px at one minute"
+      }
+    ],
+    [
+      "412",
+      "P",
+      "MA-020–021, MA-050–052",
+      "R",
+      "Square and cube roots passed. Numerical roots are a distinct test.",
+      "Verify root display and edge domains. Equation-solving failures are tracked independently."
+    ],
+    [
+      "5,6,14",
+      "P",
+      "CAL-002",
+      "calendar-workflows/results.json",
+      "Created a timed event with start, end and notes. Fine zoom increased font and positioned geometry. Adaptive checkbox interaction subsequently failed.",
+      "Isolate the checkbox, verify reload and repeat with different event lengths, time zones and phone rendering.",
+      {
+        "4": "Initial stored timed event and notes verified. Reload not reached",
+        "8": "Checkbox toggle failed after fine zoom in this run"
+      }
+    ]
+  ],
+  "sources": {
+    "230": "src/modules/mind/NotesView.tsx; src/components/Common/SafeTextEditor.tsx; src/core/repository.ts; src/core/sync.ts",
+    "240": "src/modules/mind/NotesView.tsx; src/components/Common/SafeTextEditor.tsx; src/core/repository.ts",
+    "392": "Dockerfile; docker-compose.yml; server/db.ts; server/blobs.ts; server/index.ts",
+    "395": "public/sw.js; src/App.tsx; src/core/sync.ts",
+    "398": "server/index.ts; server/recipeProxy.ts; server/icsProxy.ts; src/core/sandboxRunner.ts",
+    "402": "package.json; index.html; public/manifest.webmanifest; server/index.ts; .github/workflows"
+  },
+  "extras": [
+    [
+      "Native note autocorrection",
+      "Apply one Gboard correction mid-line and retain text after forced restart.",
+      "NotesView.tsx; SafeTextEditor.tsx; capacitor.config.json",
+      "P",
+      "AN-003–005",
+      "android-native/keyboard-finish.json,I",
+      {
+        "2": "Gboard corrected teh to the, caret 10, persisted"
+      },
+      "Repeat other IMEs, paragraphs, selection, composition and undo."
+    ],
+    [
+      "Docker nested persistence",
+      "Replace a container while retaining separately mounted SQLite and blob paths.",
+      "Dockerfile; server/index.ts; server/db.ts; server/blobs.ts",
+      "V",
+      "ST-002",
+      "D",
+      {
+        "0": "Recreated with different ID, same named volume and bind",
+        "4": "Record, blob SHA-256 and backup retained",
+        "5": "Pull verified single synthetic record"
+      },
+      "Verified for isolated Linux Docker source image and fixture."
+    ],
+    [
+      "Docker SQLite snapshot placement",
+      "Write an on-demand SQLite snapshot under mounted blobs.",
+      "server/index.ts; server/db.ts",
+      "V",
+      "ST-002",
+      "D",
+      {
+        "0": "POST backup passed",
+        "4": "Snapshot observed in nested bind and retained"
+      },
+      "Snapshot timing, rotation and live host remain separate."
+    ],
+    [
+      "Blob transport types",
+      "Accept and return ordinary binary and declared media types by hash.",
+      "server/index.ts; server/blobs.ts; src/core/sync.ts",
+      "B",
+      "BL-001, BR-002",
+      "B,W",
+      {
+        "5": "Octet-stream, PDF and SVG passed; PNG, JPEG and WAV rejected"
+      },
+      "Verify accepted media parser and cross-device content type retention."
+    ],
+    [
+      "Sync idempotency",
+      "Duplicate submission of the same synthetic operation remains a single operation.",
+      "server/db.ts; server/index.ts",
+      "V",
+      "SY-016",
+      "S",
+      {
+        "0": "Repeated op identifier accepted without duplicate sequence change",
+        "5": "One resulting operation and record observed"
+      },
+      "One controlled repeat against current server."
+    ],
+    [
+      "Calendars ICS export envelope",
+      "Download an empty calendar as a named UTF-8 ICS with valid envelope.",
+      "src/modules/plan/FlowCalendarView.tsx; src/core/ics.ts",
+      "V",
+      "WF-012",
+      "W",
+      {
+        "0": "Correct .ics filename and BEGIN/END:VCALENDAR body"
+      },
+      "Populated, time-zone and recurrence fidelity are separate."
+    ],
+    [
+      "Release and live health identity",
+      "Expose a live version that can be reconciled with source and image.",
+      "server/index.ts; .github/workflows; public/manifest.webmanifest",
+      "B",
+      "PR-001–003",
+      "C",
+      {
+        "0": "Live title and health identity differ from current source"
+      },
+      "Live image digest and exact historical SHA remain unknown."
+    ],
+    [
+      "Chromium offline lazy workspace",
+      "Open a previously unvisited studio after confirmed service-worker control and server shutdown.",
+      "src/App.tsx; public/sw.js",
+      "B",
+      "OFF-002",
+      "T",
+      {
+        "0": "Unvisited workspace failed after server shutdown",
+        "6": "Shell remained available, lazy asset failed"
+      },
+      "Do not infer every route behaves the same."
+    ],
+    [
+      "Android minimum WebView",
+      "Current app boots on old but installable Android configuration.",
+      "vite.config.ts; capacitor.config.json; .github/workflows",
+      "B",
+      "AN-007",
+      "android-5566/current-webview-syntax.log",
+      {
+        "2": "API 29 WebView 74 rejected the JS bundle"
+      },
+      "Find support cutoff and verify upgraded WebView on same OS."
+    ],
+    [
+      "Firefox app boot",
+      "Open application shell on tested Firefox and enter the workspace.",
+      "src/core/AppContext.tsx; src/App.tsx",
+      "B",
+      "UI-004",
+      "F,firefox-storage-control.json",
+      {
+        "0": "Firefox 153 remained on opening shell",
+        "1": "Same at mobile-sized viewport"
+      },
+      "Instrumented Firefox confirmed an unresolved persist request. The workspace opened when the test returned denied. Verify released Firefox and real browser allow, deny and dismiss UX."
+    ],
+    [
+      "Book document downloads",
+      "Download valid Markdown and Word document content for a named book.",
+      "src/modules/creative/BookStudioView.tsx; src/core/backup.ts",
+      "B",
+      "EX-001–002",
+      "W",
+      {
+        "0": "Both downloads carried swapped filename and content"
+      },
+      "Revalidate proper file formats with nonempty chapter fixture."
+    ],
+    [
+      "Whiteboard SVG and code downloads",
+      "Return actual SVG or source bytes under a portable filename.",
+      "src/modules/studio/WhiteboardView.tsx; src/modules/studio/CodeStudioView.tsx; src/core/backup.ts",
+      "B",
+      "EX-003–004",
+      "W",
+      {
+        "0": "SVG and JS downloads carried swapped filename and content"
+      },
+      "Revalidate filename, MIME and emitted payload per tool."
+    ],
+    [
+      "Blob failure recovery status",
+      "Show pending or failure when the server fails to persist a referenced attachment.",
+      "src/core/sync.ts; src/core/AppContext.tsx; server/index.ts",
+      "B",
+      "SY-014",
+      "S",
+      {
+        "5": "HTTP 503 led to synced status with zero pending and missing blob",
+        "8": "No visible failure from the blob response"
+      },
+      "Exercise retry, hash confirmation and eventual remote availability."
+    ],
+    [
+      "Planner asset, stickers and canvas",
+      "Display the Physical Planner decoration controls and canvas.",
+      "src/modules/planner/DigitalPlannerView.tsx; src/components/Decor/DecorCanvas.tsx",
+      "P",
+      "UI-002",
+      "M",
+      {
+        "1": "Physical Planner opened; four unnamed control flags at 320 px"
+      },
+      "Exercise sticker placement, custom assets, drawing, undo and accessibility."
+    ],
+    [
+      "Offline modes",
+      "Select the account-free local operating modes and persist user settings.",
+      "src/core/db.ts; src/core/AppContext.tsx; src/components/Settings/SettingsView.tsx",
+      "P",
+      "WF-001, BR-001, OFF-002",
+      "W,T",
+      {
+        "0": "Local and Docker fixture profiles opened using persisted configured mode",
+        "6": "Cold lazy route blocked after server shutdown"
+      },
+      "Verify setup entirely through UI, mode transitions and data preservation."
+    ],
+    [
+      "task record",
+      "Create, persist and round-trip the declared task record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/TasksView.tsx; src/core/repository.ts",
+      "P",
+      "WF-001, WF-007, SY-015",
+      "W,S",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload",
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "chore record",
+      "Create, persist and round-trip the declared chore record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/ChoresView.tsx; src/core/repository.ts",
+      "P",
+      "WF-002, SY-015",
+      "W,S",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload",
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "habit record",
+      "Create, persist and round-trip the declared habit record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/GoalsHabitsView.tsx; src/core/repository.ts",
+      "P",
+      "WF-004",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "goal record",
+      "Create, persist and round-trip the declared goal record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/GoalsHabitsView.tsx; src/core/repository.ts",
+      "P",
+      "WF-003",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "routine record",
+      "Create, persist and round-trip the declared routine record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/GoalsHabitsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "event record",
+      "Create, persist and round-trip the declared event record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/FlowCalendarView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "timeblock record",
+      "Create, persist and round-trip the declared timeblock record with its applicable fields.",
+      "src/core/types.ts; src/modules/plan/TaskCalendarView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "note record",
+      "Create, persist and round-trip the declared note record with its applicable fields.",
+      "src/core/types.ts; src/modules/mind/NotesView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "notebook record",
+      "Create, persist and round-trip the declared notebook record with its applicable fields.",
+      "src/core/types.ts; src/modules/mind/NotesView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "thought record",
+      "Create, persist and round-trip the declared thought record with its applicable fields.",
+      "src/core/types.ts; src/modules/mind/ThoughtInboxView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "diary record",
+      "Create, persist and round-trip the declared diary record with its applicable fields.",
+      "src/core/types.ts; src/modules/mind/DiaryView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "life_event record",
+      "Create, persist and round-trip the declared life_event record with its applicable fields.",
+      "src/core/types.ts; src/modules/mind/LifeEventsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "countdown record",
+      "Create, persist and round-trip the declared countdown record with its applicable fields.",
+      "src/core/types.ts; src/modules/mind/LifeEventsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "alarm record",
+      "Create, persist and round-trip the declared alarm record with its applicable fields.",
+      "src/core/types.ts; src/modules/time/TimeSuiteView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "timer record",
+      "Create, persist and round-trip the declared timer record with its applicable fields.",
+      "src/core/types.ts; src/modules/time/TimeSuiteView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "interval_preset record",
+      "Create, persist and round-trip the declared interval_preset record with its applicable fields.",
+      "src/core/types.ts; src/modules/time/TimeSuiteView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "recipe record",
+      "Create, persist and round-trip the declared recipe record with its applicable fields.",
+      "src/core/types.ts; src/modules/kitchen/RecipesView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "pantry_lot record",
+      "Create, persist and round-trip the declared pantry_lot record with its applicable fields.",
+      "src/core/types.ts; src/modules/kitchen/PantryView.tsx; src/core/repository.ts",
+      "P",
+      "WF-005",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "pantry_zone record",
+      "Create, persist and round-trip the declared pantry_zone record with its applicable fields.",
+      "src/core/types.ts; src/modules/kitchen/PantryView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "meal_plan record",
+      "Create, persist and round-trip the declared meal_plan record with its applicable fields.",
+      "src/core/types.ts; src/modules/kitchen/MealsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "food_log record",
+      "Create, persist and round-trip the declared food_log record with its applicable fields.",
+      "src/core/types.ts; src/modules/kitchen/MealsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "grocery_item record",
+      "Create, persist and round-trip the declared grocery_item record with its applicable fields.",
+      "src/core/types.ts; src/modules/kitchen/GroceryView.tsx; src/core/repository.ts",
+      "P",
+      "WF-006",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "person record",
+      "Create, persist and round-trip the declared person record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "household_member record",
+      "Create, persist and round-trip the declared household_member record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/HouseholdHealthView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "medication record",
+      "Create, persist and round-trip the declared medication record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/HouseholdHealthView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "workout record",
+      "Create, persist and round-trip the declared workout record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/HouseholdHealthView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "wellness_log record",
+      "Create, persist and round-trip the declared wellness_log record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/HouseholdHealthView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "bill record",
+      "Create, persist and round-trip the declared bill record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/FinanceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "budget_envelope record",
+      "Create, persist and round-trip the declared budget_envelope record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/FinanceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "expense record",
+      "Create, persist and round-trip the declared expense record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/FinanceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "warranty record",
+      "Create, persist and round-trip the declared warranty record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/FinanceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "wishlist_item record",
+      "Create, persist and round-trip the declared wishlist_item record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/FinanceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "review_card record",
+      "Create, persist and round-trip the declared review_card record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/LearningMediaView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "media_item record",
+      "Create, persist and round-trip the declared media_item record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/LearningMediaView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "hobby_project record",
+      "Create, persist and round-trip the declared hobby_project record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/LearningMediaView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "trip record",
+      "Create, persist and round-trip the declared trip record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "packing_template record",
+      "Create, persist and round-trip the declared packing_template record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "party record",
+      "Create, persist and round-trip the declared party record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "gift record",
+      "Create, persist and round-trip the declared gift record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "home_asset record",
+      "Create, persist and round-trip the declared home_asset record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "vehicle record",
+      "Create, persist and round-trip the declared vehicle record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "pet_plant record",
+      "Create, persist and round-trip the declared pet_plant record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "storage_item record",
+      "Create, persist and round-trip the declared storage_item record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/TravelPeopleHomeView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "custom_space record",
+      "Create, persist and round-trip the declared custom_space record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/CustomTabView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "decor_item record",
+      "Create, persist and round-trip the declared decor_item record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "custom_sticker record",
+      "Create, persist and round-trip the declared custom_sticker record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "automation_rule record",
+      "Create, persist and round-trip the declared automation_rule record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/StudioExtrasView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "spread_template record",
+      "Create, persist and round-trip the declared spread_template record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "saved_view record",
+      "Create, persist and round-trip the declared saved_view record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "period_reflection record",
+      "Create, persist and round-trip the declared period_reflection record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "triage_item record",
+      "Create, persist and round-trip the declared triage_item record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "context_mode record",
+      "Create, persist and round-trip the declared context_mode record with its applicable fields.",
+      "src/core/types.ts; src/modules/life/StudioExtrasView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "quick_capture record",
+      "Create, persist and round-trip the declared quick_capture record with its applicable fields.",
+      "src/core/types.ts; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "planner_book record",
+      "Create, persist and round-trip the declared planner_book record with its applicable fields.",
+      "src/core/types.ts; src/modules/planner/DigitalPlannerView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "planner_page record",
+      "Create, persist and round-trip the declared planner_page record with its applicable fields.",
+      "src/core/types.ts; src/modules/planner/DigitalPlannerView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_sample record",
+      "Create, persist and round-trip the declared lab_sample record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "P",
+      "WF-011, SY-015",
+      "W,S",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload",
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "lab_subcontract record",
+      "Create, persist and round-trip the declared lab_subcontract record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_inventory record",
+      "Create, persist and round-trip the declared lab_inventory record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_order record",
+      "Create, persist and round-trip the declared lab_order record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_budget record",
+      "Create, persist and round-trip the declared lab_budget record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_price_entry record",
+      "Create, persist and round-trip the declared lab_price_entry record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_price_template record",
+      "Create, persist and round-trip the declared lab_price_template record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_research record",
+      "Create, persist and round-trip the declared lab_research record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_email_draft record",
+      "Create, persist and round-trip the declared lab_email_draft record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_task record",
+      "Create, persist and round-trip the declared lab_task record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_meeting record",
+      "Create, persist and round-trip the declared lab_meeting record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_calibration record",
+      "Create, persist and round-trip the declared lab_calibration record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_wet_nir record",
+      "Create, persist and round-trip the declared lab_wet_nir record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWetNirView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_work_hour record",
+      "Create, persist and round-trip the declared lab_work_hour record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "lab_qms_item record",
+      "Create, persist and round-trip the declared lab_qms_item record with its applicable fields.",
+      "src/core/types.ts; src/modules/lab/LabWorkspaceView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "calc_saved record",
+      "Create, persist and round-trip the declared calc_saved record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/CalculatorView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "spreadsheet record",
+      "Create, persist and round-trip the declared spreadsheet record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/SpreadsheetView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "presentation record",
+      "Create, persist and round-trip the declared presentation record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/PresentationView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "project record",
+      "Create, persist and round-trip the declared project record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/ProjectsView.tsx; src/core/repository.ts",
+      "P",
+      "WF-008",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "custom_schema record",
+      "Create, persist and round-trip the declared custom_schema record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/ProjectsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "custom_entity record",
+      "Create, persist and round-trip the declared custom_entity record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/ProjectsView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "game_project record",
+      "Create, persist and round-trip the declared game_project record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/GameDevView.tsx; src/core/repository.ts",
+      "P",
+      "WF-010",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "game_entity record",
+      "Create, persist and round-trip the declared game_entity record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/GameDevView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "book_project record",
+      "Create, persist and round-trip the declared book_project record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/BookStudioView.tsx; src/core/repository.ts",
+      "P",
+      "WF-009",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "book_chapter record",
+      "Create, persist and round-trip the declared book_chapter record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/BookStudioView.tsx; src/core/repository.ts",
+      "P",
+      "WF-009",
+      "W",
+      {
+        "0": "Synthetic create flow passed",
+        "4": "Observed surviving reload"
+      },
+      "Source declaration and sampled UI persistence. Repeat with non-default fields, deletion, restore, cross-client conflict and populated views."
+    ],
+    [
+      "book_entity record",
+      "Create, persist and round-trip the declared book_entity record with its applicable fields.",
+      "src/core/types.ts; src/modules/creative/BookStudioView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "kanban_board record",
+      "Create, persist and round-trip the declared kanban_board record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/KanbanView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "kanban_card record",
+      "Create, persist and round-trip the declared kanban_card record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/KanbanView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "whiteboard record",
+      "Create, persist and round-trip the declared whiteboard record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/WhiteboardView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "code_project record",
+      "Create, persist and round-trip the declared code_project record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/CodeStudioView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "code_snippet record",
+      "Create, persist and round-trip the declared code_snippet record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/CodeStudioView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "photo_asset record",
+      "Create, persist and round-trip the declared photo_asset record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/PhotoStudioView.tsx; src/core/repository.ts",
+      "P",
+      "SY-015",
+      "S",
+      {
+        "5": "Generic payload persisted in SQLite"
+      },
+      "Fixture uploaded a minimal generic payload. Verify proper form creation and real payload semantics, update, delete, restore and a second client."
+    ],
+    [
+      "file_folder record",
+      "Create, persist and round-trip the declared file_folder record with its applicable fields.",
+      "src/core/types.ts; src/modules/studio/FileManagerView.tsx; src/core/repository.ts",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Use the matching workspace to create and edit the typed record. Reload, link, trash and restore it, then verify portable sync and offline persistence."
+    ],
+    [
+      "Custom tab instance",
+      "Create a custom tab and open its configured instance route.",
+      "src/App.tsx; src/modules/life/CustomTabView.tsx; src/components/Settings/SettingsView.tsx",
+      "N",
+      "SRC-001",
+      "source-inventory.md",
+      {},
+      "Create two separately configured tabs and verify each has isolated settings and data after reload."
+    ]
+  ]
+}

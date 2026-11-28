@@ -1,0 +1,248 @@
+{
+  "browser": "158.0.8127.88",
+  "cases": [
+    {
+      "id": "WF-001",
+      "description": "Tasks create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "task",
+        "title": "Synthetic task",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-002",
+      "description": "Chores create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "chore",
+        "title": "Synthetic chore",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-003",
+      "description": "Goals create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "goal",
+        "title": "Synthetic goal",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-004",
+      "description": "Habits & Routines create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "habit",
+        "title": "Synthetic habit",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-005",
+      "description": "Pantry Lots create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "pantry_lot",
+        "title": "Synthetic oats",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-006",
+      "description": "Groceries create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "grocery_item",
+        "title": "Synthetic milk",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-007",
+      "description": "Task edit retains long description and save",
+      "status": "pass",
+      "details": "task_388801a7-47cc-409a-b671-25ec14e11d9e"
+    },
+    {
+      "id": "WF-008",
+      "description": "Project description, template milestones and reload",
+      "status": "pass",
+      "details": {
+        "id": "proj_45e09937-8b08-4e82-8b32-a902255cfe1b",
+        "milestones": 3
+      }
+    },
+    {
+      "id": "WF-009",
+      "description": "Book and chapter persisted together",
+      "status": "pass",
+      "details": {
+        "book": "book_c9082ed9-03d2-4371-9c21-5375ff1badb8",
+        "chapter": "book_e1b2dad2-f3e4-46ab-8dc6-9a9f0e246c76"
+      }
+    },
+    {
+      "id": "WF-010",
+      "description": "Game project create and reload",
+      "status": "pass",
+      "details": {
+        "id": "game_7f77fce2-3b9e-407d-b98e-b1fe7ad09f97",
+        "fields": [
+          "version",
+          "engine",
+          "genre",
+          "gdd",
+          "coreLoop",
+          "balancing",
+          "devItems"
+        ]
+      }
+    },
+    {
+      "id": "WF-011",
+      "description": "Laboratory sample with assay and client persists",
+      "status": "pass",
+      "details": {
+        "client": "Synthetic client A",
+        "analyst": "Synthetic staff",
+        "assays": [
+          "Ash",
+          "Moisture"
+        ]
+      }
+    },
+    {
+      "id": "EX-001",
+      "description": "Book Studio .MD filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: # Synthetic story\n\n## Chapter 1: Opening Chapter\n\nFirst synthetic chapter."
+    },
+    {
+      "id": "EX-002",
+      "description": "Book Studio .DOC filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <html><head><meta charset=\"utf-8\"><title>Synthetic story</title></head><body style=\"font-family:Geor"
+    },
+    {
+      "id": "EX-003",
+      "description": "Whiteboard Canvas SVG filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <svg xmlns=\"http://www.w3.org/2000/svg\" style=\"width: 100%; height: 500px; display: block; touch-act"
+    },
+    {
+      "id": "EX-004",
+      "description": "Code Sandbox Download filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: // Planaday Isolated Web Worker Sandbox (§35.8)\n// Export a solve(input) function to test against un"
+    },
+    {
+      "id": "EX-005",
+      "description": "Presentations HTML Deck filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <!doctype html><html><head><meta charset=\"utf-8\"><title>Presentation 1</title>\n<style>body{font-fami"
+    },
+    {
+      "id": "EX-006",
+      "description": "Spreadsheets CSV filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: Item,Quantity,Unit Cost,Total,,,,\nSample Row 1,3,12.5,37.5,,,,\nSample Row 2,5,8,40,,,,\nGrand Total,8"
+    },
+    {
+      "id": "EX-007",
+      "description": "Spreadsheets Excel (.xls) filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsof"
+    },
+    {
+      "id": "WF-012",
+      "description": "Ordinary task CSV or calendar ICS export control with body",
+      "status": "pass",
+      "details": {
+        "filename": "planaday-calendar-2026-11-24.ics",
+        "body": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Dayplana//Edition 2 Life Planner//EN\r\nCALSCALE:GREGORIAN\r\nEND:VCALENDAR",
+        "type": "text/calendar"
+      }
+    },
+    {
+      "id": "CAL-001",
+      "description": "Timeline zoom endpoints, labelled controls and reload",
+      "status": "pass",
+      "details": {
+        "visited": [
+          "5",
+          "5",
+          "2",
+          "1"
+        ],
+        "coarse": {
+          "height": 384,
+          "layers": "repeating-linear-gradient(rgb(183, 169, 149) 0px, rgb(183, 169, 149) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 16px)"
+        },
+        "fine": {
+          "height": 17280,
+          "layers": "repeating-linear-gradient(rgb(183, 169, 149) 0px, rgb(183, 169, 149) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 720px), repeating-linear-gradient(rgb(223, 213, 198) 0px, rgb(223, 213, 198) 1px, rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 12px)"
+        },
+        "afterReload": "1"
+      }
+    },
+    {
+      "id": "CAL-002",
+      "description": "Timed event geometry, adaptive font and stored notes",
+      "status": "fail",
+      "error": "locator.uncheck: Clicking the checkbox did not change its state\nCall log:\n\u001b[2m  - waiting for locator('main').getByRole('checkbox', { name: /Adaptive Text/ })\u001b[22m\n\u001b[2m    - locator resolved to <input checked type=\"checkbox\"/>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m    - element is visible, enabled and stable\u001b[22m\n\u001b[2m    - scrolling into view if needed\u001b[22m\n\u001b[2m    - done scrolling\u001b[22m\n\u001b[2m    - performing click action\u001b[22m\n\u001b[2m    - click action done\u001b[22m\n\u001b[2m    - waiting for scheduled navigations to finish\u001b[22m\n\u001b[2m    - navigations have finished\u001b[22m\n"
+    }
+  ],
+  "crossNotes": [],
+  "transport": [
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/events",
+      "bytes": 0
+    }
+  ],
+  "errors": [],
+  "EX-001": {
+    "filename": "# Synthetic story\n\n## Chapter 1: Opening Chapter\n\nFirst synthetic chapter.",
+    "body": "Synthetic story.md",
+    "type": "text/markdown"
+  },
+  "EX-002": {
+    "filename": "<html><head><meta charset=\"utf-8\"><title>Synthetic story</title></head><body style=\"font-family:Geor",
+    "body": "Synthetic story.doc",
+    "type": "application/msword"
+  },
+  "EX-003": {
+    "filename": "<svg xmlns=\"http://www.w3.org/2000/svg\" style=\"width: 100%; height: 500px; display: block; touch-act",
+    "body": "Whiteboard 1.svg",
+    "type": "image/svg+xml"
+  },
+  "EX-004": {
+    "filename": "// Planaday Isolated Web Worker Sandbox (§35.8)\n// Export a solve(input) function to test against un",
+    "body": "main.js",
+    "type": "text/plain"
+  },
+  "EX-005": {
+    "filename": "<!doctype html><html><head><meta charset=\"utf-8\"><title>Presentation 1</title>\n<style>body{font-fami",
+    "body": "Presentation 1.html",
+    "type": "text/html"
+  },
+  "EX-006": {
+    "filename": "Item,Quantity,Unit Cost,Total,,,,\nSample Row 1,3,12.5,37.5,,,,\nSample Row 2,5,8,40,,,,\nGrand Total,8",
+    "body": "New Workbook-Sheet1.csv",
+    "type": "text/csv"
+  },
+  "EX-007": {
+    "filename": "<?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsof",
+    "body": "New Workbook.xls",
+    "type": "application/vnd.ms-excel"
+  }
+}

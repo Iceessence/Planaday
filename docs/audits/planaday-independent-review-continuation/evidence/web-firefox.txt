@@ -1,0 +1,4 @@
+fail FF-BOOT-D
+fail FF-NOTE-D
+fail FF-BOOT-M
+fail FF-NOTE-M

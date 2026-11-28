@@ -1,0 +1,395 @@
+{
+  "browser": "158.0.8127.88",
+  "cases": [
+    {
+      "id": "WF-001",
+      "description": "Tasks create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "task",
+        "title": "Synthetic task",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-002",
+      "description": "Chores create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "chore",
+        "title": "Synthetic chore",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-003",
+      "description": "Goals create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "goal",
+        "title": "Synthetic goal",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-004",
+      "description": "Habits & Routines create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "habit",
+        "title": "Synthetic habit",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-005",
+      "description": "Pantry Lots create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "pantry_lot",
+        "title": "Synthetic oats",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-006",
+      "description": "Groceries create and retain across reload",
+      "status": "pass",
+      "details": {
+        "type": "grocery_item",
+        "title": "Synthetic milk",
+        "visibleAfterReload": true
+      }
+    },
+    {
+      "id": "WF-007",
+      "description": "Task edit retains long description and save",
+      "status": "pass",
+      "details": "task_16e646a5-f813-4938-934f-b1538187a70f"
+    },
+    {
+      "id": "WF-008",
+      "description": "Project description, template milestones and reload",
+      "status": "pass",
+      "details": {
+        "id": "proj_1e7edd79-bd37-4478-89ef-aca4fdffb940",
+        "milestones": 3
+      }
+    },
+    {
+      "id": "WF-009",
+      "description": "Book and chapter persisted together",
+      "status": "pass",
+      "details": {
+        "book": "book_b4080d45-a8c9-48a4-b97d-1ebc443ee45a",
+        "chapter": "book_56bcf306-fb6e-4b71-a25c-8ad2906f17a1"
+      }
+    },
+    {
+      "id": "WF-010",
+      "description": "Game project create and reload",
+      "status": "pass",
+      "details": {
+        "id": "game_ff7721dd-3c52-411a-893a-5eae7975b6e2",
+        "fields": [
+          "version",
+          "engine",
+          "genre",
+          "gdd",
+          "coreLoop",
+          "balancing",
+          "devItems"
+        ]
+      }
+    },
+    {
+      "id": "WF-011",
+      "description": "Laboratory sample with assay and client persists",
+      "status": "pass",
+      "details": {
+        "client": "Synthetic client A",
+        "analyst": "Synthetic staff",
+        "assays": [
+          "Ash",
+          "Moisture"
+        ]
+      }
+    },
+    {
+      "id": "EX-001",
+      "description": "Book Studio .MD filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: # Synthetic story\n\n## Chapter 1: Opening Chapter\n\nFirst synthetic chapter."
+    },
+    {
+      "id": "EX-002",
+      "description": "Book Studio .DOC filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <html><head><meta charset=\"utf-8\"><title>Synthetic story</title></head><body style=\"font-family:Geor"
+    },
+    {
+      "id": "EX-003",
+      "description": "Whiteboard Canvas SVG filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <svg xmlns=\"http://www.w3.org/2000/svg\" style=\"width: 100%; height: 500px; display: block; touch-act"
+    },
+    {
+      "id": "EX-004",
+      "description": "Code Sandbox Download filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: // Planaday Isolated Web Worker Sandbox (§35.8)\n// Export a solve(input) function to test against un"
+    },
+    {
+      "id": "EX-005",
+      "description": "Presentations HTML Deck filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <!doctype html><html><head><meta charset=\"utf-8\"><title>Presentation 1</title>\n<style>body{font-fami"
+    },
+    {
+      "id": "EX-006",
+      "description": "Spreadsheets CSV filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: Item,Quantity,Unit Cost,Total,,,,\nSample Row 1,3,12.5,37.5,,,,\nSample Row 2,5,8,40,,,,\nGrand Total,8"
+    },
+    {
+      "id": "EX-007",
+      "description": "Spreadsheets Excel (.xls) filename and payload",
+      "status": "fail",
+      "error": "Unexpected filename: <?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsof"
+    },
+    {
+      "id": "WF-012",
+      "description": "Ordinary task CSV or calendar ICS export control with body",
+      "status": "pass",
+      "details": {
+        "filename": "planaday-calendar-2026-11-24.ics",
+        "body": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Dayplana//Edition 2 Life Planner//EN\r\nCALSCALE:GREGORIAN\r\nEND:VCALENDAR",
+        "type": "text/calendar"
+      }
+    },
+    {
+      "id": "BR-001",
+      "description": "Two independent browser profiles exchange a saved synthetic note",
+      "status": "pass",
+      "details": {
+        "source": "note_16cb195d-9083-4166-82a3-4b1526d2de68",
+        "presentOnServer": true,
+        "presentInSeparateIndexedDb": true
+      }
+    },
+    {
+      "id": "BR-002",
+      "description": "Two profiles receive matching attachment bytes with a normal Notes upload",
+      "status": "fail",
+      "error": "Expected values to be strictly equal:\n\n404 !== 200\n"
+    },
+    {
+      "id": "BR-003",
+      "description": "Dirty note switch without blur preserves record ownership locally and remotely",
+      "status": "fail",
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'Alpha original'\n- 'Alpha draft should stay Alpha'\n         ^\n"
+    },
+    {
+      "id": "BR-004",
+      "description": "Network-offline edit is saved locally and pushes when restored",
+      "status": "pass",
+      "details": {
+        "offlineQueue": 0,
+        "serverDuring": "Before outage",
+        "afterRestore": "Draft during outage"
+      }
+    }
+  ],
+  "crossNotes": [
+    {
+      "trigger": "programmatic click without blur",
+      "focused": true,
+      "alpha": "Alpha original",
+      "beta": "Alpha draft should stay Alpha",
+      "serverA": "Alpha original",
+      "serverB": "Alpha draft should stay Alpha"
+    }
+  ],
+  "transport": [
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/events",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/events",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/events",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/events",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/events",
+      "bytes": 0
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/push",
+      "bytes": 1130
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "PUT",
+      "path": "/api/blobs/b8c03d6c86ad975e7c16f20bbc9f4900e797bb27546de7a0b21ac72de3bef7b5",
+      "bytes": 68
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/push",
+      "bytes": 1197
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "PUT",
+      "path": "/api/blobs/b8c03d6c86ad975e7c16f20bbc9f4900e797bb27546de7a0b21ac72de3bef7b5",
+      "bytes": 68
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/push",
+      "bytes": 2190
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "PUT",
+      "path": "/api/blobs/b8c03d6c86ad975e7c16f20bbc9f4900e797bb27546de7a0b21ac72de3bef7b5",
+      "bytes": 68
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/push",
+      "bytes": 1127
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    },
+    {
+      "method": "PUT",
+      "path": "/api/blobs/b8c03d6c86ad975e7c16f20bbc9f4900e797bb27546de7a0b21ac72de3bef7b5",
+      "bytes": 68
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/push",
+      "bytes": 1133
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "bytes": 0
+    }
+  ],
+  "errors": [],
+  "EX-001": {
+    "filename": "# Synthetic story\n\n## Chapter 1: Opening Chapter\n\nFirst synthetic chapter.",
+    "body": "Synthetic story.md",
+    "type": "text/markdown"
+  },
+  "EX-002": {
+    "filename": "<html><head><meta charset=\"utf-8\"><title>Synthetic story</title></head><body style=\"font-family:Geor",
+    "body": "Synthetic story.doc",
+    "type": "application/msword"
+  },
+  "EX-003": {
+    "filename": "<svg xmlns=\"http://www.w3.org/2000/svg\" style=\"width: 100%; height: 500px; display: block; touch-act",
+    "body": "Whiteboard 1.svg",
+    "type": "image/svg+xml"
+  },
+  "EX-004": {
+    "filename": "// Planaday Isolated Web Worker Sandbox (§35.8)\n// Export a solve(input) function to test against un",
+    "body": "main.js",
+    "type": "text/plain"
+  },
+  "EX-005": {
+    "filename": "<!doctype html><html><head><meta charset=\"utf-8\"><title>Presentation 1</title>\n<style>body{font-fami",
+    "body": "Presentation 1.html",
+    "type": "text/html"
+  },
+  "EX-006": {
+    "filename": "Item,Quantity,Unit Cost,Total,,,,\nSample Row 1,3,12.5,37.5,,,,\nSample Row 2,5,8,40,,,,\nGrand Total,8",
+    "body": "New Workbook-Sheet1.csv",
+    "type": "text/csv"
+  },
+  "EX-007": {
+    "filename": "<?xml version=\"1.0\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n<Workbook xmlns=\"urn:schemas-microsof",
+    "body": "New Workbook.xls",
+    "type": "application/vnd.ms-excel"
+  },
+  "BR-002": {
+    "id": "note_984cf37c-fd17-4785-b897-56eb492066e2",
+    "serverBytes": 404,
+    "localSecondDevice": []
+  },
+  "BR-004": {
+    "offlineQueue": 0,
+    "serverDuring": "Before outage"
+  }
+}

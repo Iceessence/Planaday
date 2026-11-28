@@ -1,0 +1,50 @@
+Downloading WebKit 26.5 (playwright webkit v2336)[2m from https://cdn.playwright.dev/dbazure/download/playwright/builds/webkit/2336/webkit-win64.zip[22m
+|                                                                                |   0% of 59.6 MiB
+|■■■■■■■■                                                                        |  10% of 59.6 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 59.6 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 59.6 MiB
+WebKit 26.5 (playwright webkit v2336) downloaded to C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\playwright-browsers\webkit-2336
+Downloading FFmpeg (playwright ffmpeg v1011)[2m from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-win64.zip[22m
+|                                                                                |   0% of 1.3 MiB
+|■■■■■■■■                                                                        |  10% of 1.3 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  31% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  81% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 1.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 1.3 MiB
+FFmpeg (playwright ffmpeg v1011) downloaded to C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\playwright-browsers\ffmpeg-1011
+Downloading Firefox 153.0 (playwright firefox v1538)[2m from https://cdn.playwright.dev/dbazure/download/playwright/builds/firefox/1538/firefox-win64.zip[22m
+|                                                                                |   0% of 119.9 MiB
+|■■■■■■■■                                                                        |  10% of 119.9 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 119.9 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 119.9 MiB
+Firefox 153.0 (playwright firefox v1538) downloaded to C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\playwright-browsers\firefox-1538
+Downloading Winldd (playwright winldd v1007)[2m from https://cdn.playwright.dev/dbazure/download/playwright/builds/winldd/1007/winldd-win64.zip[22m
+|                                                                                |   1% of 0.1 MiB
+|■■■■■■■■                                                                        |  10% of 0.1 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 0.1 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 0.1 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 0.1 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  63% of 0.1 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  76% of 0.1 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  88% of 0.1 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 0.1 MiB
+Winldd (playwright winldd v1007) downloaded to C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\playwright-browsers\winldd-1007

@@ -1,0 +1,473 @@
+INFO         | Android emulator version 37.3.10.0 (build_id 16970787) (CL:N/A)
+INFO         | Graphics backend: gfxstream
+INFO         | Found systemPath C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\android-audit-sdk\system-images\android-36\google_apis\x86_64\
+INFO         | Saving last run QEMU version for the AVD to 2
+INFO         | Guest usage of host flag 'VulkanVirtualQueue' will be ignored.
+INFO         | Increasing RAM size to 4096MB
+INFO         | IPv4 server found: 192.152.0.1
+INFO         | Ignore IPv6 address: 3024:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 3024:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 3024:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: b02e:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: b02e:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: b02e:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 4836:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 4836:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 4836:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 5858:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 5858:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 5858:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 405e:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 405e:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 405e:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 2864:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 2864:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Ignore IPv6 address: 2864:82c2:dd01:0:3024:82c2:dd01:0
+INFO         | Guest GLES Driver: Auto (ext controls)
+INFO         | emuglConfig_init: vulkan_mode_selected:swiftshader gles_mode_selected:swiftshader
+INFO         | Checking system compatibility:
+INFO         |   Checking: hasCompatibleHypervisor
+INFO         |      Ok: Hypervisor compatibility to run avd: `planaday_audit_api36` are met
+INFO         |   Checking: hasSufficientSystem
+INFO         |      Ok: System requirements to run avd: `planaday_audit_api36` are met
+INFO         |   Checking: hasSufficientHwGpu
+INFO         |      Ok: Hardware GPU compatibility checks are not required
+INFO         |   Checking: hasSufficientDiskSpace
+INFO         |      Ok: Disk space requirements to run avd: `planaday_audit_api36` are met
+INFO         | Storing crashdata in: C:\Users\ppawe\AppData\Local\Temp\\AndroidEmulator\emu-crash-37.3.10.db, detection is enabled for process: 8972
+INFO         | Initializing gfxstream backend
+INFO         | startOpenglesRendererImpl: gpu info
+INFO         | GPU #1
+  Make: 10de
+  Model: NVIDIA GeForce RTX 5080
+  Device ID: 2c02
+
+INFO         | Disabling implicit Vulkan layers to avoid compatibility issues. Set VK_LOADER_LAYERS_DISABLE manually to disable this behavior.
+INFO         | initIcdPaths: ICD set to 'swiftshader', using Swiftshader ICD
+INFO         | Setting ICD filenames for the loader = C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\android-audit-sdk\emulator\lib64\vulkan\vk_swiftshader_icd.json
+INFO         | SharedLibrary::open for [C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\android-audit-sdk\emulator\qemu\windows-x86_64\lib64\vulkan\vulkan-1.dll]
+INFO         | SharedLibrary::open for [C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\android-audit-sdk\emulator\lib64\vulkan\vulkan-1.dll]
+INFO         | Added library: C:\Platz Apps\Planaday\node_modules\.continuation-audit-d82bdc7\android-audit-sdk\emulator\lib64\vulkan\vulkan-1.dll
+INFO         | Selecting Vulkan device: SwiftShader Device (LLVM 10.0.0), Version: 1.2.0
+INFO         | Using Vulkan externalMemoryMode: HostAllocation for VkEmulation
+INFO         | Format VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16 does not support YCbCr sampler conversion
+INFO         | Format VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16 does not support YCbCr sampler conversion
+INFO         | queryConfigs: Host EGL config 0000000000000010 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000011 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000012 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000013 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000014 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000015 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000017 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000018 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000019 was not added
+INFO         | queryConfigs: Host EGL config 000000000000001A was not added
+INFO         | queryConfigs: Host EGL config 000000000000001B was not added
+INFO         | queryConfigs: Host EGL config 000000000000001C was not added
+INFO         | queryConfigs: Host EGL config 000000000000001D was not added
+INFO         | queryConfigs: Host EGL config 000000000000001E was not added
+INFO         | queryConfigs: Host EGL config 000000000000001F was not added
+INFO         | queryConfigs: Host EGL config 0000000000000021 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000022 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000023 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000024 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000025 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000026 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000027 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000028 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000029 was not added
+INFO         | queryConfigs: Host EGL config 000000000000002A was not added
+INFO         | queryConfigs: Host EGL config 000000000000002B was not added
+INFO         | queryConfigs: Host EGL config 000000000000002C was not added
+INFO         | queryConfigs: Host EGL config 000000000000002D was not added
+INFO         | queryConfigs: Host EGL config 000000000000002E was not added
+INFO         | queryConfigs: Host EGL config 000000000000002F was not added
+INFO         | queryConfigs: Host EGL config 0000000000000030 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000031 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000032 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000033 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000035 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000036 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000037 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000038 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000039 was not added
+INFO         | queryConfigs: Host EGL config 000000000000003A was not added
+INFO         | queryConfigs: Host EGL config 000000000000003B was not added
+INFO         | queryConfigs: Host EGL config 000000000000003C was not added
+INFO         | queryConfigs: Host EGL config 000000000000003D was not added
+INFO         | queryConfigs: Host EGL config 000000000000003F was not added
+INFO         | queryConfigs: Host EGL config 0000000000000040 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000041 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000042 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000043 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000044 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000045 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000046 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000047 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000048 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000049 was not added
+INFO         | queryConfigs: Host EGL config 000000000000004A was not added
+INFO         | queryConfigs: Host EGL config 000000000000004B was not added
+INFO         | queryConfigs: Host EGL config 0000000000000001 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000002 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000003 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000005 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000006 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000007 was not added
+INFO         | queryConfigs: Host EGL config 0000000000000008 was not added
+INFO         | queryConfigs: Host EGL config 000000000000000A was not added
+INFO         | queryConfigs: Host EGL config 000000000000000B was not added
+INFO         | queryConfigs: Host EGL config 000000000000000C was not added
+INFO         | queryConfigs: Host EGL config 000000000000000D was not added
+INFO         | queryConfigs: Host EGL config 000000000000000E was not added
+INFO         | queryConfigs: Host EGL config 000000000000000F was not added
+INFO         | Initializing VkEmulation features:
+INFO         |     glInteropSupported: false
+INFO         |     useDeferredCommands: true
+INFO         |     createResourceWithRequirements: true
+INFO         |     useVulkanComposition: false
+INFO         |     useVulkanNativeSwapchain: false
+INFO         |     enable guestRenderDoc: false
+INFO         |     enable Ycbcr emulation: false
+INFO         |     guestVulkanOnly: false
+INFO         |     useDedicatedAllocations: false
+INFO         |     guestVulkanMaxApiVersion: 1.3.0
+INFO         |     enableProtectedMemoryEmulation: false
+INFO         |     VulkanDisableShaderFloatControls2: disabled ((vk_util::extensionSupported(mDeviceInfo.extensions, VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME) || mDeviceInfo.physdevProps.apiVersion >= VK_API_VERSION_1_4) && mDeviceInfo.physdevProps.vendorID == 0x1010)
+INFO         | Graphics Adapter Vendor Google (Google Inc.)
+INFO         | Graphics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
+INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 
+INFO         | Graphics Device Extensions N/A
+INFO         | Disabling sparse binding feature support
+INFO         | Sending adb public key [QAAAAFVGbKYDeYlM/0vDf0sJbjwCRQmjkff7hF1vev4JEKbL3MRyjosPGE3VEn9+pR2WGz+1ZH5E0ScCxVMC5tQV/trhbzOcN90VDHNGgrbmzALV2KFrR1klIugdk3UiwoxGMi99WdbI2b7vJHcyIHi8VZ+XvUskAxHrjnqNrGnwYm+l1jV0ezchFQoozokG7AOyNKIF/LbEdE74oSCJxMwRjqF5xW8vkIKNStjmkqZ+pOv8DrF47HpAr5fx2mfCUkWWWcYnqtzd4puHcs6u0RgCdjGf4HtSu3Vq11bWtpaGZt7IP5QPPVCtozDsnnUlfOnND5ORN5Dq/gS8Q/5cSk23DzmtPzTMQaHWRt1uhI3SKa6YXEojUwIuIBrlvV22TbYdQ+qBL6vTE00br8zLSnTThE8m4aIgz2taEiyfKjy6FsDvx4sThOxhy8sUMN3Ibf+3tUQc8ih/ibsJn/4HBiLB/SYWE7yoZynwEfc0oxXeh4EWn4xwUTvy9JvzRK4tBLn6+HpKz694M4EdV8jRF/UssaMyY3hkAVCkuuRqJSQD1MqS7CAotuRcyZ73R2L5+ZAlqQbcBYHAEPVLdmWWwEbQzHUPIVdPgngGVyk2dakJFN783M1EH9Pnr2MvFmQu7ER+BYHi/KxkePoRPbkQTX0H5wvuYnH7YibUUubvGKtw8d9t4AFrYQEAAQA= @unknown]
+INFO         | Userspace boot properties:
+INFO         |   androidboot.boot_devices=pci0000:00/0000:00:03.0 pci0000:00/0000:00:06.0
+INFO         |   androidboot.dalvik.vm.heapsize=576m
+INFO         |   androidboot.debug.hwui.renderer=skiagl
+INFO         |   androidboot.hardware=ranchu
+INFO         |   androidboot.hardware.gltransport=pipe
+INFO         |   androidboot.hardware.vulkan=ranchu
+INFO         |   androidboot.logcat=*:V
+INFO         |   androidboot.opengles.version=196608
+INFO         |   androidboot.qemu=1
+INFO         |   androidboot.qemu.adb.pubkey=QAAINFO         | Monitoring duration of emulator setup.
+INFO         | Setting display: 0 configuration to: 1080x2280, dpi: 440x440 
+INFO         | setDisplayActiveConfig: id:0, 1080x2280
+INFO         | emulatorSetupEnvironment: Environment scene is not required
+USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to INFO         | Activated packet streamer for uwb emulation
+INFO         | Activated packet streamer for bluetooth emulation
+INFO         | Monitoring duration of emulator setup.
+INFO         | Successfully initialized netsim WiFi
+INFO         | Setting display: 0 configuration to: 2560x1600, dpi: 320x320 
+INFO         | setDisplayActiveConfig: id:0, 2560x1600
+INFO         | emulatorSetupEnvironment: Environment scene is not required
+USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
+INFO         | Boot completed in 60980 ms
+INFO         | Increasing screen off timeout, logcat buffer size to 2M.
+INFO         | Created VkInstance:000001DF02C3D770 for application:'' engine:''.
+INFO         | Destroyed VkInstance:000001DF02C3D770 for application:'' engine:''.
+INFO         | IPv4 server found: 192.152.0.1
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | IPv4 server found: 192.152.0.1
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | IPv4 server found: 192.152.0.1
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: f0f9:30ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 7004:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 80c:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 182e:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: 34:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Ignore IPv6 address: e839:31ef:de01:0:f0f9:30ef:de01:0
+INFO         | Created VkInstance:000001DF325FE050 for application:'' engine:''.
+INFO         | Destroyed VkInstance:000001DF325FE050 for application:'' engine:''.
+INFO         | Created VkInstance:000001DF2E733010 for application:'' engine:''.
+INFO         | Destroyed VkInstance:000001DF2E733010 for application:'' engine:''.
+INFO         | Wait for emulator (pid 8972) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+
+WARNING      | Not saving state: RAM not mapped as shared
+INFO         | Saving snapshot 'default_boot' took 1 ms
+WARNING      | Emulator client has not yet been configured.. Call configure me first!
+INFO         | removeAll
+WARNING      | Netsim Wifi dns:///localhost:61817 is gone due to Stream removed (CANCELLED)
+ROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+ERROR        | Failed to create EGL fence sync: 12288
+INFO         | Boot completed in 18022 ms
+INFO         | Increasing screen off timeout, logcat buffer size to 2M.
+INFO         | Wait for emulator (pid 2848) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+
+WARNING      | Not saving state: RAM not mapped as shared
+INFO         | Saving snapshot 'default_boot' took 2 ms
+WARNING      | Emulator client has not yet been configured.. Call configure me first!
+INFO         | removeAll

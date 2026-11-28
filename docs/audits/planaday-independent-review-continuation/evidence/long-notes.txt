@@ -1,0 +1,6 @@
+pass service worker controls the built application
+pass create or open a synthetic note
+pass note input and selected-text replacement at approximately 1000 words
+pass note remains editable after emulated orientation change
+pass Chromium IME replacement of a selected middle word
+pass 30-minute repeated Notes editing and debounce soak

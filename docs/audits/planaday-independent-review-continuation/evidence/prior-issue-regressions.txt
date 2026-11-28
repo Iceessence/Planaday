@@ -1,0 +1,176 @@
+
+ RUN  v3.2.7 C:/Platz Apps/Planaday/node_modules/.continuation-audit-d82bdc7
+
+stdout | tests/prior-audit.test.ts > independent Planaday data and correctness checks > downloads attachment bytes on a clean second client when its note initially syncs
+fresh device requests: PUT /api/blobs/a45641b95303045f629e9b7ca0a2240bf23e0a4b490f5f7e004bcb3ea727edd4, POST /api/sync/push, GET /api/sync/pull, GET /api/sync/pull
+
+stdout | tests/prior-audit.test.ts > independent Planaday data and correctness checks > retains two disjoint edits to the same record started concurrently
+parallel update: { title: 'Audit note', content: 'new body', rev: 2, queued: 2 }
+
+stdout | tests/prior-audit.test.ts > independent Planaday data and correctness checks > reconciles a restored local ZIP into an empty replacement server
+replacement server: { importedSeq: 300, status: 'synced', pending: 0, records: 0 }
+
+stdout | tests/prior-audit.test.ts > independent Planaday data and correctness checks > round-trips CSV containing a comma, quote, and embedded newline as ordinary cell text
+CSV imported cells: {
+  A1: { raw: 'East' },
+  B1: { raw: 'West' },
+  C1: { raw: 'She said "hi"' },
+  D1: { raw: 'line one' },
+  A2: { raw: 'line two' }
+}
+
+ ❯ tests/prior-audit.test.ts (9 tests | 6 failed) 254ms
+   ✓ independent Planaday data and correctness checks > preserves an ordinary record, a correctly hashed blob and a readable SQLite snapshot after server reopen 160ms
+   × independent Planaday data and correctness checks > downloads attachment bytes on a clean second client when its note initially syncs 41ms
+     → expected undefined to be defined
+   × independent Planaday data and correctness checks > retains two disjoint edits to the same record started concurrently 8ms
+     → expected { …(28) } to match object { title: 'new title', …(2) }
+(28 matching properties omitted from actual)
+   × independent Planaday data and correctness checks > reconciles a restored local ZIP into an empty replacement server 33ms
+     → expected false to be true // Object.is equality
+   × independent Planaday data and correctness checks > round-trips CSV containing a comma, quote, and embedded newline as ordinary cell text 2ms
+     → expected { A1: { raw: 'East' }, …(4) } to deeply equal { A1: { raw: 'East, West' }, …(2) }
+   ✓ independent Planaday data and correctness checks > evaluates arithmetic, fractions, degree trig and a smooth integral against known values 2ms
+   × independent Planaday data and correctness checks > does not report a vertical discontinuity as a root 3ms
+     → expected [ 0.123 ] to deeply equal []
+   × independent Planaday data and correctness checks > can find a tangent root without a sign change inside the sampling intervals 2ms
+     → expected undefined to be close to 0.123, received difference is NaN, but expected 0.0005
+   ✓ independent Planaday data and correctness checks > preserves exclusive dates and recurrence exceptions from a standard all-day calendar fixture 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/prior-audit.test.ts > independent Planaday data and correctness checks > downloads attachment bytes on a clean second client when its note initially syncs
+AssertionError: expected undefined to be defined
+ ❯ tests/prior-audit.test.ts:99:49
+     97|     expect(await db.records.get(note.id)).toBeDefined();
+     98|     console.log('fresh device requests:', requests.join(', '));
+     99|     expect(await db.blobs.get(attachment.hash)).toBeDefined();
+       |                                                 ^
+    100|   });
+    101| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/prior-audit.test.ts > independent Planaday data and correctness checks > retains two disjoint edits to the same record started concurrently
+AssertionError: expected { …(28) } to match object { title: 'new title', …(2) }
+(28 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "payload": {
+      "content": "new body",
+    },
+-   "rev": 3,
+-   "title": "new title",
++   "rev": 2,
++   "title": "Audit note",
+  }
+
+ ❯ tests/prior-audit.test.ts:110:20
+    108|     const [record, queued] = await Promise.all([db.records.get(note.id…
+    109|     console.log('parallel update:', { title: record?.title, content: r…
+    110|     expect(record).toMatchObject({ title: 'new title', payload: { cont…
+       |                    ^
+    111|   });
+    112| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/prior-audit.test.ts > independent Planaday data and correctness checks > reconciles a restored local ZIP into an empty replacement server
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/prior-audit.test.ts:125:84
+    123|     const remote = (await app.inject('/api/sync/pull?since=0')).json();
+    124|     console.log('replacement server:', { importedSeq: imported.lastSyn…
+    125|     expect(remote.records.some((record: { id: string }) => record.id =…
+       |                                                                                    ^
+    126|   });
+    127| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/prior-audit.test.ts > independent Planaday data and correctness checks > round-trips CSV containing a comma, quote, and embedded newline as ordinary cell text
+AssertionError: expected { A1: { raw: 'East' }, …(4) } to deeply equal { A1: { raw: 'East, West' }, …(2) }
+
+- Expected
++ Received
+
+  {
+    "A1": {
+-     "raw": "East, West",
++     "raw": "East",
++   },
++   "A2": {
++     "raw": "line two",
+    },
+    "B1": {
++     "raw": "West",
++   },
++   "C1": {
+      "raw": "She said \"hi\"",
+    },
+-   "C1": {
+-     "raw": "line one
+- line two",
++   "D1": {
++     "raw": "line one",
+    },
+  }
+
+ ❯ tests/prior-audit.test.ts:135:28
+    133|     const imported = importDelimitedToSheet(csv);
+    134|     console.log('CSV imported cells:', imported.cells);
+    135|     expect(imported.cells).toEqual(original.cells);
+       |                            ^
+    136|   });
+    137| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/prior-audit.test.ts > independent Planaday data and correctness checks > does not report a vertical discontinuity as a root
+AssertionError: expected [ 0.123 ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   0.123,
++ ]
+
+ ❯ tests/prior-audit.test.ts:146:19
+    144|   it('does not report a vertical discontinuity as a root', () => {
+    145|     const roots = findNumericalRoots('1/(x-0.123)', -1, 1);
+    146|     expect(roots).toEqual([]);
+       |                   ^
+    147|   });
+    148| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/prior-audit.test.ts > independent Planaday data and correctness checks > can find a tangent root without a sign change inside the sampling intervals
+AssertionError: expected undefined to be close to 0.123, received difference is NaN, but expected 0.0005
+ ❯ tests/prior-audit.test.ts:151:22
+    149|   it('can find a tangent root without a sign change inside the samplin…
+    150|     const roots = findNumericalRoots('(x-0.123)^2', -1, 1);
+    151|     expect(roots[0]).toBeCloseTo(0.123, 3);
+       |                      ^
+    152|   });
+    153| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 3 passed (9)
+   Start at  17:33:43
+   Duration  2.12s (transform 160ms, setup 71ms, collect 352ms, tests 254ms, environment 520ms, prepare 171ms)
+

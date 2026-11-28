@@ -1,0 +1,55 @@
+{
+  "browser": "153.0",
+  "checks": [
+    {
+      "action": "normal",
+      "workspace": "Opening Planaday workspace…",
+      "storage": [
+        {
+          "name": "persist",
+          "state": "called"
+        }
+      ],
+      "ready": false,
+      "errors": []
+    },
+    {
+      "action": "return-denied",
+      "workspace": "P\nPlanaday\nMY CUSTOM TABS\nPLAN\nAll-in-One Scroll\nQuick Glance\nHome\nToday Spread\nPhysical Planner\nWeek / Month / Year\nFlow Calendar\nTask Calendar\nTasks",
+      "storage": [
+        {
+          "name": "persist",
+          "state": "called"
+        },
+        {
+          "name": "persist",
+          "state": "resolved",
+          "value": false
+        },
+        {
+          "name": "persisted",
+          "state": "called"
+        },
+        {
+          "name": "persisted",
+          "state": "resolved",
+          "value": false
+        },
+        {
+          "name": "estimate",
+          "state": "called"
+        },
+        {
+          "name": "estimate",
+          "state": "resolved",
+          "value": {
+            "quota": 10737418240,
+            "usage": 86240
+          }
+        }
+      ],
+      "ready": true,
+      "errors": []
+    }
+  ]
+}

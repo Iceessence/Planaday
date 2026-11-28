@@ -1,0 +1,16 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +95
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Packages are hard linked from the content-addressable store to the virtual store.
+  Content-addressable store is at: C:\Users\ppawe\AppData\Local\pnpm\store\v11
+  Virtual store is at:             node_modules/.pnpm
+Progress: resolved 95, reused 5, downloaded 90, added 18
+Progress: resolved 95, reused 5, downloaded 90, added 95, done
+
+dependencies:
++ @capacitor/android 7.6.10 (8.6.2 is available)
++ @capacitor/cli 7.6.10 (8.6.2 is available)
++ @capacitor/core 7.6.10 (8.6.2 is available)
++ @capacitor/local-notifications 7.0.7 (8.3.1 is available)
+
+Done in 2.2s using pnpm v11.25.0

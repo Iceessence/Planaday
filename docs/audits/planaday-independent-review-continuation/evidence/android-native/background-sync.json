@@ -1,0 +1,57 @@
+{
+  "phase": "background-sync",
+  "os": "15",
+  "ime": "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME",
+  "checks": [
+    {
+      "id": "AN-001",
+      "status": "pass",
+      "details": {
+        "native": true,
+        "platform": "android",
+        "notifications": true,
+        "origin": "http://localhost",
+        "dpr": 2.625,
+        "viewport": [
+          412,
+          915
+        ],
+        "agent": "Mozilla/5.0 (Linux; Android 15; sdk_gphone64_x86_64 Build/AE3A.240806.043; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Mobile Safari/537.36"
+      }
+    },
+    {
+      "id": "AN-008",
+      "status": "pass",
+      "details": {
+        "observationSeconds": 45,
+        "foreground": "Foreground baseline",
+        "wireBefore": "Foreground baseline",
+        "powerStart": "mWakefulness=Asleep",
+        "powerEnd": "mWakefulness=Asleep",
+        "wireDuringSleep": "Queued before display sleep",
+        "wireAfterWake": "Queued before display sleep"
+      }
+    }
+  ],
+  "bridge": {
+    "native": true,
+    "platform": "android",
+    "notifications": true,
+    "origin": "http://localhost",
+    "dpr": 2.625,
+    "viewport": [
+      412,
+      915
+    ],
+    "agent": "Mozilla/5.0 (Linux; Android 15; sdk_gphone64_x86_64 Build/AE3A.240806.043; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Mobile Safari/537.36"
+  },
+  "background": {
+    "observationSeconds": 45,
+    "foreground": "Foreground baseline",
+    "wireBefore": "Foreground baseline",
+    "powerStart": "mWakefulness=Asleep",
+    "powerEnd": "mWakefulness=Asleep",
+    "wireDuringSleep": "Queued before display sleep",
+    "wireAfterWake": "Queued before display sleep"
+  }
+}

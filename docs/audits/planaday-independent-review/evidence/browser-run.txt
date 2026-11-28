@@ -1,0 +1,9 @@
+pass service worker controls the built application
+pass unvisited lazy studio opens after network is disabled
+pass create or open a synthetic note
+pass note input and selected-text replacement at approximately 1000 words
+pass note input and selected-text replacement at approximately 10000 words
+fail note input and selected-text replacement at approximately 50000 words
+fail note input and selected-text replacement at approximately 100000 words
+fail 100k-word saved note survives browser reload
+pass note remains editable after emulated orientation change

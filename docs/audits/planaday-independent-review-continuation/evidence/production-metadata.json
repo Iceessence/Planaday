@@ -1,0 +1,78 @@
+{
+  "title": "Dayplana — Tactile Life Planner",
+  "probes": {
+    "/api/health": {
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "sha256": "505b79764541a09a9030da7094ada09462cd418ef76fa8def074940bb25f426f",
+      "metadata": {
+        "ok": true,
+        "app": "dayplana",
+        "legacyApp": null,
+        "version": null,
+        "dataDir": "/data",
+        "recordCount": 99,
+        "seq": 16113
+      }
+    },
+    "/api/storage/info": {
+      "status": 404,
+      "contentType": "application/json; charset=utf-8",
+      "sha256": "4408c94072487af4a1e6e6383bb83b6cb281fb90a6655a3bf06a6dec6172f886"
+    },
+    "/manifest.webmanifest": {
+      "status": 200,
+      "contentType": "application/manifest+json",
+      "sha256": "430431a53012f964cabe46972e0c4ad551ab35677b05d1fe709b80d095e90fcb",
+      "metadata": {
+        "name": "Dayplana — Tactile Life Planner",
+        "short_name": "Dayplana",
+        "display": "standalone",
+        "start_url": "/",
+        "scope": "/"
+      }
+    },
+    "/sw.js": {
+      "status": 200,
+      "contentType": "application/javascript; charset=utf-8",
+      "sha256": "8945224c66e127a5e20afebf515428f7e303429a7cc44be898486e08a0927f21"
+    }
+  },
+  "assets": [
+    {
+      "path": "/assets/index-B3OCKsQL.js",
+      "size": 390342,
+      "sha256": "bbeace624224c821ea3e200d7973b94334d0f8d74fdf7359a9fe20cdd447fb4c"
+    },
+    {
+      "path": "/assets/vendor-BROSOlJU.js",
+      "size": 165512,
+      "sha256": "63f8ec141156766895d091811eb1feacd3489ad82052fdd45c95fa44020c9ca0"
+    },
+    {
+      "path": "/assets/archive-BoQ23Qv2.js",
+      "size": 12433,
+      "sha256": "85b038dbcdad130b2bab074b042c9481c4b1164f0d601822eb272ccf694459e0"
+    },
+    {
+      "path": "/assets/plan-CUiqlryT.js",
+      "size": 281917,
+      "sha256": "27e81d7b8508db65743421b09f94e64b227b2cf49b7f270227247f31ba5f35b1"
+    },
+    {
+      "path": "/assets/mindTime-M4eYaSW-.js",
+      "size": 118083,
+      "sha256": "4f5517a50db72f3b0097bb8e9c4da53052fee83f68afeae5fb7de0671fc1b6fc"
+    },
+    {
+      "path": "/assets/kitchenLife-DJyYyP3P.js",
+      "size": 115655,
+      "sha256": "720c9ddf7515cf495eba7525dc395c2823c05401bdb07e7b727886b3ec5e3ef7"
+    },
+    {
+      "path": "/assets/index-BdFlMIf2.css",
+      "size": 23159,
+      "sha256": "df61c4222a28d3131dca9531c6c608dd0ceb56a643f01928fda64e00e494ebeb"
+    }
+  ]
+}

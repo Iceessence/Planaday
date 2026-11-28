@@ -1,0 +1,14 @@
+# Prioritized repair roadmap
+
+| Order | Work | Why and affected area | Gate |
+|---|---|---|---|
+| 0 | Protect self-hosted data and sandbox execution boundary | Records, attachments, relay settings and professional data rely on deployment trust. Scope protected routes and enforce a separate runner threat model. Preserve local-only tools. | Authorized-device and workspace matrix, safe deployment defaults, bounded runner design accepted independently. |
+| 1 | Atomic edits, attachment hydration, restore/rebind | A successful save can lose a disjoint edit, a second device can lack file bytes, and a replacement server can stay empty. | Six synthetic cases in [next developer assignment](11_NEXT_DEVELOPER_PROMPT.md), including interrupted work, repeated retries and hash equality. |
+| 2 | Stabilize primary mobile editing and navigation | Restore drafts per record through hide, orientation, save errors and composition. Fix clipped controls and provide keyboard/screen reader alternatives. | Physical Gboard, Samsung Keyboard, iOS Safari plus Chromium matrix. No unexpected selection or cross-record changes. Control visibility at 320 px and 200% text scale. |
+| 3 | Correct interchange and numeric claims | Repair CSV quoting, reject root candidates without a numeric residual and bound behavior at poles and tangencies. Clarify format limitations in app. | Independent fixtures pass through UI and engine, including save/reopen and exports examined with independent tools. |
+| 4 | Bound resource use and serve offline assets | Profile browser long Notes, search, sync pages and large grids. Precache each committed build's required modules and isolate cache generations. | Cold install offline launch, unvisited open, atomic upgrade, p95 entry/edit targets agreed on real device, 60-minute profile with no growth outside expected data. |
+| 5 | Complete approved workflows and UI consistency | Add clear create/edit/save error paths, calendar and task edge cases, planner accessibility and reminder reliability. Make documentation/version alignment a release gate. | Owner-defined authoritative requirements each have applicable end-to-end test and exact artifact. |
+| 6 | Build shared relationship, schema and view primitives | Use verified shared tools to complete Lab, game, writer, office and workspaces. Migrate one vertical slice at a time. | Typed links and change preservation across workspace, sync, search and restore. |
+| 7 | Expand and refine | Optional professional tools, composable workspaces and automations. | See [expanded roadmap](21_EXPANDED_PRODUCT_ROADMAP.md) and [feature scorecard](20_FEATURE_PRIORITY_SCORECARD.md). |
+
+The emergency batch covers orders 0–1. Orders 2–4 require representative browser/device acceptance. Every gate should preserve existing IDs, timeline behavior, settings and documents. Scope performance goals using measured hardware and realistic workloads from [performance evidence](05_PERFORMANCE_AND_STABILITY.md).

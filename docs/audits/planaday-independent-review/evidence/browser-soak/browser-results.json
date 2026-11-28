@@ -1,0 +1,1304 @@
+{
+  "checks": [
+    {
+      "name": "service worker controls the built application",
+      "status": "pass",
+      "details": [
+        "planaday-shell-v4-0"
+      ]
+    },
+    {
+      "name": "create or open a synthetic note",
+      "status": "pass",
+      "details": [
+        [
+          "",
+          "Collapse sidebar",
+          ""
+        ],
+        [
+          "",
+          "New Custom Tab",
+          "Create a brand-new custom sidebar tab"
+        ],
+        [
+          "PLAN",
+          null,
+          ""
+        ],
+        [
+          "All-in-One Scroll",
+          null,
+          ""
+        ],
+        [
+          "Quick Glance",
+          null,
+          ""
+        ],
+        [
+          "Home",
+          null,
+          ""
+        ],
+        [
+          "Today Spread",
+          null,
+          ""
+        ],
+        [
+          "Physical Planner",
+          null,
+          ""
+        ],
+        [
+          "Week / Month / Year",
+          null,
+          ""
+        ],
+        [
+          "Flow Calendar",
+          null,
+          ""
+        ],
+        [
+          "Task Calendar",
+          null,
+          ""
+        ],
+        [
+          "Tasks",
+          null,
+          ""
+        ],
+        [
+          "Chores",
+          null,
+          ""
+        ],
+        [
+          "History & Reviews",
+          null,
+          ""
+        ],
+        [
+          "Reports & Analytics",
+          null,
+          ""
+        ],
+        [
+          "Life Events",
+          null,
+          ""
+        ],
+        [
+          "LABORATORY",
+          null,
+          ""
+        ],
+        [
+          "Lab Management",
+          null,
+          ""
+        ],
+        [
+          "CREATE & MATH",
+          null,
+          ""
+        ],
+        [
+          "Calculator & Graph",
+          null,
+          ""
+        ],
+        [
+          "Spreadsheets",
+          null,
+          ""
+        ],
+        [
+          "Presentations",
+          null,
+          ""
+        ],
+        [
+          "Kanban Boards",
+          null,
+          ""
+        ],
+        [
+          "Whiteboard Canvas",
+          null,
+          ""
+        ],
+        [
+          "Projects & Records",
+          null,
+          ""
+        ],
+        [
+          "Game Dev Studio",
+          null,
+          ""
+        ],
+        [
+          "Book Studio",
+          null,
+          ""
+        ],
+        [
+          "Code Sandbox",
+          null,
+          ""
+        ],
+        [
+          "Camera & Photos",
+          null,
+          ""
+        ],
+        [
+          "Universal Files",
+          null,
+          ""
+        ],
+        [
+          "MIND",
+          null,
+          ""
+        ],
+        [
+          "Notes & Graph",
+          null,
+          ""
+        ],
+        [
+          "Thought Inbox",
+          null,
+          ""
+        ],
+        [
+          "Diary & Mood",
+          null,
+          ""
+        ],
+        [
+          "TIME",
+          null,
+          ""
+        ],
+        [
+          "Clock & World",
+          null,
+          ""
+        ],
+        [
+          "Smart Alarms",
+          null,
+          ""
+        ],
+        [
+          "Timers & Pomodoro",
+          null,
+          ""
+        ],
+        [
+          "Stopwatch & Ledger",
+          null,
+          ""
+        ],
+        [
+          "Countdowns",
+          null,
+          ""
+        ],
+        [
+          "KITCHEN",
+          null,
+          ""
+        ],
+        [
+          "Recipes",
+          null,
+          ""
+        ],
+        [
+          "Pantry Lots",
+          null,
+          ""
+        ],
+        [
+          "Meal Planner",
+          null,
+          ""
+        ],
+        [
+          "Groceries",
+          null,
+          ""
+        ],
+        [
+          "LIFE-OS",
+          null,
+          ""
+        ],
+        [
+          "Goals",
+          null,
+          ""
+        ],
+        [
+          "Habits & Routines",
+          null,
+          ""
+        ],
+        [
+          "STUDIO",
+          null,
+          ""
+        ],
+        [
+          "Custom Spaces",
+          null,
+          ""
+        ],
+        [
+          "Rituals & Contexts",
+          null,
+          ""
+        ],
+        [
+          "Insights & Heatmaps",
+          null,
+          ""
+        ],
+        [
+          "Automations",
+          null,
+          ""
+        ],
+        [
+          "Guide & Help",
+          null,
+          ""
+        ],
+        [
+          "Trash (30d)",
+          null,
+          ""
+        ],
+        [
+          "Settings & Themes",
+          null,
+          ""
+        ],
+        [
+          "Search",
+          null,
+          "Global Fuzzy Search (/)"
+        ],
+        [
+          "Capture",
+          null,
+          "Quick Capture (N)"
+        ],
+        [
+          "",
+          "Open Command Palette",
+          "Command Palette (Ctrl/Cmd+K)"
+        ],
+        [
+          "Install App",
+          null,
+          "Install Planaday as a standalone app"
+        ],
+        [
+          "",
+          "Undo",
+          "Undo (Ctrl/Cmd+Z)"
+        ],
+        [
+          "",
+          "Redo",
+          "Redo (Ctrl/Cmd+Shift+Z)"
+        ],
+        [
+          "Calm",
+          null,
+          "Toggle Low-Energy / Overwhelmed Mode"
+        ],
+        [
+          "",
+          "Open Zen Sheet",
+          "Distraction-Free Zen Sheet"
+        ],
+        [
+          "Synced",
+          null,
+          "Sync Status & Server Connection Settings"
+        ],
+        [
+          "",
+          "Open App Guide",
+          "App Guide & Documentation"
+        ],
+        [
+          "",
+          "Open Settings",
+          "Settings & Theme Studio"
+        ],
+        [
+          "New Note",
+          null,
+          ""
+        ],
+        [
+          "Connection Graph",
+          null,
+          ""
+        ],
+        [
+          "Notes Editor Settings",
+          null,
+          ""
+        ],
+        [
+          "All (1)",
+          null,
+          ""
+        ],
+        [
+          "📓 Personal",
+          null,
+          ""
+        ],
+        [
+          "🏡 Family",
+          null,
+          ""
+        ],
+        [
+          "💼 Work",
+          null,
+          ""
+        ],
+        [
+          "📚 Learning",
+          null,
+          ""
+        ],
+        [
+          "💻 Technology",
+          null,
+          ""
+        ],
+        [
+          "💡 Ideas",
+          null,
+          ""
+        ],
+        [
+          "🌿 Wellbeing",
+          null,
+          ""
+        ],
+        [
+          "🧾 Finances",
+          null,
+          ""
+        ],
+        [
+          "🗂️ Other",
+          null,
+          ""
+        ],
+        [
+          "",
+          "Sort descending",
+          "Descending (click to reverse)"
+        ],
+        [
+          "All Notes",
+          null,
+          ""
+        ],
+        [
+          "📌 Pinned Only",
+          null,
+          ""
+        ],
+        [
+          "+",
+          null,
+          "Add nested sub-note inside this note"
+        ],
+        [
+          "Save",
+          null,
+          "Save immediately & create version snapshot (Ctrl+S)"
+        ],
+        [
+          "",
+          null,
+          "Pin note"
+        ],
+        [
+          "History",
+          null,
+          ""
+        ],
+        [
+          "Preview",
+          null,
+          ""
+        ],
+        [
+          "",
+          null,
+          "Move note to Trash"
+        ],
+        [
+          "Untitled Note",
+          null,
+          ""
+        ]
+      ]
+    },
+    {
+      "name": "note input and selected-text replacement at approximately 1000 words",
+      "status": "pass",
+      "details": {
+        "words": 1000,
+        "initialLoadMethod": "Input.insertText",
+        "initialLoadMs": 70.39330000000007,
+        "medianEditMs": 1.4078999999999269,
+        "p95EditMs": 2.537399999999934,
+        "heap": {
+          "usedSize": 6875272,
+          "totalSize": 13893632,
+          "embedderHeapUsedSize": 31065560,
+          "backingStorageSize": 1526455
+        },
+        "immediate": {
+          "size": 6214,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterDebounce": {
+          "size": 6214,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        },
+        "afterManual": {
+          "size": 6214,
+          "start": 102,
+          "end": 102,
+          "scroll": 122,
+          "windowScroll": 1125,
+          "prefix": "# Audit note\n\nalpha beta gamma delt",
+          "sample": "eCDilon\nalpha beta g"
+        }
+      }
+    },
+    {
+      "name": "note remains editable after emulated orientation change",
+      "status": "pass",
+      "details": {
+        "size": 6214,
+        "start": 116,
+        "end": 116,
+        "scroll": 122,
+        "windowScroll": 1063,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDiloorientationa g"
+      }
+    },
+    {
+      "name": "Chromium IME replacement of a selected middle word",
+      "status": "pass",
+      "details": {
+        "size": 13,
+        "start": 9,
+        "end": 9,
+        "scroll": 0,
+        "windowScroll": 1063,
+        "prefix": "begin the end",
+        "sample": ""
+      }
+    },
+    {
+      "name": "120-second repeated Notes editing and debounce soak",
+      "status": "pass",
+      "details": {
+        "edits": 158,
+        "p50Ms": 5.4033999999992375,
+        "p95Ms": 6.167300000000978,
+        "checkpoints": [
+          {
+            "elapsedSeconds": 0.016399399999999332,
+            "edits": 1,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 509,
+              "Nodes": 7975,
+              "LayoutCount": 6004,
+              "ScriptDuration": 0.009939,
+              "TaskDuration": 4.419385,
+              "JSHeapUsedSize": 6108104
+            },
+            "requests": 13
+          },
+          {
+            "elapsedSeconds": 18.2988825,
+            "edits": 25,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 3489,
+              "Nodes": 7976,
+              "LayoutCount": 6103,
+              "ScriptDuration": 0.1416,
+              "TaskDuration": 4.887465,
+              "JSHeapUsedSize": 19625128
+            },
+            "requests": 17
+          },
+          {
+            "elapsedSeconds": 37.292778,
+            "edits": 50,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 643,
+              "Nodes": 7959,
+              "LayoutCount": 6205,
+              "ScriptDuration": 0.26962,
+              "TaskDuration": 5.363101,
+              "JSHeapUsedSize": 7965752
+            },
+            "requests": 19
+          },
+          {
+            "elapsedSeconds": 56.286310400000005,
+            "edits": 75,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 3637,
+              "Nodes": 7976,
+              "LayoutCount": 6307,
+              "ScriptDuration": 0.404631,
+              "TaskDuration": 5.80875,
+              "JSHeapUsedSize": 19621696
+            },
+            "requests": 21
+          },
+          {
+            "elapsedSeconds": 75.2929033,
+            "edits": 100,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 4471,
+              "Nodes": 7978,
+              "LayoutCount": 6408,
+              "ScriptDuration": 0.533224,
+              "TaskDuration": 6.247816,
+              "JSHeapUsedSize": 28872656
+            },
+            "requests": 23
+          },
+          {
+            "elapsedSeconds": 94.2997252,
+            "edits": 125,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 3817,
+              "Nodes": 7976,
+              "LayoutCount": 6510,
+              "ScriptDuration": 0.658098,
+              "TaskDuration": 6.672634,
+              "JSHeapUsedSize": 20890272
+            },
+            "requests": 25
+          },
+          {
+            "elapsedSeconds": 113.2395097,
+            "edits": 150,
+            "metrics": {
+              "Documents": 4,
+              "JSEventListeners": 3163,
+              "Nodes": 7974,
+              "LayoutCount": 6612,
+              "ScriptDuration": 0.780422,
+              "TaskDuration": 7.095351,
+              "JSHeapUsedSize": 12284388
+            },
+            "requests": 27
+          }
+        ],
+        "after": {
+          "size": 62000,
+          "start": 102,
+          "end": 102,
+          "scroll": 94,
+          "windowScroll": 1063,
+          "prefix": "alpha beta gamma delta epsilon\nalph",
+          "sample": "bABa gamma delta eps"
+        }
+      }
+    }
+  ],
+  "viewports": [],
+  "notes": [
+    {
+      "words": 1000,
+      "initialLoadMethod": "Input.insertText",
+      "initialLoadMs": 70.39330000000007,
+      "medianEditMs": 1.4078999999999269,
+      "p95EditMs": 2.537399999999934,
+      "heap": {
+        "usedSize": 6875272,
+        "totalSize": 13893632,
+        "embedderHeapUsedSize": 31065560,
+        "backingStorageSize": 1526455
+      },
+      "immediate": {
+        "size": 6214,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterDebounce": {
+        "size": 6214,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      },
+      "afterManual": {
+        "size": 6214,
+        "start": 102,
+        "end": 102,
+        "scroll": 122,
+        "windowScroll": 1125,
+        "prefix": "# Audit note\n\nalpha beta gamma delt",
+        "sample": "eCDilon\nalpha beta g"
+      }
+    }
+  ],
+  "browserErrors": [],
+  "requests": [
+    "/",
+    "/assets/index-DyeBixqe.js",
+    "/assets/vendor-BXbLIbeB.js",
+    "/assets/archive-BoQ23Qv2.js",
+    "/assets/plan-DXnJakOx.js",
+    "/assets/mindTime-CE4Acib2.js",
+    "/assets/kitchenLife-CFK4mFCp.js",
+    "/assets/index-_IZoqLsr.css",
+    "/manifest.webmanifest",
+    "/icons/icon.svg",
+    "/icons/icon.svg",
+    "/api/sync/pull",
+    "/api/sync/events",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/push",
+    "/api/sync/pull",
+    "/api/sync/push",
+    "/api/sync/pull"
+  ],
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36",
+  "navigation": {
+    "frameId": "F84E3E9BD7A1D6A0D0C4A8DBB2E66905",
+    "loaderId": "9E1183130EF5C08CDE5928807D4D6903",
+    "isDownload": false
+  },
+  "onboarding": [
+    [
+      "PLAN",
+      null,
+      ""
+    ],
+    [
+      "All-in-One Scroll",
+      null,
+      ""
+    ],
+    [
+      "Quick Glance",
+      null,
+      ""
+    ],
+    [
+      "Home",
+      null,
+      ""
+    ],
+    [
+      "Today Spread",
+      null,
+      ""
+    ],
+    [
+      "Physical Planner",
+      null,
+      ""
+    ],
+    [
+      "Week / Month / Year",
+      null,
+      ""
+    ],
+    [
+      "Flow Calendar",
+      null,
+      ""
+    ],
+    [
+      "Task Calendar",
+      null,
+      ""
+    ],
+    [
+      "Tasks",
+      null,
+      ""
+    ],
+    [
+      "Chores",
+      null,
+      ""
+    ],
+    [
+      "History & Reviews",
+      null,
+      ""
+    ],
+    [
+      "Reports & Analytics",
+      null,
+      ""
+    ],
+    [
+      "Life Events",
+      null,
+      ""
+    ],
+    [
+      "LABORATORY",
+      null,
+      ""
+    ],
+    [
+      "Lab Management",
+      null,
+      ""
+    ],
+    [
+      "CREATE & MATH",
+      null,
+      ""
+    ],
+    [
+      "Calculator & Graph",
+      null,
+      ""
+    ],
+    [
+      "Spreadsheets",
+      null,
+      ""
+    ],
+    [
+      "Presentations",
+      null,
+      ""
+    ],
+    [
+      "Kanban Boards",
+      null,
+      ""
+    ],
+    [
+      "Whiteboard Canvas",
+      null,
+      ""
+    ],
+    [
+      "Projects & Records",
+      null,
+      ""
+    ],
+    [
+      "Game Dev Studio",
+      null,
+      ""
+    ],
+    [
+      "Book Studio",
+      null,
+      ""
+    ],
+    [
+      "Code Sandbox",
+      null,
+      ""
+    ],
+    [
+      "Camera & Photos",
+      null,
+      ""
+    ],
+    [
+      "Universal Files",
+      null,
+      ""
+    ],
+    [
+      "MIND",
+      null,
+      ""
+    ],
+    [
+      "Notes & Graph",
+      null,
+      ""
+    ],
+    [
+      "Thought Inbox",
+      null,
+      ""
+    ],
+    [
+      "Diary & Mood",
+      null,
+      ""
+    ],
+    [
+      "TIME",
+      null,
+      ""
+    ],
+    [
+      "Clock & World",
+      null,
+      ""
+    ],
+    [
+      "Smart Alarms",
+      null,
+      ""
+    ],
+    [
+      "Timers & Pomodoro",
+      null,
+      ""
+    ],
+    [
+      "Stopwatch & Ledger",
+      null,
+      ""
+    ],
+    [
+      "Countdowns",
+      null,
+      ""
+    ],
+    [
+      "KITCHEN",
+      null,
+      ""
+    ],
+    [
+      "Recipes",
+      null,
+      ""
+    ],
+    [
+      "Pantry Lots",
+      null,
+      ""
+    ],
+    [
+      "Meal Planner",
+      null,
+      ""
+    ],
+    [
+      "Groceries",
+      null,
+      ""
+    ],
+    [
+      "LIFE-OS",
+      null,
+      ""
+    ],
+    [
+      "Goals",
+      null,
+      ""
+    ],
+    [
+      "Habits & Routines",
+      null,
+      ""
+    ],
+    [
+      "STUDIO",
+      null,
+      ""
+    ],
+    [
+      "Custom Spaces",
+      null,
+      ""
+    ],
+    [
+      "Rituals & Contexts",
+      null,
+      ""
+    ],
+    [
+      "Insights & Heatmaps",
+      null,
+      ""
+    ],
+    [
+      "Automations",
+      null,
+      ""
+    ],
+    [
+      "Guide & Help",
+      null,
+      ""
+    ],
+    [
+      "Trash (30d)",
+      null,
+      ""
+    ],
+    [
+      "Settings & Themes",
+      null,
+      ""
+    ],
+    [
+      "Search",
+      null,
+      "Global Fuzzy Search (/)"
+    ],
+    [
+      "Capture",
+      null,
+      "Quick Capture (N)"
+    ],
+    [
+      "Install App",
+      null,
+      "Install Planaday as a standalone app"
+    ],
+    [
+      "Calm",
+      null,
+      "Toggle Low-Energy / Overwhelmed Mode"
+    ],
+    [
+      "Syncing…",
+      null,
+      "Sync Status & Server Connection Settings"
+    ],
+    [
+      "Today Spread Settings",
+      null,
+      ""
+    ],
+    [
+      "←",
+      null,
+      ""
+    ],
+    [
+      "→",
+      null,
+      ""
+    ],
+    [
+      "Open-Book",
+      null,
+      ""
+    ],
+    [
+      "+ Event",
+      null,
+      ""
+    ],
+    [
+      "+ Task",
+      null,
+      ""
+    ],
+    [
+      "+ Chore",
+      null,
+      ""
+    ],
+    [
+      "+ Meal",
+      null,
+      ""
+    ],
+    [
+      "+ Timer",
+      null,
+      ""
+    ],
+    [
+      "+ Note",
+      null,
+      ""
+    ],
+    [
+      "+ Thought",
+      null,
+      ""
+    ],
+    [
+      "Add",
+      null,
+      ""
+    ],
+    [
+      "0\nStill Upcoming Today",
+      null,
+      ""
+    ],
+    [
+      "0\nOverdue Chores",
+      null,
+      ""
+    ],
+    [
+      "0\nDue Chores",
+      null,
+      ""
+    ],
+    [
+      "0\nOpen Tasks",
+      null,
+      ""
+    ],
+    [
+      "Decor",
+      null,
+      "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+    ],
+    [
+      "Ink",
+      null,
+      "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+    ],
+    [
+      "Planned View",
+      null,
+      "Planned View shows your intended schedule. Planned vs. Actual lets you record when events really started & finished so you can see schedule drift."
+    ],
+    [
+      "Flow Calendar →",
+      null,
+      ""
+    ],
+    [
+      "Add",
+      null,
+      ""
+    ],
+    [
+      "Decor",
+      null,
+      "Open 208 Built-In Stickers, Washi Tape, Sticky Notes & Stamps"
+    ],
+    [
+      "Ink",
+      null,
+      "Toggle Smooth Pen, Highlighter & Stroke Eraser"
+    ]
+  ],
+  "desktopNav": [
+    "PLAN",
+    "All-in-One Scroll",
+    "Quick Glance",
+    "Home",
+    "Today Spread",
+    "Physical Planner",
+    "Week / Month / Year",
+    "Flow Calendar",
+    "Task Calendar",
+    "Tasks",
+    "Chores",
+    "History & Reviews",
+    "Reports & Analytics",
+    "Life Events",
+    "LABORATORY",
+    "Lab Management",
+    "CREATE & MATH",
+    "Calculator & Graph",
+    "Spreadsheets",
+    "Presentations",
+    "Kanban Boards",
+    "Whiteboard Canvas",
+    "Projects & Records",
+    "Game Dev Studio",
+    "Book Studio",
+    "Code Sandbox",
+    "Camera & Photos",
+    "Universal Files",
+    "MIND",
+    "Notes & Graph",
+    "Thought Inbox",
+    "Diary & Mood",
+    "TIME",
+    "Clock & World",
+    "Smart Alarms",
+    "Timers & Pomodoro",
+    "Stopwatch & Ledger",
+    "Countdowns",
+    "KITCHEN",
+    "Recipes",
+    "Pantry Lots",
+    "Meal Planner",
+    "Groceries",
+    "LIFE-OS",
+    "Goals",
+    "Habits & Routines",
+    "STUDIO",
+    "Custom Spaces",
+    "Rituals & Contexts",
+    "Insights & Heatmaps",
+    "Automations",
+    "Guide & Help",
+    "Trash (30d)",
+    "Settings & Themes"
+  ],
+  "soak": {
+    "samples": [
+      {
+        "elapsedSeconds": 0.016399399999999332,
+        "edits": 1,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 509,
+          "Nodes": 7975,
+          "LayoutCount": 6004,
+          "ScriptDuration": 0.009939,
+          "TaskDuration": 4.419385,
+          "JSHeapUsedSize": 6108104
+        },
+        "requests": 13
+      },
+      {
+        "elapsedSeconds": 18.2988825,
+        "edits": 25,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 3489,
+          "Nodes": 7976,
+          "LayoutCount": 6103,
+          "ScriptDuration": 0.1416,
+          "TaskDuration": 4.887465,
+          "JSHeapUsedSize": 19625128
+        },
+        "requests": 17
+      },
+      {
+        "elapsedSeconds": 37.292778,
+        "edits": 50,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 643,
+          "Nodes": 7959,
+          "LayoutCount": 6205,
+          "ScriptDuration": 0.26962,
+          "TaskDuration": 5.363101,
+          "JSHeapUsedSize": 7965752
+        },
+        "requests": 19
+      },
+      {
+        "elapsedSeconds": 56.286310400000005,
+        "edits": 75,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 3637,
+          "Nodes": 7976,
+          "LayoutCount": 6307,
+          "ScriptDuration": 0.404631,
+          "TaskDuration": 5.80875,
+          "JSHeapUsedSize": 19621696
+        },
+        "requests": 21
+      },
+      {
+        "elapsedSeconds": 75.2929033,
+        "edits": 100,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 4471,
+          "Nodes": 7978,
+          "LayoutCount": 6408,
+          "ScriptDuration": 0.533224,
+          "TaskDuration": 6.247816,
+          "JSHeapUsedSize": 28872656
+        },
+        "requests": 23
+      },
+      {
+        "elapsedSeconds": 94.2997252,
+        "edits": 125,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 3817,
+          "Nodes": 7976,
+          "LayoutCount": 6510,
+          "ScriptDuration": 0.658098,
+          "TaskDuration": 6.672634,
+          "JSHeapUsedSize": 20890272
+        },
+        "requests": 25
+      },
+      {
+        "elapsedSeconds": 113.2395097,
+        "edits": 150,
+        "metrics": {
+          "Documents": 4,
+          "JSEventListeners": 3163,
+          "Nodes": 7974,
+          "LayoutCount": 6612,
+          "ScriptDuration": 0.780422,
+          "TaskDuration": 7.095351,
+          "JSHeapUsedSize": 12284388
+        },
+        "requests": 27
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+pass WK-BOOT-D
+pass WK-NOTE-D
+pass WK-BOOT-M
+pass WK-NOTE-M

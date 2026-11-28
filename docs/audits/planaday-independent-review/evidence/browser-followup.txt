@@ -1,0 +1,10 @@
+pass service worker controls the built application
+fail unvisited lazy studio opens after the server shuts down
+pass create or open a synthetic note
+pass mobile menu exposes Tasks and a created task survives reload
+pass note input and selected-text replacement at approximately 1000 words
+pass note input and selected-text replacement at approximately 10000 words
+pass note input and selected-text replacement at approximately 50000 words
+pass note input and selected-text replacement at approximately 100000 words
+pass 100k-word saved note survives browser reload
+pass note remains editable after emulated orientation change

@@ -1,0 +1,262 @@
+[
+  {
+    "rev": "5a7022f",
+    "assets": [
+      {
+        "path": "/assets/archive-BoQ23Qv2.js",
+        "size": 12433,
+        "sha256": "85b038dbcdad130b2bab074b042c9481c4b1164f0d601822eb272ccf694459e0"
+      },
+      {
+        "path": "/assets/index-BdFlMIf2.css",
+        "size": 23159,
+        "sha256": "df61c4222a28d3131dca9531c6c608dd0ceb56a643f01928fda64e00e494ebeb"
+      },
+      {
+        "path": "/assets/index-CRhFlR2E.js",
+        "size": 390342,
+        "sha256": "f6ef9a8734e7653609096573cc63fa09d14cb4a83243f4408578db20c16a5590"
+      },
+      {
+        "path": "/assets/kitchenLife-D9Jok7U1.js",
+        "size": 115655,
+        "sha256": "743f7e7aa2f789a9c5cd59b4abc6a812c127d8850050e0f8ade88a49ae75e920"
+      },
+      {
+        "path": "/assets/mindTime-DNdRKUTf.js",
+        "size": 118083,
+        "sha256": "6c872ff023da68c97088573003c2d7264cfca0df54a31ee05de257397dfde01a"
+      },
+      {
+        "path": "/assets/plan-C8oYCkvN.js",
+        "size": 281871,
+        "sha256": "00d60d42ec3d0903f3b381e78513cc2b06d622a9763fd23831b447628f8cbd59"
+      },
+      {
+        "path": "/assets/purify.es-BKvm9NlY.js",
+        "size": 31549,
+        "sha256": "24e7f3c2678c36a7cf3e13d3bdc5a889852602a01256f9fa7ca39844faeaf128"
+      },
+      {
+        "path": "/assets/temporal-polyfill-Dz9imr3U.js",
+        "size": 58520,
+        "sha256": "7dd57f4efe25a736fb64b549ae4a807a6e7c46e7967e641d04e50d5ac1de7815"
+      },
+      {
+        "path": "/assets/vendor-BROSOlJU.js",
+        "size": 165512,
+        "sha256": "63f8ec141156766895d091811eb1feacd3489ad82052fdd45c95fa44020c9ca0"
+      }
+    ],
+    "manifest": "517c0ee3eeb30313f158acce47b79c9e87c9461fdaee3d4cdeecfa3ae1067ee5",
+    "worker": "95e3a86c9b8954ab77c2bd6f2e34bba2f0532809a2fadfa1dd71fe0abc191f7f"
+  },
+  {
+    "rev": "4b8318d",
+    "assets": [
+      {
+        "path": "/assets/archive-BoQ23Qv2.js",
+        "size": 12433,
+        "sha256": "85b038dbcdad130b2bab074b042c9481c4b1164f0d601822eb272ccf694459e0"
+      },
+      {
+        "path": "/assets/index-Buu2iVDW.css",
+        "size": 21771,
+        "sha256": "21760a87bb68a26bd0178cbd11b77e2b3aeeec04979e73d7877d23415a972f2a"
+      },
+      {
+        "path": "/assets/index-BziQbZFZ.js",
+        "size": 354695,
+        "sha256": "17fc416538da945abc758a2dbb68dbca9cea1f1fd7d8d29c49f55eced220924b"
+      },
+      {
+        "path": "/assets/kitchenLife-DfG0fYrC.js",
+        "size": 105841,
+        "sha256": "3230dd2cec83cb8aaaeb023b99c9d3a2908680892dd6894988ff23135d2e3313"
+      },
+      {
+        "path": "/assets/mindTime-Cupu8t4I.js",
+        "size": 82082,
+        "sha256": "3416b213efe1b0b2d6c006705529d06ecf3576ebe0b57802f7797e62a08698d5"
+      },
+      {
+        "path": "/assets/plan-Do4u0D57.js",
+        "size": 211866,
+        "sha256": "fc27c5a2ca81952cf256d05b251c4e10e62ed1cc1f2e9bd2a20fc32a7e6eaa16"
+      },
+      {
+        "path": "/assets/purify.es-BKvm9NlY.js",
+        "size": 31549,
+        "sha256": "24e7f3c2678c36a7cf3e13d3bdc5a889852602a01256f9fa7ca39844faeaf128"
+      },
+      {
+        "path": "/assets/temporal-polyfill-Dz9imr3U.js",
+        "size": 58520,
+        "sha256": "7dd57f4efe25a736fb64b549ae4a807a6e7c46e7967e641d04e50d5ac1de7815"
+      },
+      {
+        "path": "/assets/vendor-TfYeYqJ5.js",
+        "size": 159543,
+        "sha256": "c1d1dda27ee6a6712fb09ce64e13a329968c5cd9752d959657432354e6c1f2eb"
+      }
+    ],
+    "manifest": "517c0ee3eeb30313f158acce47b79c9e87c9461fdaee3d4cdeecfa3ae1067ee5",
+    "worker": "95e3a86c9b8954ab77c2bd6f2e34bba2f0532809a2fadfa1dd71fe0abc191f7f"
+  },
+  {
+    "rev": "2e85a7f",
+    "assets": [
+      {
+        "path": "/assets/archive-BoQ23Qv2.js",
+        "size": 12433,
+        "sha256": "85b038dbcdad130b2bab074b042c9481c4b1164f0d601822eb272ccf694459e0"
+      },
+      {
+        "path": "/assets/index-BqSHLUzX.js",
+        "size": 302685,
+        "sha256": "c5e9058e2855e51bbfad18046a77c4b5b2bb356eca2da58a2be02891dc20f35e"
+      },
+      {
+        "path": "/assets/index-Buu2iVDW.css",
+        "size": 21771,
+        "sha256": "21760a87bb68a26bd0178cbd11b77e2b3aeeec04979e73d7877d23415a972f2a"
+      },
+      {
+        "path": "/assets/kitchenLife-szjktaBf.js",
+        "size": 90716,
+        "sha256": "c0c593cc57b127f476449654f2c6f4266442f55f70e47046d9e0a848574b9742"
+      },
+      {
+        "path": "/assets/mindTime-D6nkTHj_.js",
+        "size": 79772,
+        "sha256": "c47652cce78245ad518401dbe491302522c208d6a3b73b5955545ee4014107d6"
+      },
+      {
+        "path": "/assets/plan-BOiVL9qw.js",
+        "size": 181563,
+        "sha256": "8cc16b9c7369dcddafed36ac00b40981818ff8bc5ee0d475d611b85d0c39e003"
+      },
+      {
+        "path": "/assets/purify.es-BKvm9NlY.js",
+        "size": 31549,
+        "sha256": "24e7f3c2678c36a7cf3e13d3bdc5a889852602a01256f9fa7ca39844faeaf128"
+      },
+      {
+        "path": "/assets/temporal-polyfill-Dz9imr3U.js",
+        "size": 58520,
+        "sha256": "7dd57f4efe25a736fb64b549ae4a807a6e7c46e7967e641d04e50d5ac1de7815"
+      },
+      {
+        "path": "/assets/vendor-BcQz_LRs.js",
+        "size": 155689,
+        "sha256": "06f4a74eedc3c62640bc98b4d84f0c1dac827d56fe639cd3fdf16d4b2943bd52"
+      }
+    ],
+    "manifest": "517c0ee3eeb30313f158acce47b79c9e87c9461fdaee3d4cdeecfa3ae1067ee5",
+    "worker": "95e3a86c9b8954ab77c2bd6f2e34bba2f0532809a2fadfa1dd71fe0abc191f7f"
+  },
+  {
+    "rev": "e179712",
+    "assets": [
+      {
+        "path": "/assets/archive-BoQ23Qv2.js",
+        "size": 12433,
+        "sha256": "85b038dbcdad130b2bab074b042c9481c4b1164f0d601822eb272ccf694459e0"
+      },
+      {
+        "path": "/assets/index-BRUgwYjJ.css",
+        "size": 21748,
+        "sha256": "df0ad0809d2e759988200e6d0e896d717fe4665f89c6ea3947f4c95b127bfc95"
+      },
+      {
+        "path": "/assets/index-DBsF0Ek3.js",
+        "size": 287406,
+        "sha256": "4fdad8999aa674981c9aa4d11ee36094b6b65437a601849b11f647fd5fb635cb"
+      },
+      {
+        "path": "/assets/kitchenLife-C8RRbiRx.js",
+        "size": 107094,
+        "sha256": "1e96478bbbb54f3dc96ebc336b2ada7b99447dc0babba82add12705a69720566"
+      },
+      {
+        "path": "/assets/mindTime-hfLulek6.js",
+        "size": 79262,
+        "sha256": "110dc2aebf2dc46721cde7f774d8a7475d6af2b6650d83d17b3ae3d8a83a6701"
+      },
+      {
+        "path": "/assets/plan-C2aismCA.js",
+        "size": 148809,
+        "sha256": "3aa5827c922271f3f0f2f92aeaf11b39d39b5f9da741a54b1c7bf5a5156be4c3"
+      },
+      {
+        "path": "/assets/purify.es-BKvm9NlY.js",
+        "size": 31549,
+        "sha256": "24e7f3c2678c36a7cf3e13d3bdc5a889852602a01256f9fa7ca39844faeaf128"
+      },
+      {
+        "path": "/assets/temporal-polyfill-Dz9imr3U.js",
+        "size": 58520,
+        "sha256": "7dd57f4efe25a736fb64b549ae4a807a6e7c46e7967e641d04e50d5ac1de7815"
+      },
+      {
+        "path": "/assets/vendor-DEpgPNG8.js",
+        "size": 154356,
+        "sha256": "a6540bd7571451aa2f644c46101206e0702db92b00860c5470e271ed0b5a1317"
+      }
+    ],
+    "manifest": "517c0ee3eeb30313f158acce47b79c9e87c9461fdaee3d4cdeecfa3ae1067ee5",
+    "worker": "95e3a86c9b8954ab77c2bd6f2e34bba2f0532809a2fadfa1dd71fe0abc191f7f"
+  },
+  {
+    "rev": "ed15cad",
+    "assets": [
+      {
+        "path": "/assets/archive-BoQ23Qv2.js",
+        "size": 12433,
+        "sha256": "85b038dbcdad130b2bab074b042c9481c4b1164f0d601822eb272ccf694459e0"
+      },
+      {
+        "path": "/assets/index-BRUgwYjJ.css",
+        "size": 21748,
+        "sha256": "df0ad0809d2e759988200e6d0e896d717fe4665f89c6ea3947f4c95b127bfc95"
+      },
+      {
+        "path": "/assets/index-DBsF0Ek3.js",
+        "size": 287406,
+        "sha256": "4fdad8999aa674981c9aa4d11ee36094b6b65437a601849b11f647fd5fb635cb"
+      },
+      {
+        "path": "/assets/kitchenLife-C8RRbiRx.js",
+        "size": 107094,
+        "sha256": "1e96478bbbb54f3dc96ebc336b2ada7b99447dc0babba82add12705a69720566"
+      },
+      {
+        "path": "/assets/mindTime-hfLulek6.js",
+        "size": 79262,
+        "sha256": "110dc2aebf2dc46721cde7f774d8a7475d6af2b6650d83d17b3ae3d8a83a6701"
+      },
+      {
+        "path": "/assets/plan-C2aismCA.js",
+        "size": 148809,
+        "sha256": "3aa5827c922271f3f0f2f92aeaf11b39d39b5f9da741a54b1c7bf5a5156be4c3"
+      },
+      {
+        "path": "/assets/purify.es-BKvm9NlY.js",
+        "size": 31549,
+        "sha256": "24e7f3c2678c36a7cf3e13d3bdc5a889852602a01256f9fa7ca39844faeaf128"
+      },
+      {
+        "path": "/assets/temporal-polyfill-Dz9imr3U.js",
+        "size": 58520,
+        "sha256": "7dd57f4efe25a736fb64b549ae4a807a6e7c46e7967e641d04e50d5ac1de7815"
+      },
+      {
+        "path": "/assets/vendor-DEpgPNG8.js",
+        "size": 154356,
+        "sha256": "a6540bd7571451aa2f644c46101206e0702db92b00860c5470e271ed0b5a1317"
+      }
+    ],
+    "manifest": "517c0ee3eeb30313f158acce47b79c9e87c9461fdaee3d4cdeecfa3ae1067ee5",
+    "worker": "95e3a86c9b8954ab77c2bd6f2e34bba2f0532809a2fadfa1dd71fe0abc191f7f"
+  }
+]

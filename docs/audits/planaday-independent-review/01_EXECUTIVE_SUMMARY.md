@@ -1,0 +1,41 @@
+# Planaday independent application audit
+
+**Readiness verdict: CRITICAL REPAIRS REQUIRED.** Reviewed commit `d82bdc73742e8982732b5e73d3c44d63e805d842`, checked out on `main`, on November 24, 2026. The application and sync health endpoint report 4.0.0. The root package says 2.0.0 and the Windows wrapper says 2.1.0.
+
+Planaday is a broad offline-first productivity application. Its web app provides planning, task and chore tracking, writing, journals, a digital planner, kitchen and household tools, and specialist workspaces. A Fastify server connects clients to SQLite and binary file storage. The browser and PWA use IndexedDB. Windows Electron and Android Capacitor wrap the web app.
+
+## What the evidence establishes
+
+- The isolated production build and all **47 repository tests** passed with loopback networking enabled. Chrome and Edge independently reopened a timed Calendar event, a Lab sample in QA Review, a worksheet formula and a Whiteboard. Chrome opened 46 visible navigation entries and retained a task created in the mobile layout after a reload. The browser accepted selected-text replacements in notes up to 100,000 words when the largest fixtures were preloaded.
+- Two concurrent edits to different fields on one note lost the changed title while both operations completed. A clean sync client received the note and attachment reference but lacked the attachment bytes that the server held. These are separate data integrity failures. [Issue register](03_COMPLETE_ISSUE_REGISTER.md)
+- An exported ZIP restored the note locally. A fresh replacement server stayed empty and the client reported synchronized with zero pending records. The SQLite snapshot test separately confirmed an intact record database and restart persistence when the same storage directory was reused. [Storage and synchronization](06_STORAGE_AND_SYNCHRONIZATION.md)
+- A CSV exported by Planaday reimported a quoted comma and newline into the wrong cells. The Whiteboard SVG export reversed the filename and content in both browsers. The calculator reported a vertical discontinuity as a root and missed a tangent root. Standard arithmetic, degree trigonometry and a smooth integral passed their controls. [Test evidence](09_TEST_RESULTS_AND_EVIDENCE.md)
+- A narrow browser viewport exposes clipped File Hub and project controls. The available browser tests are headless Chromium emulation. The owner's phone keyboard, touch gestures, lock screen and native notifications require physical-device testing. [Interface review](04_UI_UX_REVIEW.md)
+- Source review found that the configured server relies on a trusted network for access. It has no application-layer authentication or workspace authorization for its records and attachments. The Code Studio's worker should be treated as a responsiveness mechanism pending a security isolation redesign. The audit did not test an exploit or probe a deployed host. [Security review](07_SECURITY_AND_PRIVACY.md)
+
+## Answers to the owner's priority questions
+
+| Question | Answer |
+|---|---|
+| Why did the cursor jump and autocorrect duplicate? | The current buffered textarea preserved caret and selected-range replacement in covered Chromium cases. Earlier developer notes attribute the reports to stale async writes and IME handling. The historical mobile behavior and its cause remain unconfirmed. The current hook also has a source-level record-switch race that needs a focused test. |
+| Why did note-taking slow down or crash? | Very large multiline insertions timed out in the first browser run. That establishes a harness-visible latency problem, with browser input and layout involved. It does not establish the historical crash or a memory leak. See the preloaded-note follow-up in the performance report. |
+| Why did the queue reach roughly 2,000 operations? | The previous report says historical edits enqueued whole-record operations. The current repository suite reproduced compaction of a synthetic 2,000-operation same-record queue to one before syncing. The owner's historical queue is unavailable, so its mix and trigger remain unknown. |
+| Does the data survive Docker recreation? | The shipped Compose file uses a named `/data` volume. The isolated local database and blobs survived reopening the same directory. The owner's TrueNAS dataset mapping, snapshot coverage, UID/GID and container recreation remain unverified. |
+| Are backups dependable? | Small browser ZIP and SQLite cases passed. ZIP restore to server failed to reconcile, and a whole-dataset restore including blobs, application config and local-only state remains unverified. |
+| Does it work with the screen locked or closed? | Source has best-effort browser lifecycle flush, native notification scheduling hooks and an optional server relay. Browser emulation and relay settings persistence cannot establish physical delivery or continued background sync. |
+| Are calendar, chores and tasks dependable? | Targeted recurrence and ICS fixtures passed. Task scheduling and shared records are plausible strengths. Device gestures, DST, multi-calendar edge cases, reminder delivery and full lifecycles remain validation work. |
+| Is Lab usable today? | The workspace has substantive sample, subcontract, inventory, purchasing, pricing, research, statistics and operational screens. There is no evidence to accept it as a sole system of record for confidential or regulated work. |
+| Are the creative and office tools real? | The studios have records, computation and editing handlers. Interoperability, complete editing, cross-feature links and large datasets remain uneven. See the feature-by-feature matrix. |
+| Can the architecture support the vision? | Stable record IDs, the local-first model and reusable primitives are worth preserving. Data durability, permissions, per-workspace boundaries, canonical links and bounded document/sync services need to mature before expanding the number of modules. |
+
+## What should happen next
+
+Start with atomic local writes, two-client attachment hydration, explicit server replacement and verified restore, and authenticated deployment boundaries. Put an authenticated-isolation gate around Code Studio before treating it as suitable for untrusted snippets. Run these gates before selecting new features. Next, address long Notes editing, narrow forms, formula and file fidelity. Preserve the existing works-in-progress, record IDs, user-visible settings and historical data format compatibility. [Next development batch](11_NEXT_DEVELOPER_PROMPT.md) · [Owner recommendations](24_TOP_RECOMMENDATIONS_FOR_OWNER.md)
+
+The repository contained a README, an in-app changelog and guide, and Git release history. A standalone authoritative master specification and previous independent reports were unavailable in the checked locations. The matrix uses the audit brief's explicit feature list and labels repository claims by evidence level. [Coverage and requirements provenance](12_AUDIT_COVERAGE.md)
+
+## Where to read next
+
+- **Technical findings** · [Feature matrix](02_COMPLETE_FEATURE_MATRIX.md), [issue register](03_COMPLETE_ISSUE_REGISTER.md), [UI and screenshots](04_UI_UX_REVIEW.md), [performance](05_PERFORMANCE_AND_STABILITY.md), [storage and sync](06_STORAGE_AND_SYNCHRONIZATION.md), [security and privacy](07_SECURITY_AND_PRIVACY.md), [architecture](08_ARCHITECTURE_AND_CODE_QUALITY.md).
+- **Verification and repair** · [Test evidence](09_TEST_RESULTS_AND_EVIDENCE.md), [repair roadmap](10_PRIORITIZED_DEVELOPMENT_ROADMAP.md), [developer prompt](11_NEXT_DEVELOPER_PROMPT.md), [coverage](12_AUDIT_COVERAGE.md), [application scorecard](13_APPLICATION_SCORECARD.md).
+- **Product direction** · [Competitors](14_COMPETITOR_ANALYSIS.md), [feature catalog](15_COMPLETE_NEW_FEATURE_CATALOG.md), [existing feature improvements](16_EXISTING_FEATURE_EXPANSION.md), [integration map](17_FEATURE_INTEGRATION_MAP.md), [innovation](18_INNOVATION_AND_COMPETITIVE_ADVANTAGE.md), [mobile and desktop](19_MOBILE_AND_DESKTOP_PRODUCT_VISION.md), [feature scores](20_FEATURE_PRIORITY_SCORECARD.md), [expanded roadmap](21_EXPANDED_PRODUCT_ROADMAP.md), [workspace defaults](22_USER_TYPE_AND_WORKSPACE_ANALYSIS.md), [proposed spec additions](23_PROPOSED_MASTER_SPECIFICATION_ADDITIONS.md), [owner recommendations](24_TOP_RECOMMENDATIONS_FOR_OWNER.md).

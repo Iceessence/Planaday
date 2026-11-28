@@ -1,0 +1,146 @@
+[
+  {
+    "name": "01_EXECUTIVE_SUMMARY.md",
+    "bytes": 8298,
+    "digest": "da68e39c33630153503f693886a0d891b9e1a0ebd404b95d50de5b27edb83458",
+    "headings": 5
+  },
+  {
+    "name": "02_COMPLETE_FEATURE_MATRIX.md",
+    "bytes": 64595,
+    "digest": "ba2837015ce69844b2013b5cdb15d7c651adb5e5815a79a7d235bae3fa70b778",
+    "headings": 25
+  },
+  {
+    "name": "03_COMPLETE_ISSUE_REGISTER.md",
+    "bytes": 27213,
+    "digest": "044f1e94490b6616c935d251fc390dc5a014969ed68d55b6c47d956983246b6a",
+    "headings": 21
+  },
+  {
+    "name": "04_UI_UX_REVIEW.md",
+    "bytes": 5400,
+    "digest": "9ed7f95a227ece9762ebeec2787981f8156548b6e1fd86f4c5b1c7fc8be448f1",
+    "headings": 4
+  },
+  {
+    "name": "05_PERFORMANCE_AND_STABILITY.md",
+    "bytes": 5246,
+    "digest": "6e82f80160166112872ce2e2b71ccb0fca75bbcff43d62b1b9084d5d29bb504a",
+    "headings": 4
+  },
+  {
+    "name": "06_STORAGE_AND_SYNCHRONIZATION.md",
+    "bytes": 5587,
+    "digest": "457cc28354adb649f651e7c30720ec3b6d83f115912379f718145f149e5290a4",
+    "headings": 3
+  },
+  {
+    "name": "07_SECURITY_AND_PRIVACY.md",
+    "bytes": 6108,
+    "digest": "b0615ba2bb65e5c76a3c35a11e35c4fce74bc9901a983a26e2f798d688c65777",
+    "headings": 1
+  },
+  {
+    "name": "08_ARCHITECTURE_AND_CODE_QUALITY.md",
+    "bytes": 4530,
+    "digest": "8fffdc5f64ea08f9009e47e71918184f8a51d2cb5bc38c0c73fb267cb9a234a2",
+    "headings": 2
+  },
+  {
+    "name": "09_TEST_RESULTS_AND_EVIDENCE.md",
+    "bytes": 5849,
+    "digest": "60996ec92f6f8bef5d5b792353139a1342170237be8437f51c6187734eb11b56",
+    "headings": 4
+  },
+  {
+    "name": "10_PRIORITIZED_DEVELOPMENT_ROADMAP.md",
+    "bytes": 2971,
+    "digest": "90c5ce9e6a23039249fb22fc04745b30dd42129a756bf970a4eb80f9c4348520",
+    "headings": 1
+  },
+  {
+    "name": "11_NEXT_DEVELOPER_PROMPT.md",
+    "bytes": 3598,
+    "digest": "1abb2f0ee006c28297a23fca126a9d41e79fcfba8c54909b36ae0500d19772d9",
+    "headings": 2
+  },
+  {
+    "name": "12_AUDIT_COVERAGE.md",
+    "bytes": 6498,
+    "digest": "66bb31daeea52e8a06273226391b768c17963dfe5f054db457f9040cf62d6e32",
+    "headings": 2
+  },
+  {
+    "name": "13_APPLICATION_SCORECARD.md",
+    "bytes": 4846,
+    "digest": "99408cc2e769eb50df6b4703630c79c853312b0f55117db4ccd435623fff58cc",
+    "headings": 1
+  },
+  {
+    "name": "14_COMPETITOR_ANALYSIS.md",
+    "bytes": 23489,
+    "digest": "2699b29f14ce1bab5e60ac4e422a4230a732e5cf28256fd207eee4854d2857ba",
+    "headings": 12
+  },
+  {
+    "name": "15_COMPLETE_NEW_FEATURE_CATALOG.md",
+    "bytes": 99727,
+    "digest": "97667ef48a01c405e3adc6a72e30a9b8e2d8c1cb1327b6e70b82f6481b2b2118",
+    "headings": 52
+  },
+  {
+    "name": "16_EXISTING_FEATURE_EXPANSION.md",
+    "bytes": 7443,
+    "digest": "5ecba7dcfa1864d3ebf311f0fef9b33d2c54d8415afb335687e4ed28d670ee5f",
+    "headings": 1
+  },
+  {
+    "name": "17_FEATURE_INTEGRATION_MAP.md",
+    "bytes": 6331,
+    "digest": "59547b44e00e1b50404498ffc1e2a7af7a9ba59a6b17ec091ec948c1884511ac",
+    "headings": 1
+  },
+  {
+    "name": "18_INNOVATION_AND_COMPETITIVE_ADVANTAGE.md",
+    "bytes": 4621,
+    "digest": "e75a3f7376416032eb456019aabfeef0fdfe4a97421eab78a7cbc7a6f2e7a149",
+    "headings": 1
+  },
+  {
+    "name": "19_MOBILE_AND_DESKTOP_PRODUCT_VISION.md",
+    "bytes": 3268,
+    "digest": "277a4d1064e8a31f5cf034b50c9b798717b157df75abfaf47f95a12b7b0bd6c0",
+    "headings": 4
+  },
+  {
+    "name": "20_FEATURE_PRIORITY_SCORECARD.md",
+    "bytes": 16612,
+    "digest": "c94e3417e9d0273dab6c055b254ad480c5d65733fe2e66e02b2910ec00a45fd0",
+    "headings": 1
+  },
+  {
+    "name": "21_EXPANDED_PRODUCT_ROADMAP.md",
+    "bytes": 4883,
+    "digest": "fee43bbdc2976b95f6c006c8c007e3b215d254ae3a2da07ddfe0aedf9e2db804",
+    "headings": 2
+  },
+  {
+    "name": "22_USER_TYPE_AND_WORKSPACE_ANALYSIS.md",
+    "bytes": 5506,
+    "digest": "4192f71f5c2426621fe89312330f74a0ab5149f5583146dd56f027dd98a9ecfb",
+    "headings": 1
+  },
+  {
+    "name": "23_PROPOSED_MASTER_SPECIFICATION_ADDITIONS.md",
+    "bytes": 4842,
+    "digest": "26a47eb530a3b644b4340b2e3b93e01db0dc86882c8aa140babd7734d860cb77",
+    "headings": 2
+  },
+  {
+    "name": "24_TOP_RECOMMENDATIONS_FOR_OWNER.md",
+    "bytes": 22838,
+    "digest": "5a40a0a771e6d07b33ea3f4b75dc479eb2c5ccc902a0acaf067a57a219fa5991",
+    "headings": 7
+  }
+]

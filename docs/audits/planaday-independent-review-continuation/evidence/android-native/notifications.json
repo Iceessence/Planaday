@@ -1,0 +1,213 @@
+{
+  "phase": "notifications",
+  "os": "15",
+  "ime": "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME",
+  "checks": [
+    {
+      "id": "AN-001",
+      "status": "pass",
+      "details": {
+        "native": true,
+        "platform": "android",
+        "notifications": true,
+        "origin": "http://localhost",
+        "dpr": 2.625,
+        "viewport": [
+          412,
+          915
+        ],
+        "agent": "Mozilla/5.0 (Linux; Android 15; sdk_gphone64_x86_64 Build/AE3A.240806.043; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Mobile Safari/537.36"
+      }
+    },
+    {
+      "id": "AN-006A",
+      "status": "pass",
+      "details": {
+        "timerId": "tmr_b47cb9d5-aa61-44ac-89c3-66ac03dfa261",
+        "permissions": {
+          "display": "granted"
+        },
+        "exact": {
+          "exact_alarm": "granted"
+        },
+        "pending": {
+          "notifications": [
+            {
+              "id": 1344630038,
+              "title": "Timer Done: Synthetic Foreground",
+              "body": "Your Planaday timer \"Synthetic Foreground\" finished!",
+              "schedule": {
+                "at": "Tue Nov 24 17:33:56 PST 2026",
+                "count": 1,
+                "repeats": false
+              }
+            }
+          ]
+        },
+        "visibleNativeNotificationRecords": [
+          "NotificationRecord(0x0300018e: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=1344630038 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|1344630038|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))"
+        ]
+      }
+    },
+    {
+      "id": "AN-006B",
+      "status": "pass",
+      "details": {
+        "timerId": "tmr_b57da388-a18c-4025-bcff-d13185044358",
+        "permissions": {
+          "display": "granted"
+        },
+        "exact": {
+          "exact_alarm": "granted"
+        },
+        "pending": {
+          "notifications": [
+            {
+              "id": 27158552,
+              "title": "Timer Done: Synthetic Home",
+              "body": "Your Planaday timer \"Synthetic Home\" finished!",
+              "schedule": {
+                "at": "Tue Nov 24 17:34:11 PST 2026",
+                "count": 1,
+                "repeats": false
+              }
+            }
+          ]
+        },
+        "visibleNativeNotificationRecords": [
+          "NotificationRecord(0x0dad4a81: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=2147483647 tag=ranker_group importance=3 key=0|org.planaday.audit.d82bdc7|2147483647|ranker_group|10209|ranker_group: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=AUTO_CANCEL|LOCAL_ONLY|GROUP_SUMMARY|AUTOGROUP_SUMMARY color=0xffa97434 groupKey=ranker_group vis=PRIVATE))",
+          "NotificationRecord(0x063d9114: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=27158552 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|27158552|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))",
+          "NotificationRecord(0x0300018e: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=1344630038 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|1344630038|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))"
+        ]
+      }
+    },
+    {
+      "id": "AN-006C",
+      "status": "pass",
+      "details": {
+        "timerId": "tmr_cd670bea-ba4b-4368-9e55-0467f9a169b4",
+        "permissions": {
+          "display": "granted"
+        },
+        "exact": {
+          "exact_alarm": "granted"
+        },
+        "pending": {
+          "notifications": [
+            {
+              "id": 323705606,
+              "title": "Timer Done: Synthetic Locked",
+              "body": "Your Planaday timer \"Synthetic Locked\" finished!",
+              "schedule": {
+                "at": "Tue Nov 24 17:34:26 PST 2026",
+                "count": 1,
+                "repeats": false
+              }
+            }
+          ]
+        },
+        "visibleNativeNotificationRecords": [
+          "NotificationRecord(0x03fc852b: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=323705606 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|323705606|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))",
+          "NotificationRecord(0x0dad4a81: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=2147483647 tag=ranker_group importance=3 key=0|org.planaday.audit.d82bdc7|2147483647|ranker_group|10209|ranker_group: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=AUTO_CANCEL|LOCAL_ONLY|GROUP_SUMMARY|AUTOGROUP_SUMMARY color=0xffa97434 groupKey=ranker_group vis=PRIVATE))",
+          "NotificationRecord(0x063d9114: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=27158552 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|27158552|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))",
+          "NotificationRecord(0x0300018e: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=1344630038 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|1344630038|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))"
+        ]
+      }
+    }
+  ],
+  "bridge": {
+    "native": true,
+    "platform": "android",
+    "notifications": true,
+    "origin": "http://localhost",
+    "dpr": 2.625,
+    "viewport": [
+      412,
+      915
+    ],
+    "agent": "Mozilla/5.0 (Linux; Android 15; sdk_gphone64_x86_64 Build/AE3A.240806.043; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Mobile Safari/537.36"
+  },
+  "AN-006A": {
+    "timerId": "tmr_b47cb9d5-aa61-44ac-89c3-66ac03dfa261",
+    "permissions": {
+      "display": "granted"
+    },
+    "exact": {
+      "exact_alarm": "granted"
+    },
+    "pending": {
+      "notifications": [
+        {
+          "id": 1344630038,
+          "title": "Timer Done: Synthetic Foreground",
+          "body": "Your Planaday timer \"Synthetic Foreground\" finished!",
+          "schedule": {
+            "at": "Tue Nov 24 17:33:56 PST 2026",
+            "count": 1,
+            "repeats": false
+          }
+        }
+      ]
+    },
+    "visibleNativeNotificationRecords": [
+      "NotificationRecord(0x0300018e: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=1344630038 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|1344630038|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))"
+    ]
+  },
+  "AN-006B": {
+    "timerId": "tmr_b57da388-a18c-4025-bcff-d13185044358",
+    "permissions": {
+      "display": "granted"
+    },
+    "exact": {
+      "exact_alarm": "granted"
+    },
+    "pending": {
+      "notifications": [
+        {
+          "id": 27158552,
+          "title": "Timer Done: Synthetic Home",
+          "body": "Your Planaday timer \"Synthetic Home\" finished!",
+          "schedule": {
+            "at": "Tue Nov 24 17:34:11 PST 2026",
+            "count": 1,
+            "repeats": false
+          }
+        }
+      ]
+    },
+    "visibleNativeNotificationRecords": [
+      "NotificationRecord(0x0dad4a81: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=2147483647 tag=ranker_group importance=3 key=0|org.planaday.audit.d82bdc7|2147483647|ranker_group|10209|ranker_group: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=AUTO_CANCEL|LOCAL_ONLY|GROUP_SUMMARY|AUTOGROUP_SUMMARY color=0xffa97434 groupKey=ranker_group vis=PRIVATE))",
+      "NotificationRecord(0x063d9114: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=27158552 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|27158552|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))",
+      "NotificationRecord(0x0300018e: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=1344630038 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|1344630038|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))"
+    ]
+  },
+  "AN-006C": {
+    "timerId": "tmr_cd670bea-ba4b-4368-9e55-0467f9a169b4",
+    "permissions": {
+      "display": "granted"
+    },
+    "exact": {
+      "exact_alarm": "granted"
+    },
+    "pending": {
+      "notifications": [
+        {
+          "id": 323705606,
+          "title": "Timer Done: Synthetic Locked",
+          "body": "Your Planaday timer \"Synthetic Locked\" finished!",
+          "schedule": {
+            "at": "Tue Nov 24 17:34:26 PST 2026",
+            "count": 1,
+            "repeats": false
+          }
+        }
+      ]
+    },
+    "visibleNativeNotificationRecords": [
+      "NotificationRecord(0x03fc852b: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=323705606 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|323705606|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))",
+      "NotificationRecord(0x0dad4a81: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=2147483647 tag=ranker_group importance=3 key=0|org.planaday.audit.d82bdc7|2147483647|ranker_group|10209|ranker_group: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=AUTO_CANCEL|LOCAL_ONLY|GROUP_SUMMARY|AUTOGROUP_SUMMARY color=0xffa97434 groupKey=ranker_group vis=PRIVATE))",
+      "NotificationRecord(0x063d9114: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=27158552 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|27158552|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))",
+      "NotificationRecord(0x0300018e: pkg=org.planaday.audit.d82bdc7 user=UserHandle{0} id=1344630038 tag=null importance=3 key=0|org.planaday.audit.d82bdc7|1344630038|null|10209: Notification(channel=default shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONLY_ALERT_ONCE|AUTO_CANCEL color=0xffa97434 vis=PRIVATE))"
+    ]
+  }
+}

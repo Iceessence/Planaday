@@ -1,0 +1,253 @@
+{
+  "engine": "158.0.8127.88",
+  "sizes": [
+    {
+      "words": 100,
+      "target": 100,
+      "loadMs": 141.96499999999992,
+      "length": 699,
+      "edits": [
+        {
+          "place": 0,
+          "ms": 7.780899999999974,
+          "pos": 1,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 349,
+          "ms": 5.774199999999837,
+          "pos": 350,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 699,
+          "ms": 5.215400000000045,
+          "pos": 700,
+          "at": "X",
+          "scroll": 246
+        }
+      ],
+      "outbox": 1,
+      "heap": {
+        "usedSize": 15263540,
+        "totalSize": 20881408,
+        "embedderHeapUsedSize": 17461256,
+        "backingStorageSize": 3006774
+      },
+      "status": "pass"
+    },
+    {
+      "words": 1000,
+      "target": 1000,
+      "loadMs": 128.85959999999977,
+      "length": 6999,
+      "edits": [
+        {
+          "place": 0,
+          "ms": 5.750100000000202,
+          "pos": 1,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 3499,
+          "ms": 5.464199999999892,
+          "pos": 3500,
+          "at": "X",
+          "scroll": 2486
+        },
+        {
+          "place": 6999,
+          "ms": 5.968499999999949,
+          "pos": 7000,
+          "at": "X",
+          "scroll": 5286
+        }
+      ],
+      "outbox": 1,
+      "heap": {
+        "usedSize": 21347872,
+        "totalSize": 31219712,
+        "embedderHeapUsedSize": 26883568,
+        "backingStorageSize": 4529053
+      },
+      "status": "pass"
+    },
+    {
+      "words": 10000,
+      "target": 10000,
+      "loadMs": 134.11000000000013,
+      "length": 69999,
+      "edits": [
+        {
+          "place": 0,
+          "ms": 8.7192,
+          "pos": 1,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 34999,
+          "ms": 8.611100000000079,
+          "pos": 35000,
+          "at": "X",
+          "scroll": 27686
+        },
+        {
+          "place": 69999,
+          "ms": 8.36869999999999,
+          "pos": 70000,
+          "at": "X",
+          "scroll": 55686
+        }
+      ],
+      "outbox": 1,
+      "heap": {
+        "usedSize": 21770920,
+        "totalSize": 36315136,
+        "embedderHeapUsedSize": 19220504,
+        "backingStorageSize": 2486681
+      },
+      "status": "pass"
+    },
+    {
+      "words": 25000,
+      "target": 25000,
+      "loadMs": 157.95669999999973,
+      "length": 174999,
+      "edits": [
+        {
+          "place": 0,
+          "ms": 16.16489999999976,
+          "pos": 1,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 87499,
+          "ms": 12.60320000000047,
+          "pos": 87500,
+          "at": "X",
+          "scroll": 69686
+        },
+        {
+          "place": 174999,
+          "ms": 20.46649999999954,
+          "pos": 175000,
+          "at": "X",
+          "scroll": 139686
+        }
+      ],
+      "outbox": 1,
+      "heap": {
+        "usedSize": 23508088,
+        "totalSize": 51232768,
+        "embedderHeapUsedSize": 16669600,
+        "backingStorageSize": 2808725
+      },
+      "status": "pass"
+    },
+    {
+      "words": 50000,
+      "target": 50000,
+      "loadMs": 205.14650000000074,
+      "length": 349999,
+      "edits": [
+        {
+          "place": 0,
+          "ms": 28.2466000000004,
+          "pos": 1,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 174999,
+          "ms": 21.681099999999788,
+          "pos": 175000,
+          "at": "X",
+          "scroll": 139686
+        },
+        {
+          "place": 349999,
+          "ms": 24.278700000000754,
+          "pos": 350000,
+          "at": "X",
+          "scroll": 279686
+        }
+      ],
+      "outbox": 1,
+      "heap": {
+        "usedSize": 35020240,
+        "totalSize": 70254592,
+        "embedderHeapUsedSize": 85657136,
+        "backingStorageSize": 5282364
+      },
+      "status": "pass"
+    },
+    {
+      "words": 100000,
+      "target": 100000,
+      "loadMs": 295.84299999999985,
+      "length": 699999,
+      "edits": [
+        {
+          "place": 0,
+          "ms": 45.652000000000044,
+          "pos": 1,
+          "at": "X",
+          "scroll": 0
+        },
+        {
+          "place": 349999,
+          "ms": 43.46640000000025,
+          "pos": 350000,
+          "at": "X",
+          "scroll": 279686
+        },
+        {
+          "place": 699999,
+          "ms": 46.31739999999991,
+          "pos": 700000,
+          "at": "X",
+          "scroll": 559686
+        }
+      ],
+      "outbox": 1,
+      "heap": {
+        "usedSize": 41906432,
+        "totalSize": 85774336,
+        "embedderHeapUsedSize": 133292672,
+        "backingStorageSize": 6891662
+      },
+      "status": "pass"
+    }
+  ],
+  "inputControls": [
+    {
+      "words": 1000,
+      "bytes": 6200,
+      "bare": 34.91849999999977,
+      "bareChars": 6200,
+      "app": 114.88550000000032,
+      "appChars": 6200
+    },
+    {
+      "words": 10000,
+      "bytes": 62000,
+      "bare": 2707.7382,
+      "bareChars": 62000,
+      "app": 4389.345599999999,
+      "appChars": 62000
+    },
+    {
+      "words": 25000,
+      "bytes": 155000,
+      "bare": 22333.8109,
+      "bareChars": 155000,
+      "app": 28223.3269,
+      "appChars": 155000
+    }
+  ]
+}
