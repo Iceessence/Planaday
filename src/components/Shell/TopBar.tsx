@@ -44,6 +44,8 @@ const VIEW_TITLES: Record<NavView, string> = {
   whiteboard: 'Infinite Whiteboard',
   code_studio: 'Code Sandbox',
   photo_studio: 'Photo Studio',
+  scanner: 'Note Scanner & OCR',
+  pdf_studio: 'PDF Reader & Editor',
   files: 'Universal Files',
   events: 'Life Events',
   notes: 'Notes',

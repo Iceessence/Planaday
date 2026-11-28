@@ -23,6 +23,8 @@ const DOC_TYPES: RecordType[] = [
   'whiteboard',
   'code_project',
   'photo_asset',
+  'pdf_doc',
+  'scanned_doc',
   'calc_saved',
   'lab_sample',
   'lab_research',
@@ -42,6 +44,8 @@ const TYPE_TO_VIEW: Partial<Record<RecordType, NavView>> = {
   whiteboard: 'whiteboard',
   code_project: 'code_studio',
   photo_asset: 'photo_studio',
+  pdf_doc: 'pdf_studio',
+  scanned_doc: 'scanner',
   calc_saved: 'calculator',
   lab_sample: 'lab',
   lab_research: 'lab',
@@ -53,7 +57,7 @@ interface FolderPayload {
 }
 
 export const FileManagerView: React.FC = () => {
-  const { records, setActiveView, setSelectedNoteId, pushToast } = useApp();
+  const { records, setActiveView, setSelectedNoteId, openPdfInStudio, pushToast } = useApp();
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState<'all' | 'personal' | 'lab' | 'favorites' | 'archived'>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -97,6 +101,10 @@ export const FileManagerView: React.FC = () => {
 
   const openDocument = (rec: LifeRecord) => {
     if (rec.type === 'note') setSelectedNoteId(rec.id);
+    if (rec.type === 'pdf_doc') {
+      openPdfInStudio(rec.id);
+      return;
+    }
     const target = TYPE_TO_VIEW[rec.type] ?? 'home';
     setActiveView(target);
   };
@@ -126,6 +134,12 @@ export const FileManagerView: React.FC = () => {
               {label}
             </button>
           ))}
+          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('pdf_studio')}>
+            📕 PDF Studio
+          </button>
+          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('scanner')}>
+            📷 Scan Note
+          </button>
         </div>
       </div>
 

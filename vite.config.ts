@@ -28,8 +28,8 @@ function planadayOfflineManifestPlugin(): Plugin {
       };
       walk(distDir);
       const manifest = {
-        version: '4.1.0',
-        buildId: `planaday-4.1.0-${Date.now().toString(36)}`,
+        version: '4.2.0',
+        buildId: `planaday-4.2.0-${Date.now().toString(36)}`,
         generatedAt: new Date().toISOString(),
         assets: Array.from(assets).sort(),
       };
@@ -47,64 +47,74 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'dexie', 'dexie-react-hooks', 'lucide-react'],
-          archive: ['fflate'],
-          plan: [
-            './src/modules/plan/HomeDashboard.tsx',
-            './src/modules/plan/QuickGlanceView.tsx',
-            './src/modules/plan/TodaySpread.tsx',
-            './src/modules/plan/FlowCalendarView.tsx',
-            './src/modules/plan/TaskCalendarView.tsx',
-            './src/modules/plan/PeriodPlannerView.tsx',
-            './src/modules/plan/TasksView.tsx',
-            './src/modules/plan/ChoresView.tsx',
-            './src/modules/plan/GoalsHabitsView.tsx',
-          ],
-          lab: [
-            './src/modules/lab/LabWorkspaceView.tsx',
-            './src/modules/lab/LabWetNirView.tsx',
-          ],
-          digitalPlanner: [
-            './src/modules/planner/DigitalPlannerView.tsx',
-            './src/modules/life/ReportsView.tsx',
-          ],
-          mathOffice: [
-            './src/modules/studio/CalculatorView.tsx',
-            './src/modules/studio/SpreadsheetView.tsx',
-            './src/modules/studio/PresentationView.tsx',
-          ],
-          creativeStudios: [
-            './src/modules/creative/ProjectsView.tsx',
-            './src/modules/creative/GameDevView.tsx',
-            './src/modules/creative/BookStudioView.tsx',
-          ],
-          visualCodeMedia: [
-            './src/modules/studio/KanbanView.tsx',
-            './src/modules/studio/WhiteboardView.tsx',
-            './src/modules/studio/CodeStudioView.tsx',
-            './src/modules/studio/PhotoStudioView.tsx',
-            './src/modules/studio/FileManagerView.tsx',
-          ],
-          mindTime: [
-            './src/modules/mind/NotesView.tsx',
-            './src/modules/mind/ThoughtInboxView.tsx',
-            './src/modules/mind/DiaryView.tsx',
-            './src/modules/mind/LifeEventsView.tsx',
-            './src/modules/time/TimeSuiteView.tsx',
-            './src/modules/time/ZenSheetOverlay.tsx',
-          ],
-          kitchenLife: [
-            './src/modules/kitchen/RecipesView.tsx',
-            './src/modules/kitchen/PantryView.tsx',
-            './src/modules/kitchen/MealsView.tsx',
-            './src/modules/kitchen/GroceryView.tsx',
-            './src/modules/life/HouseholdHealthView.tsx',
-            './src/modules/life/FinanceView.tsx',
-            './src/modules/life/LearningMediaView.tsx',
-            './src/modules/life/TravelPeopleHomeView.tsx',
-            './src/modules/life/StudioExtrasView.tsx',
-          ],
+        manualChunks(id) {
+          const norm = id.replace(/\\/g, '/');
+          if (norm.includes('/node_modules/')) {
+            if (norm.includes('/pdf-lib/') || norm.includes('/pdfjs-dist/')) return 'pdfEngine';
+            if (norm.includes('/tesseract.js/')) return 'ocrEngine';
+            if (norm.includes('/fflate/')) return 'archive';
+            if (
+              norm.includes('/react/') ||
+              norm.includes('/react-dom/') ||
+              norm.includes('/scheduler/') ||
+              norm.includes('/dexie/') ||
+              norm.includes('/dexie-react-hooks/')
+            ) {
+              return 'vendor';
+            }
+            return undefined;
+          }
+          // Isolate heavy on-demand studios FIRST before shared core matching
+          if (
+            norm.includes('/src/components/Settings/SettingsView.tsx') ||
+            norm.includes('/src/components/Settings/TrashView.tsx') ||
+            norm.includes('/src/core/backup.ts')
+          ) {
+            return 'settings';
+          }
+          if (norm.includes('/src/modules/studio/PdfStudioView.tsx') || norm.includes('/src/core/pdfEngine.ts')) {
+            return 'pdfStudio';
+          }
+          if (norm.includes('/src/modules/studio/DocumentScannerView.tsx') || norm.includes('/src/core/documentScanner.ts')) {
+            return 'scannerStudio';
+          }
+          if (
+            norm.includes('/src/core/mathEngine.ts') ||
+            norm.includes('/src/core/spreadsheetEngine.ts') ||
+            norm.includes('/src/modules/studio/CalculatorView.tsx') ||
+            norm.includes('/src/modules/studio/SpreadsheetView.tsx') ||
+            norm.includes('/src/modules/studio/PresentationView.tsx')
+          ) {
+            return 'mathOffice';
+          }
+          if (
+            norm.includes('/src/core/') ||
+            norm.includes('/src/components/Common/') ||
+            norm.includes('/src/components/Shell/') ||
+            norm.includes('/src/components/Decor/') ||
+            norm.includes('/src/components/Settings/OnboardingModal.tsx') ||
+            norm.includes('/src/modules/plan/TodaySpread.tsx') ||
+            norm.includes('/src/modules/time/ZenSheetOverlay.tsx') ||
+            norm.includes('/src/data/')
+          ) {
+            return 'appCore';
+          }
+          if (norm.includes('/src/modules/lab/')) return 'lab';
+          if (norm.includes('/src/modules/planner/') || norm.includes('/src/modules/life/ReportsView.tsx')) {
+            return 'digitalPlanner';
+          }
+          if (norm.includes('/src/modules/creative/')) return 'creativeStudios';
+          if (norm.includes('/src/modules/studio/')) return 'visualCodeMedia';
+          if (norm.includes('/src/modules/plan/') && !norm.includes('/src/modules/plan/TodaySpread.tsx')) {
+            return 'calendarPlan';
+          }
+          if (norm.includes('/src/modules/mind/') || norm.includes('/src/modules/time/TimeSuiteView.tsx')) {
+            return 'mindTime';
+          }
+          if (norm.includes('/src/modules/kitchen/') || norm.includes('/src/modules/life/')) {
+            return 'kitchenLife';
+          }
+          return undefined;
         },
       },
     },

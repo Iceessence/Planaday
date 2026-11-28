@@ -1,32 +1,33 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink, Layers } from 'lucide-react';
 import { useApp } from '../../core/AppContext';
 import { TodaySpread } from '../plan/TodaySpread';
-import { HomeDashboard } from '../plan/HomeDashboard';
-import { FlowCalendarView } from '../plan/FlowCalendarView';
-import { PeriodPlannerView } from '../plan/PeriodPlannerView';
-import { TasksView } from '../plan/TasksView';
-import { ChoresView } from '../plan/ChoresView';
-import { GoalsHabitsView } from '../plan/GoalsHabitsView';
-import { NotesView } from '../mind/NotesView';
-import { ThoughtInboxView } from '../mind/ThoughtInboxView';
-import { DiaryView } from '../mind/DiaryView';
-import { LifeEventsView } from '../mind/LifeEventsView';
-import { TimeSuiteView } from '../time/TimeSuiteView';
-import { RecipesView } from '../kitchen/RecipesView';
-import { PantryView } from '../kitchen/PantryView';
-import { MealsView } from '../kitchen/MealsView';
-import { GroceryView } from '../kitchen/GroceryView';
-import { HouseholdHealthView } from './HouseholdHealthView';
-import { FinanceView } from './FinanceView';
-import { LearningMediaView } from './LearningMediaView';
-import { TravelPeopleHomeView } from './TravelPeopleHomeView';
-import { StudioExtrasView } from './StudioExtrasView';
-import { HistoryView } from './HistoryView';
-import { GuideView } from './GuideView';
-import { CustomTabView } from './CustomTabView';
 import { DecorCanvasOverlay } from '../../components/Decor/DecorCanvas';
 import type { ModuleId, NavView } from '../../core/types';
+
+const HomeDashboard = lazy(() => import('../plan/HomeDashboard').then((m) => ({ default: m.HomeDashboard })));
+const FlowCalendarView = lazy(() => import('../plan/FlowCalendarView').then((m) => ({ default: m.FlowCalendarView })));
+const PeriodPlannerView = lazy(() => import('../plan/PeriodPlannerView').then((m) => ({ default: m.PeriodPlannerView })));
+const TasksView = lazy(() => import('../plan/TasksView').then((m) => ({ default: m.TasksView })));
+const ChoresView = lazy(() => import('../plan/ChoresView').then((m) => ({ default: m.ChoresView })));
+const GoalsHabitsView = lazy(() => import('../plan/GoalsHabitsView').then((m) => ({ default: m.GoalsHabitsView })));
+const NotesView = lazy(() => import('../mind/NotesView').then((m) => ({ default: m.NotesView })));
+const ThoughtInboxView = lazy(() => import('../mind/ThoughtInboxView').then((m) => ({ default: m.ThoughtInboxView })));
+const DiaryView = lazy(() => import('../mind/DiaryView').then((m) => ({ default: m.DiaryView })));
+const LifeEventsView = lazy(() => import('../mind/LifeEventsView').then((m) => ({ default: m.LifeEventsView })));
+const TimeSuiteView = lazy(() => import('../time/TimeSuiteView').then((m) => ({ default: m.TimeSuiteView })));
+const RecipesView = lazy(() => import('../kitchen/RecipesView').then((m) => ({ default: m.RecipesView })));
+const PantryView = lazy(() => import('../kitchen/PantryView').then((m) => ({ default: m.PantryView })));
+const MealsView = lazy(() => import('../kitchen/MealsView').then((m) => ({ default: m.MealsView })));
+const GroceryView = lazy(() => import('../kitchen/GroceryView').then((m) => ({ default: m.GroceryView })));
+const HouseholdHealthView = lazy(() => import('./HouseholdHealthView').then((m) => ({ default: m.HouseholdHealthView })));
+const FinanceView = lazy(() => import('./FinanceView').then((m) => ({ default: m.FinanceView })));
+const LearningMediaView = lazy(() => import('./LearningMediaView').then((m) => ({ default: m.LearningMediaView })));
+const TravelPeopleHomeView = lazy(() => import('./TravelPeopleHomeView').then((m) => ({ default: m.TravelPeopleHomeView })));
+const StudioExtrasView = lazy(() => import('./StudioExtrasView').then((m) => ({ default: m.StudioExtrasView })));
+const HistoryView = lazy(() => import('./HistoryView').then((m) => ({ default: m.HistoryView })));
+const GuideView = lazy(() => import('./GuideView').then((m) => ({ default: m.GuideView })));
+const CustomTabView = lazy(() => import('./CustomTabView').then((m) => ({ default: m.CustomTabView })));
 
 interface ScrollSectionDef {
   id: string;
@@ -39,6 +40,7 @@ interface ScrollSectionDef {
 /**
  * All-in-One Scroll View: Every single enabled tab stacked on one continuous scrollable page
  * with a sticky quick-jump pill bar and individual collapse/expand controls.
+ * Sections lazy-load their own chunks so cold boot stays ultra-fast (v4.2.0 §2).
  */
 export const AllInOneView: React.FC = () => {
   const { settings, isModuleEnabled, setActiveView } = useApp();
@@ -94,7 +96,6 @@ export const AllInOneView: React.FC = () => {
 
   return (
     <div className="dp-stack" style={{ gap: 20 }}>
-      {/* Sticky Quick-Jump Bar */}
       <div
         className="dp-card dp-stack dp-no-print"
         style={{ position: 'sticky', top: 56, zIndex: 12, padding: 12, gap: 8 }}
@@ -132,7 +133,6 @@ export const AllInOneView: React.FC = () => {
         </div>
       </div>
 
-      {/* Stacked Live Modules */}
       {visibleSections.map((sec) => {
         const isClosed = Boolean(collapsed[sec.id]);
         return (
@@ -155,7 +155,11 @@ export const AllInOneView: React.FC = () => {
                 <ExternalLink size={13} /> Open Dedicated Tab
               </button>
             </div>
-            {!isClosed && sec.render()}
+            {!isClosed && (
+              <Suspense fallback={<div className="dp-card" style={{ padding: 14 }}>Loading {sec.label}…</div>}>
+                {sec.render()}
+              </Suspense>
+            )}
           </section>
         );
       })}
