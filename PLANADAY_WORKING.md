@@ -1,12 +1,30 @@
 # PLANADAY — Active Working Ledger (`PLANADAY_WORKING.md`)
 
-**Last Updated:** 2026-11-27
-**Base Audited Revision:** `d82bdc73742e8982732b5e73d3c44d63e805d842` (Planaday `4.0.0`) → `bd96a55` (`4.1.0`)
-**Current Completed Checkpoint:** Planaday `4.2.0` — All 8 Directive Batches Complete (`14/14` test files, **`186/186` automated tests PASS**; `26/28` audit issues developer-verified; `2/28` production host items waiting on owner authorization; 100k-record search **`14.32 ms` p95**; cold-boot JS **−39.1% raw / −34.0% gzip**)
+**Last Updated:** 2026-11-28
+**Base Audited Revision:** `d82bdc73742e8982732b5e73d3c44d63e805d842` (`4.0.0`) → `bd96a55` (`4.1.0`) → `f3f57d3` (`4.2.0` pre-integration)
+**Current Active Branch:** `integrate/final-upgrade-package` (recoverable backup tag `backup/pre-final-upgrade-f3f57d3` + git bundle)
+**Current Completed Checkpoint:** Planaday `4.2.0` Post-108-File Integration, Optimization & Security Hardening Pass — **`108/108` files integrated** (`90` byte-exact, `18` merged/refined, `0` skipped), **`219/219` validation runner checks PASS**, **`15/15` Vitest files / `191/191` tests PASS**, cold-boot eager JS **`624.2 KB` raw / `187.8 KB` gz** (`−22.6%` vs. `f3f57d3`, `−52.9%` vs. `v4.1.0`), 100k-record search **`15.50 ms` p95**, incremental 4,200-cell spreadsheet single-edit **`6.02 ms` p95 (`−72.9%`)**.
 
 ---
 
-## Completed Checkpoint Summary (Planaday `4.2.0` — 2026-11-27)
+## Completed Checkpoint Summary (108-File Integration, Performance & Hardening — 2026-11-28)
+
+1. **Safe Baseline, Backup & 108-File Integration (`PLANADAY_INTEGRATION_MANIFEST.md`):**
+   - Verified `108/108` archive candidate SHA-256 hashes against `UPGRADE_MANIFEST.json` (`106` matched `f3f57d3` byte-for-byte, `1` EOL-only match, `1` new `src/components/Common/viewSafety.ts`, `0` diverged).
+   - Resolved 5 integration regressions + 1 native dialog violation (`labStats.ts` exact `pearsonR = 1.0`, `sync.ts`/`weather.ts` cross-realm `AbortSignal` fallback, `HouseholdHealthView.tsx` `${pills} doses left`, `SpreadsheetView.tsx` accessible `ModalDialog`, unified `4.2.0` changelog version).
+2. **Deep Performance & Bundle Optimization (`PLANADAY_PERFORMANCE_AUDIT.md`):**
+   - Split `AppProvider` into isolated `ToastProvider` + `SyncStateProvider` + memoized `AppCoreProvider` with stable domain slices and `React.memo` shell (`0` extra renders on `useApp()` during activity heartbeats & toasts).
+   - Lazy-loaded `DecorCanvasOverlay` + tightened `vite.config.ts` `manualChunks(id)` (`appCore` `284.5 KB`, `todaySpread`, `decor`, `studioShared`, `0` circular chunks, `624.2 KB` raw / `187.8 KB` gz eager boot JS).
+   - Added `IncrementalWorkbookEvaluator` (`spreadsheetEngine.ts` + `SpreadsheetView.tsx`) cutting 4,200-cell single-edit `p95` by `−72.9%` (`22.23 ms` → `6.02 ms`).
+   - Eliminated off-page `SearchHit`/snippet allocations in `searchIndex.ts`, kept PDF.js workers alive across page/zoom navigation in `PdfStudioView.tsx`, fixed `extractPdfTextByPage` cleanup leak in `pdfEngine.ts`, and upgraded `public/sw.js` (`activate` cache cleanup + Network-First navigations).
+3. **Server, Sync, Desktop & GPU Security Hardening:**
+   - Closed workspace push/record-hijack bypasses (`server/index.ts`, `server/db.ts`), restricted `?token=` to SSE `/api/sync/events`, made pairing redemption atomic (`server/auth.ts`), added per-IP auth rate limiting (`429`), closed IPv4-mapped IPv6/NAT64 SSRF bypasses (`server/outboundPolicy.ts`), enforced static directory containment (`desktop/main.cjs`), upgraded `gpu-service/Dockerfile` to CUDA `12.8.1` (Blackwell `sm_120`), hardened `gpu-service/app.py` (constant-time auth, image caps, cached `PaddleOCR`, `asyncio.to_thread` offload, VRAM fraction cap), and hardened `server/gpuBridge.ts`.
+4. **Expanded Verification (`PLANADAY_TEST_RESULTS.md`):**
+   - Added `tests/integration-optimization-v42.test.tsx` (5 tests) and expanded `tests/ui-smoke.test.tsx` (36 views). Passed `typecheck`, `219/219` 4-runner checks, `191/191` Vitest tests, `py_compile`, `docker compose config`, and `build`.
+
+---
+
+## Completed Checkpoint Summary (Planaday `4.2.0` Initial Build — 2026-11-27)
 
 1. **§2 Comprehensive Performance Overhaul (DONE — Measured & Verified):**
    - Lazy-loaded all 28+ non-initial views in `src/App.tsx` and `src/modules/life/AllInOneView.tsx` + refactored `vite.config.ts` to function-based `manualChunks(id)` isolating `appCore`, `vendor`, `pdfEngine`, `ocrEngine`, `pdfStudio`, `scannerStudio`, and all studio chunks (zero lazy chunks preloaded on cold boot; eager boot JS dropped `1.32 MB` → `806.1 KB` raw / `249.8 KB` gzip!).

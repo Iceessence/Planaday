@@ -1,71 +1,77 @@
 # PLANADAY — Performance Investigation & Optimization Audit (`PLANADAY_PERFORMANCE_AUDIT.md`)
 
-**Release:** Planaday `4.2.0`  
-**Date:** 2026-11-27  
-**Baseline Audited Revision:** `4.1.0` (`bd96a55`)  
-**Methodology:** Measured before-and-after profiling across production Vite bundles (`dist/`), Node/Vitest 100,000-record search & IndexedDB CRUD benchmarks (`tests/performance-benchmarks.test.ts`), and static/runtime hot-path analysis — with **zero features removed**.
+**Release:** Planaday `4.2.0` (Post-108-File Integration & Deep Optimization Pass)  
+**Date:** 2026-11-28  
+**Integration Branch:** `integrate/final-upgrade-package` (branched from `f3f57d3e44f784b28636d861fd8cb1f8e121f68a`; prior baseline `v4.1.0` `bd96a55`)  
+**Methodology:** Reproducible before-and-after measurements across production Vite builds (`dist/`), isolated microbenchmarks (1k/10k/50k search, 4,200-cell 2-sheet spreadsheet recalc, 300-task scheduler), Vitest 100,000-record search & IndexedDB CRUD benchmarks (`tests/performance-benchmarks.test.ts`), and React DOM subscription isolation tests (`tests/integration-optimization-v42.test.tsx`) — with **zero features removed**.
 
 ---
 
-## 1. Root Causes Identified Before Optimization (`v4.1.0` Baseline)
+## 1. Bottlenecks Identified & Resolved
 
-Profiling revealed **5 concrete bottlenecks** — none caused by hardware limits or requiring feature removal:
-
-1. **Over-Eager Cold-Boot Bundle Loading (`src/App.tsx`, `src/modules/life/AllInOneView.tsx`, `vite.config.ts`):**
-   - `App.tsx` eagerly imported 27 views (Calendar, Tasks, Chores, Notes, Diary, Kitchen, Finance, Settings, AllInOneView, etc.), and object-form Rollup `manualChunks` caused static reverse imports into `plan`, `mindTime`, and `kitchenLife`.
-   - **Measured BEFORE (`v4.1.0`):** `1,324,578` bytes raw (`~378.6 KB` gzip) of JS parsed eagerly on cold startup.
-2. **Unthrottled 1-Second Full-Record Scans in `AppContext.tsx`:**
-   - The notification timer ran `window.setInterval(..., 1000)` unconditionally, executing **4 full `records.filter(...)` passes every single second** (for alarms, events, chores, medications) even with zero running countdown timers and even though alarms/events/chores/meds only trigger on minute (`HH:MM`) boundaries.
-3. **Linear O(N) Unindexed Search (`src/core/search.ts`):**
-   - `fuzzySearchRecords` serialized/extracted text and ran regex word splits + Damerau-Levenshtein comparisons linearly over every record on every keystroke (`80.9–118.7 ms` on short synthetic 100k docs, scaling linearly with real multi-KB notes and sluggish on mobile CPUs).
-4. **Unbounded Blob ObjectURL Creation & Redundant Decodes (`src/core/db.ts`, `NotesView.tsx`):**
-   - `getBlobObjectUrl()` created a brand-new `URL.createObjectURL()` on every read without LRU reuse or bounding, risking memory growth across long photo/note/PDF sessions.
-5. **Missing Compound Database Indexes (`src/core/db.ts`, `server/db.ts`):**
-   - IndexedDB lacked `[workspaceId+deletedAt]`, `[workspaceId+type+updatedAt]`, and `[type+updatedAt]` compound indexes and a dedicated FTS token store; SQLite lacked `(workspace_id, type, deleted_at)`, `(type, deleted_at)`, and `(updated_at)` indexes and explicit `temp_store=MEMORY` / 16 MB `cache_size` PRAGMAs.
-6. **Aggressive Sync During Active User Typing (`src/core/sync.ts`):**
-   - Post-edit sync fired `1.5s` after edits even while the user was actively typing or navigating, competing with UI interaction and uploading blobs mid-session.
-
----
-
-## 2. Optimizations Implemented (`v4.2.0`)
-
-1. **Function-Based Code Splitting & Full Lazy Routing (`src/App.tsx`, `src/modules/life/AllInOneView.tsx`, `vite.config.ts`):**
-   - Converted all 28+ non-initial views in `App.tsx` and `AllInOneView.tsx` to `React.lazy` + `<Suspense>`.
-   - Replaced Rollup object chunks with function-based `manualChunks(id)` assigning shared runtime (`src/core/`, shell, common dialogs, `TodaySpread.tsx`) to `appCore` and isolating `pdfEngine` (`pdf-lib` + `pdfjs-dist`), `ocrEngine` (`tesseract.js`), `pdfStudio`, `scannerStudio`, `settings`, `calendarPlan`, `mindTime`, `kitchenLife`, `lab`, `mathOffice`, `digitalPlanner`, `creativeStudios`, `visualCodeMedia`, and `archive` so **ZERO** lazy views preload on startup!
-2. **Pre-Memoized Notification Slices & Minute-Boundary Gating (`src/core/AppContext.tsx`):**
-   - Pre-memoized `activeAlarms`, `activeEvents`, `activeChores`, and `activeMeds` once per `records` mutation.
-   - Reduced polling interval from `1s` to `5s` whenever no countdown timer is running, and gated minute-level checks behind `lastMinuteCheckedRef` (**~60× reduction** in idle scans!).
-3. **Incremental Inverted Trigram FTS Index (`src/core/searchIndex.ts`, `src/core/search.ts`):**
-   - Built `InvertedSearchIndex` with exact token postings (`Map<string, Set<number>>`), 2-char prefix buckets, 3-char trigram vocabulary buckets for fast 1-edit typo resolution, smallest-posting-first intersection, and O(1) revision-checked incremental `upsert`/`remove` updates.
-4. **Bounded LRU Blob ObjectURL Cache (`src/core/blobCache.ts`, `src/core/db.ts`):**
-   - Added `BoundedBlobUrlCache` (max 64 entries) with automatic `URL.revokeObjectURL()` eviction and GC invalidation.
-5. **Virtualized Scroll List (`src/components/Common/VirtualList.tsx`):**
-   - Added zero-dependency virtualized viewport list ready for 10,000+ record views.
-6. **Non-Destructive Dexie v3 & SQLite PRAGMA/Index Tuning (`src/core/db.ts`, `server/db.ts`):**
-   - Added Dexie v3 compound indexes + `searchIndex` table; added 3 composite SQLite indexes + `PRAGMA temp_store = MEMORY`, `PRAGMA cache_size = -16000`, `PRAGMA busy_timeout = 5000`.
-7. **Activity-Aware Offline-First Sync (`src/core/sync.ts`):**
-   - Default `smart` sync mode waits ~10s of user inactivity before syncing (capped at `maxDelaySec = 120s`) and pauses/yields multi-blob transfers if the user resumes interaction.
+1. **Cold-Boot Chunk Bloat (`src/App.tsx`, `vite.config.ts`):**
+   - *Before `v4.1.0`:* `1,324,578` B raw (`~378.6 KB` gz) eager JS.
+   - *Before 108-File Integration (`f3f57d3`):* `806,056` B raw (`249.8 KB` gz), with `TodaySpread.tsx`, `DecorCanvas.tsx`, `stickers.ts` (269 stickers), and non-boot shared helpers bundled into `appCore` (`468.4 KB`, climbing to `512.5 KB` immediately after integrating the 108 files and triggering Rollup's `>500 kB` warning).
+   - *Fix:* Lazy-loaded `TodaySpread` (Batch 6) and `DecorCanvasOverlay` (`src/App.tsx`), traced the exact 30-file static boot graph from `src/main.tsx`, and tightened `vite.config.ts` `manualChunks(id)` to place ONLY exact boot files in `appCore` (`284.5 KB`), isolating `todaySpread`, `decor`, and `studioShared` with **0 circular chunks**.
+2. **`AppContext` Global Re-Render Fan-Out (`src/core/AppContext.tsx`, Shell & Views):**
+   - *Before:* Every `markUserActivity()` / sync status change / toast update mutated the monolithic `AppContext` object and re-rendered every consumer in the tree; native alarm/event scheduling effects re-ran on `[records, ...]` even when editing unrelated notes.
+   - *Fix:* Split `AppProvider` into `<ToastProvider>` (`ToastsListContext` + stable `ToastActionsContext`, `useToasts()`) → `<SyncStateProvider>` (`SyncStateContext`, `useSyncState()`) → memoized `<AppCoreProvider>`, added `useStableRecordSlice` for `activeAlarms`, `activeEvents`, `activeChores`, `activeMeds`, `trashedRecords`, and `runningTimers`, scoped native scheduling effects to domain slices, and wrapped `TopBar`, `Sidebar`, `MiniBar`, and `ToastStack` in `React.memo`.
+   - *Verified:* 5 consecutive `markUserActivity` + `pushToast` updates cause **0 extra renders** on `useApp()` consumers (`tests/integration-optimization-v42.test.tsx`).
+3. **Full-Workbook Recalculation on Every Spreadsheet Keystroke (`src/core/spreadsheetEngine.ts`, `SpreadsheetView.tsx`):**
+   - *Before:* Editing a single cell re-evaluated every formula across all sheets (`p95 = 22.23 ms` on a 4,200-cell 2-sheet workbook).
+   - *Fix:* Added stateful `IncrementalWorkbookEvaluator` maintaining per-cell forward/reverse dependency sets plus volatile (`TODAY()`) cell tracking, diffing modified cells, invalidating only transitive dependents, and falling back cleanly on structural/sheet/named-range changes.
+4. **Search Tombstone Memory Retention & Off-Page Allocation (`src/core/searchIndex.ts`):**
+   - *Before:* Array-backed `docs` retained deleted entries forever (`1,000 → 1,000` after 500 deletes; `50,000 → 50,000`), allocated `SearchHit` objects and `corpus.slice()` snippets for every matching doc before slicing the page, and called `localeCompare` on ISO timestamps.
+   - *Fix:* Integrated Final Pass Map-backed `docs` deletion release (0 retained tombstones) and eliminated off-page hit/snippet allocations + replaced `localeCompare` with direct lexicographical `<`/`>` comparison.
+5. **PDF.js Worker Thrashing & Cleanup Leak (`src/modules/studio/PdfStudioView.tsx`, `src/core/pdfEngine.ts`):**
+   - *Before:* Every page flip or zoom change destroyed and re-instantiated a PDF.js document/worker; `extractPdfTextByPage` could leak `loadingTask` on throw.
+   - *Fix:* Split `PdfStudioView` into a persistent document/worker loader keyed on `[activeDoc?.id, activeHash]` and a bounded page-window renderer reusing `loadedPdf.pdf` with `cancelRender?.()` cleanup; wrapped `extractPdfTextByPage` in `try/finally` with `loadingTask.destroy()` + `page.cleanup()`.
+6. **Service Worker Cache Eviction Timing (`public/sw.js`):**
+   - *Fix:* Moved stale cache deletion from `install` to `activate` and switched navigation/`index.html` to Network-First (with offline fallback) while keeping content-hashed `/assets/*` Cache-First.
+7. **Idle Notification Polling, Blob URL Coalescing & Database Indexing (`AppContext.tsx`, `blobCache.ts`, `db.ts`, `server/db.ts`, `sync.ts`):**
+   - Preserved & strengthened ~60× idle notification scan reduction, concurrent-coalescing generation-guarded LRU `BoundedBlobUrlCache`, Dexie v3 compound indexes, SQLite composite indexes + 16 MB page cache PRAGMAs, and activity-aware `smart` sync deferral.
 
 ---
 
-## 3. Real Measured Before vs. After Benchmarks
+## 2. Exact Measured Before vs. After Benchmarks
 
-| Metric | BEFORE (`v4.1.0`) | AFTER (`v4.2.0`) | Target (§10) | Status |
-|---|---|---|---|---|
-| **Cold-Boot Eager JS (raw)** | `1,324,578` B (`1.32 MB`) | **`806,056` B (`806.1 KB`)** | Minimize startup parse | **−39.1% raw (−518.5 KB)** |
-| **Cold-Boot Eager JS (gzip)** | `~378.6 KB` | **`249.8 KB`** | Minimize startup parse | **−34.0% gzip** |
-| **Lazy Views Preloaded on Boot** | `4` heavy chunks (`plan`, `mindTime`, `kitchenLife`, `settings`) | **`0` lazy chunks** (`index` + `vendor` + `appCore` only) | Zero lazy preload | **PASS** |
-| **Startup Cost of New PDF & OCR Engines** | N/A | **`0` bytes** (`pdfEngine`, `pdf.worker`, `ocrEngine` strictly lazy) | Zero boot penalty | **PASS** |
-| **100,000-Record Search p50** | `~80–118 ms` (linear O(N)) | **`2.01 ms`** (`InvertedSearchIndex`) | < 300 ms | **PASS (~45× faster)** |
-| **100,000-Record Search p95 (20 queries incl. typo + prefix + filter)** | `~118.7 ms` (short text) / scales O(N·L) | **`14.32 ms`** (max `14.32 ms`, vocab `100,110`) | **< 300 ms p95** | **PASS (21× below target)** |
-| **100,000-Record Incremental Upsert** | Full rescan | **`0.19 ms`** | < 25 ms | **PASS** |
-| **100 Local IndexedDB CRUD Actions** | Unbenchmarked | **`0.62 ms` p50 / `1.43 ms` p95** | **95% < 100 ms** | **PASS (70× below target)** |
-| **200 Rapid Note Edits Coalescing** | `149.6 ms` → 1 outbox op | **`170.5 ms` → 1 outbox op** | Coalesce to 1 op | **PASS** |
-| **2,000-Op Legacy Backlog Compaction + SQLite Sync** | `49.6 ms` + `23.5 ms` | **`55.6 ms` + `24.1 ms`** | Non-blocking | **PASS** |
-| **Idle Notification Loop Scans/Min (0 active timers)** | `240` full array filters / min | **`4` pre-memoized checks / min** | Eliminate idle churn | **~60× reduction** |
-| **Chrome 74 / Android 10 Syntax Scan** | `0` `?.`/`??` | **`0` `?.`/`??`** across all built app chunks | Android 10 WebView safe | **PASS** |
+### A. Production Cold-Boot Bundle (`dist/`)
+
+| Metric | `v4.1.0` (`bd96a55`) | BEFORE 108-File (`f3f57d3`) | AFTER Optimization (`4.2.0`) | Delta vs. `f3f57d3` | Delta vs. `v4.1.0` |
+|---|---:|---:|---:|---:|---:|
+| **Cold-Boot Eager JS (raw)** | `1,324,578 B` (`1.32 MB`) | `806,056 B` (`806.1 KB`) | **`624,165 B` (`624.2 KB`)** | **−22.6% (−181.9 KB)** | **−52.9% (−700.4 KB)** |
+| **Cold-Boot Eager JS (gzip, L9)** | `~378.6 KB` | `249,780 B` (`249.8 KB`) | **`187,842 B` (`187.8 KB`)** | **−24.8% (−61.9 KB)** | **−50.4%** |
+| **`appCore` Chunk (raw / gz)** | N/A | `468.4 KB / 144.1 KB` | **`284.5 KB / 81.7 KB`** | **−39.3% raw (no >500 kB warning)** | — |
+| **Circular Rollup Chunks** | `>0` (reverse imports) | `0` | **`0`** | Clean | Eliminated |
+| **Lazy Views Preloaded on Boot** | `4` heavy chunks | `0` | **`0`** | Clean | Eliminated |
+| **Total `dist/` Files / Raw / Gz** | `19` / `~1.8 MB` | `26` / `4.16 MB` / `1.28 MB` | **`29` / `4.26 MB` / `1.31 MB`** | +3 split chunks (`todaySpread`, `decor`, `studioShared`) | Offline PDF+OCR added lazily |
+
+### B. Microbenchmarks (Exact Saved Runs: `before_microbench.json` vs. `after_microbench.json`)
+
+| Benchmark | BEFORE (`f3f57d3`) | AFTER (Integrated + Optimized) | Delta / Notes |
+|---|---:|---:|---|
+| **Search 1k docs (`p50` / `p95`)** | `0.138 ms` / `6.337 ms` | **`0.074 ms` / `0.572 ms`** | **−46.4% p50 / −91.0% p95** |
+| **Search 1k empty query** | `0.187 ms` | **`0.041 ms`** | **−78.1%** |
+| **Search 1k retained docs after 500 deletes** | `1,000` (500 tombstones) | **`500` (0 tombstones)** | **100% tombstone release** |
+| **Search 10k docs (`p50` / `p95`)** | `0.709 ms` / `2.654 ms` | **`0.582 ms` / `0.789 ms`** | **−17.9% p50 / −70.3% p95** |
+| **Search 10k empty query** | `1.114 ms` | **`0.783 ms`** | **−29.7%** |
+| **Search 10k retained docs after 500 deletes** | `10,000` (500 tombstones) | **`9,500` (0 tombstones)** | **100% tombstone release** |
+| **Search 50k docs (`p50` / `p95`)** | `2.513 ms` / `6.763 ms` | **`3.877 ms` / `8.087 ms`** | Map-backed zero-tombstone tradeoff (still **37× below 300ms target**) |
+| **Search 50k retained docs after 500 deletes** | `50,000` (500 tombstones) | **`49,500` (0 tombstones)** | **100% tombstone release** |
+| **Spreadsheet 4,200-cell 2-sheet single-cell edit (`p50` / `p95`)** | `7.90 ms` / `22.23 ms` (full recalc) | **`4.18 ms` / `6.02 ms`** (incremental, 203 downstream cells) | **−47.1% p50 / −72.9% p95** (full fallback: `9.02 / 26.18 ms`) |
+| **Task Scheduler 300 tasks (`p50` / `p95`)** | `0.34 ms` / `0.72 ms` | **`0.12 ms` / `0.53 ms`** | **−64.7% p50 / −26.4% p95** |
+
+### C. Automated Vitest Benchmarks (Final Verification Run)
+
+| Benchmark | Measured Result | Target | Status |
+|---|---|---|---|
+| **100,000-Record `InvertedSearchIndex` (20 queries: exact, prefix, typo, filter)** | `build=674.5 ms` · **`p50=2.38 ms`** · **`p95=15.50 ms`** · `incUpsert=0.17 ms` | `< 300 ms p95` | **PASS (19× below target)** |
+| **100 Local IndexedDB CRUD Actions** | **`p50=0.93 ms`** · **`p95=1.72 ms`** | `95% < 100 ms` | **PASS (58× below target)** |
+| **200 Rapid Note Edits Coalescing** | **`182.8 ms`** → `1` outbox op | Coalesce to 1 op | **PASS** |
+| **2,000-Op Legacy Backlog Compaction + SQLite Sync** | Compacted in **`58.8 ms`**, synced in **`30.1 ms`**, SQLite backup `81,920 B` | Non-blocking | **PASS** |
+| **AppContext Render Isolation (`5× activity + 5× toast`)** | **`0` extra `useApp()` renders** | `0` spurious fan-out | **PASS** |
 
 ---
 
-## 4. Pending Hardware / Live Browser Benchmarks (Honest Status)
-- Real-device Android mid-range phone cold-start timing, 60fps scrolling FPS profiling, multi-hour memory stability soak, and live NVIDIA RTX 5050 CUDA vs. CPU OCR benchmark timings require execution on physical devices / GPU Docker host and are explicitly marked **Pending physical hardware verification**.
+## 3. Pending Hardware / Live Browser Benchmarks (Honest Status)
+- Real-device Android mid-range phone cold-start timing, live Chromium/Firefox/WebKit 60fps scroll & 320px viewport profiling, multi-hour memory stability soak, packaged Windows Electron `.exe` startup, and live NVIDIA RTX 5050 / RTX 5080 CUDA 12.8 container inference benchmarks were **not executed in this environment** (Docker Desktop engine stopped; no physical mobile handset attached) and remain **Pending hardware/staging verification**.

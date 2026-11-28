@@ -18,7 +18,50 @@ Preserved unmodified in `docs/audits/planaday-independent-review-continuation/`:
 
 ---
 
-## Developer Verification Log (`4.2.0` — 2026-11-27 — Pending Independent Verification)
+## Developer Verification Log (`4.2.0` Post-108-File Integration & Hardening — 2026-11-28 — Pending Independent Verification)
+
+**Branch:** `integrate/final-upgrade-package` (branched from `f3f57d3`; backup tag `backup/pre-final-upgrade-f3f57d3`)
+
+### 1. Dependency Install, Typecheck, Build, GPU & Compatibility Checks — **PASS (Developer-verified)**
+- **Clean Dependency Install:** `npm.cmd ci` → Exit `0` (`259` packages installed cleanly from `package-lock.json`, including `zlibjs@0.3.1`; note `npm ci` reported 6 transitive advisories in upstream dev/tooling packages — documented in Remaining Issues).
+- **TypeScript Strict Check:** `npm.cmd run typecheck` (`tsc --noEmit && tsc -p tsconfig.server.json --noEmit`) → Exit `0` (`0` errors).
+- **Production Build:** `npm.cmd run build` (`tsc --noEmit && vite build && tsc -p tsconfig.server.json`) → Exit `0` (`1,923` modules transformed in `4.12s`; `0` circular chunks; `29` dist files totaling `4,255,166 B` raw / `1,310,487 B` gz; `9` `dist-server/` files totaling `81,892 B` raw / `23,063 B` gz).
+- **Cold-Boot Eager JS:** **`624,165 B` raw (`624.2 KB`) / `187,842 B` gz (`187.8 KB` L9)** — `index` (`13.2 KB`) + `vendor` (`326.5 KB`) + `appCore` (`284.5 KB`), down **−22.6% raw** vs. pre-integration `f3f57d3` (`806.1 KB`) and **−52.9% raw** vs. `v4.1.0` (`1.32 MB`). Zero lazy feature views preloaded; Rollup `>500 kB` warning on `appCore` eliminated.
+- **GPU Service Syntax & Compose Validation:**
+  - `py -B -m py_compile gpu-service/app.py` → Exit `0`.
+  - `docker compose -f docker-compose.yml -f docker-compose.gpu.yml config --quiet` → Exit `0`.
+- **Chrome 74 / Android 10 WebView Compatibility Scan (`CONT-005`):** Scanned all built app `.js` chunks in `dist/assets/` → `chrome74Hits: 0`.
+- **Static Safety & Completeness Scan (`src/`):** `45` module files (`33,714` lines); `0` `localStorage` data calls, `0` native `window.alert/confirm/prompt` calls, `0` `eval()`, `0` stubs/placeholders.
+
+### 2. Upgrade Package Validation Suite (4 Runners) — **219/219 Checks PASS (Developer-verified)**
+Executed against `c:\Platz Apps\Planaday` with `PLANADAY_TYPESCRIPT_PATH=c:\Platz Apps\Planaday\node_modules\typescript`:
+- `BATCH4_VALIDATION.cjs`: Exit `0` — `131` files syntax clean (`0` errors), **`77` focused assertions passed** (`128` facts, `269` stickers, `58` diary prompts, `39` thought prompts).
+- `BATCH5_VALIDATION.cjs`: Exit `0` — **`51` isolated assertions passed**.
+- `BATCH6_VALIDATION.cjs`: Exit `0` — **`50` checks passed** (33 behavioral assertions + structural checks).
+- `FINAL_VALIDATION.cjs`: Exit `0` — **`41` isolated assertions passed** (search index & mocked URL lifecycle).
+
+### 3. Full Automated Vitest Suite (`npm.cmd test`) — **15/15 Files, 191/191 Tests PASS (Developer-verified)**
+- **New `tests/integration-optimization-v42.test.tsx` (5 / 5 PASS):**
+  1. `AppContext` render isolation: 5× `markUserActivity` + 5× `pushToast` trigger **`0` extra `useApp()` renders**.
+  2. `IncrementalWorkbookEvaluator`: 100% parity with full `evaluateWorkbook`, incremental recalculation of `≤8` cells for independent single-row edit, plus `#CIRC!` detection and recovery.
+  3. `InvertedSearchIndex` + `BoundedBlobUrlCache`: Map-backed deletion release (`0` retained tombstones), concurrent load coalescing (`1` underlying decode for simultaneous callers), and race-safe invalidation.
+  4. Server security & GPU bridge hardening: scoped member token blocked (`403`) from pushing missing `workspaceId` or hijacking `ws_lab` records, scoped `recordCount` in `/api/sync/pull`, atomic pairing code redemption (`1` success / `1` failure on concurrent reuse), `?token=` rejected (`401`) on REST routes while accepted on SSE `/api/sync/events`, IPv4-mapped IPv6 (`::ffff:7f00:1`) & NAT64 SSRF blocking, malformed `x-blob-name` safe handling, and `server/gpuBridge.ts` scheme rejection + `401/403` token-mismatch reporting.
+  5. Offline fallback failover (`serverUrl` unreachable → fallback URL succeeds), SHA-256 verified attachment upload/download round-trip, and multi-device conflict `keep-both` resolution preserving both copies.
+- **Expanded `tests/ui-smoke.test.tsx` (1 / 1 PASS):** Awaits lazy `TodaySpread` cleanly and mounts all 36 major UI views (including `Note Scanner & OCR` and `PDF Reader & Editor`) in jsdom with `0` `localStorage`.
+- **Performance & Feature Suites Retained & Passing (`tests/performance-benchmarks.test.ts` 3/3, `tests/v42-features.test.ts` 5/5, `tests/audit-references.test.ts` 117/117, `tests/repair-verification-v41.test.ts` 14/14, plus all 9 baseline suites 46/46):**
+  - `[BENCH-100K]`: `build=674.5ms | p50=2.38ms | p95=15.50ms | max=15.50ms | incUpsert=0.17ms | vocab=100110`
+  - `[BENCH-LOCAL-CRUD]`: `ops=100 | p50=0.93ms | p95=1.72ms`
+  - `200` rapid note edits → `1` outbox op in `182.8ms`; `2,000`-op legacy backlog compacted in `58.8ms`, synced to SQLite in `30.1ms`, backup verified (`81,920` bytes).
+
+### 4. Environment-Blocked / Hardware Checks (Not Claimed as Passed)
+- **Live Docker Container Build & Run (`docker-compose.yml` + `docker-compose.gpu.yml`):** Docker CLI `29.1.3` is installed, but the Docker Desktop Linux engine daemon (`//./pipe/dockerDesktopLinuxEngine`) was not running on this host; compose YAML validation passed, while live container build/startup remains **Pending staging run**.
+- **Physical NVIDIA RTX 5050 / Blackwell CUDA 12.8 Inference Benchmark:** Upgraded base image to `nvidia/cuda:12.8.1-runtime-ubuntu22.04` and hardened `gpu-service/app.py` (syntax verified), but real CUDA/PaddleOCR inference timing requires a running Docker+NVIDIA Container Toolkit host (**Pending GPU host verification**).
+- **Live Multi-Browser (Chrome / Firefox / WebKit), Physical Android/iOS & Packaged Windows Electron `.exe` Runs:** Not executed in this session (**Pending live browser & physical device verification**).
+- **Live Production Docker / TrueNAS Host Cutover (`CONT-001`, `CONT-009`):** Intentionally untouched without explicit owner authorization.
+
+---
+
+## Prior Developer Verification Log (`4.2.0` Pre-Integration — 2026-11-27)
 
 ### 1. Build, Bundle & Compatibility Verification — **PASS (Developer-verified)**
 - **Command:** `npm.cmd run build` (`tsc --noEmit && vite build && tsc -p tsconfig.server.json`)
