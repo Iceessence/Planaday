@@ -48,6 +48,8 @@ export type ModuleId =
   | 'whiteboard'
   | 'code_studio'
   | 'photo_studio'
+  | 'scanner'
+  | 'pdf_studio'
   | 'files'
   | 'ai';
 
@@ -98,6 +100,8 @@ export type NavView =
   | 'whiteboard'
   | 'code_studio'
   | 'photo_studio'
+  | 'scanner'
+  | 'pdf_studio'
   | 'files'
   | 'spaces'
   | 'custom_tab'
@@ -196,12 +200,28 @@ export type RecordType =
   | 'code_project'
   | 'code_snippet'
   | 'photo_asset'
+  | 'pdf_doc'
+  | 'scanned_doc'
   | 'file_folder';
 
 export interface EntityLink {
   targetId: string;
   targetType?: RecordType;
-  relation: 'mentions' | 'attached_note' | 'scheduled_from' | 'person' | 'recipe' | 'supply' | 'parent' | 'depends_on' | 'expense' | 'asset';
+  relation:
+    | 'mentions'
+    | 'attached_note'
+    | 'scheduled_from'
+    | 'person'
+    | 'recipe'
+    | 'supply'
+    | 'parent'
+    | 'depends_on'
+    | 'expense'
+    | 'asset'
+    | 'daily_source'
+    | 'converted_to'
+    | 'pdf_page'
+    | 'scanned_from';
   label?: string;
 }
 
@@ -440,6 +460,110 @@ export interface NotePayload {
   textAlign?: 'left' | 'center' | 'right';
   textColor?: string;
   bgColor?: string;
+  // v4.2.0 Daily Notes Archive & Physical Scan OCR metadata (zero duplication!)
+  isDailyNote?: boolean;
+  dailyCategory?: 'daily_specific' | 'general_knowledge' | 'ideas' | 'reminders' | 'research' | 'uncategorized';
+  sourcePlannerDate?: string | null;
+  promotedToKnowledgeAt?: string | null;
+  ocrSourceBlobIds?: string[];
+  ocrConfidence?: number | null;
+}
+
+export interface PdfAnnotationItem {
+  id: string;
+  pageIndex: number; // 0-based
+  kind: 'highlight' | 'underline' | 'strikethrough' | 'text' | 'comment' | 'ink' | 'rect' | 'ellipse' | 'arrow' | 'stamp' | 'signature';
+  x: number; // normalized 0..1
+  y: number; // normalized 0..1
+  width?: number; // normalized 0..1
+  height?: number; // normalized 0..1
+  x2?: number;
+  y2?: number;
+  color: string;
+  opacity?: number;
+  text?: string;
+  strokeWidth?: number;
+  points?: Array<[number, number]>; // normalized 0..1 pairs
+  createdAt: string;
+}
+
+export interface PdfRedactionRect {
+  id: string;
+  pageIndex: number; // 0-based
+  x: number; // normalized 0..1
+  y: number; // normalized 0..1
+  width: number; // normalized 0..1
+  height: number; // normalized 0..1
+  reason?: string;
+  appliedPermanently?: boolean;
+}
+
+export interface PdfBookmarkItem {
+  id: string;
+  title: string;
+  pageIndex: number;
+  createdAt: string;
+}
+
+export interface PdfDocPayload {
+  fileName: string;
+  originalBlobHash: string;
+  activeBlobHash: string; // latest saved PDF binary (preserved original in originalBlobHash)
+  pageCount: number;
+  currentPage: number; // 1-based reading position
+  zoom: number;
+  viewMode: 'continuous' | 'single' | 'spread';
+  readingProgressPct: number;
+  bookmarks: PdfBookmarkItem[];
+  annotations: PdfAnnotationItem[];
+  pendingRedactions: PdfRedactionRect[];
+  appliedRedactionCount?: number;
+  formValues?: Record<string, string | boolean>;
+  extractedTextByPage: Record<number, string>; // 1-based page -> extracted/OCR text
+  ocrCompletedPages?: number[];
+  revisions?: Array<{ id: string; blobHash: string; label: string; timestamp: string; structuralEdit: boolean }>;
+  folderId?: string | null;
+  projectId?: string | null;
+  notebookId?: string | null;
+  labSampleId?: string | null;
+  favorite?: boolean;
+  archived?: boolean;
+}
+
+export interface ScannedOcrWord {
+  text: string;
+  confidence: number; // 0..100
+  uncertain: boolean;
+}
+
+export interface ScannedPageItem {
+  id: string;
+  pageNumber: number;
+  originalBlobHash: string;
+  enhancedBlobHash?: string | null;
+  corners: Array<[number, number]>; // 4 normalized [x,y] points TL, TR, BR, BL
+  rotationDeg: 0 | 90 | 180 | 270;
+  contrastBoost: number; // 0..100
+  shadowReduction: boolean;
+  bwMode: boolean;
+  extractedText: string;
+  confidence: number; // 0..100
+  uncertainWords: ScannedOcrWord[];
+  engineUsed: 'tesseract-local' | 'gpu-paddleocr' | 'gpu-vlm' | 'manual';
+}
+
+export interface ScannedDocPayload {
+  pages: ScannedPageItem[];
+  combinedText: string;
+  avgConfidence: number;
+  engineUsed: 'tesseract-local' | 'gpu-paddleocr' | 'gpu-vlm' | 'manual';
+  language: string;
+  requiresManualReview: boolean;
+  manualReviewConfirmed: boolean;
+  detectedTableCsv?: string | null;
+  savedTargets?: Array<{ recordId: string; type: RecordType; label: string; createdAt: string }>;
+  folderId?: string | null;
+  projectId?: string | null;
 }
 
 export interface ThoughtPayload {
@@ -896,6 +1020,26 @@ export interface ReusableTaskTypeDef {
   category?: string;
 }
 
+export type SyncMode = 'smart' | 'manual' | 'scheduled' | 'continuous' | 'offline';
+
+export interface SyncPolicyConfig {
+  mode: SyncMode;
+  inactivityDelaySec: number; // default 10s
+  maxDelaySec: number; // default 120s max postponement cap
+  scheduledIntervalMin: number; // default 15m
+  wifiOnly: boolean;
+  chargingOnly: boolean;
+  selectiveWorkspaceIds: string[]; // empty = all workspaces
+}
+
+export interface GpuConfig {
+  enabled: boolean;
+  privacyOptIn: boolean;
+  preferredModel: 'paddleocr' | 'vlm_handwriting' | 'auto';
+  memoryLimitMb: number; // e.g. 6144 MB safe default for 8GB RTX 5050
+  preferLocalFallback: boolean;
+}
+
 export interface AppSettings {
   id: 'app-settings';
   deviceId: string;
@@ -925,6 +1069,9 @@ export interface AppSettings {
   lastSyncServerId?: string; // Bound sync server identity (PD-003)
   lastSyncEpoch?: number; // Bound sync epoch (PD-003)
   restoredFromBackupAt?: string | null; // Marks freshly restored client requiring replacement-server reconciliation (PD-003)
+  // v4.2.0 Intelligent Activity-Aware Sync & Optional Self-Hosted RTX 5050 GPU Config
+  syncPolicy?: SyncPolicyConfig;
+  gpuConfig?: GpuConfig;
   // Weather (live Open-Meteo when online + cached offline fallback)
   weatherEnabled: boolean;
   weatherLocationName: string;

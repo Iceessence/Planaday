@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ModalDialog } from './ModalDialog';
 import { useApp } from '../../core/AppContext';
-import { fuzzySearchRecords } from '../../core/search';
+import { globalSearchIndex } from '../../core/searchIndex';
 import type { NavView, RecordType } from '../../core/types';
 
 function recordTypeToView(type: RecordType): NavView {
@@ -83,6 +83,10 @@ function recordTypeToView(type: RecordType): NavView {
       return 'code_studio';
     case 'photo_asset':
       return 'photo_studio';
+    case 'pdf_doc':
+      return 'pdf_studio';
+    case 'scanned_doc':
+      return 'scanner';
     case 'file_folder':
       return 'files';
     case 'lab_sample':
@@ -107,7 +111,16 @@ function recordTypeToView(type: RecordType): NavView {
 }
 
 export const GlobalSearchDialog: React.FC = () => {
-  const { searchOpen, setSearchOpen, records, settings, setActiveView, setActiveDate, setSelectedNoteId } = useApp();
+  const {
+    searchOpen,
+    setSearchOpen,
+    records,
+    settings,
+    setActiveView,
+    setActiveDate,
+    setSelectedNoteId,
+    openPdfInStudio,
+  } = useApp();
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState('');
@@ -130,8 +143,8 @@ export const GlobalSearchDialog: React.FC = () => {
   }, [settings.enabledModules]);
 
   const result = useMemo(() => {
-    return fuzzySearchRecords(
-      records,
+    globalSearchIndex.syncFromArray(records);
+    return globalSearchIndex.search(
       query,
       {
         types: typeFilter === 'all' ? undefined : [typeFilter as RecordType],
@@ -184,6 +197,8 @@ export const GlobalSearchDialog: React.FC = () => {
             <option value="code_project">Code Projects</option>
             <option value="code_snippet">Code Snippets</option>
             <option value="photo_asset">Photos</option>
+            <option value="pdf_doc">PDF Documents</option>
+            <option value="scanned_doc">Scanned Notes (OCR)</option>
             <option value="calc_saved">Calculations</option>
             <option value="lab_sample">Lab Samples</option>
             <option value="lab_inventory">Lab Inventory</option>
@@ -245,7 +260,11 @@ export const GlobalSearchDialog: React.FC = () => {
                 onClick={() => {
                   if (hit.jumpDate) setActiveDate(hit.jumpDate);
                   if (hit.record.type === 'note') setSelectedNoteId(hit.record.id);
-                  setActiveView(recordTypeToView(hit.record.type));
+                  if (hit.record.type === 'pdf_doc') {
+                    openPdfInStudio(hit.record.id);
+                  } else {
+                    setActiveView(recordTypeToView(hit.record.type));
+                  }
                   setSearchOpen(false);
                 }}
               >

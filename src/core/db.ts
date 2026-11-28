@@ -4,17 +4,28 @@ import type {
   BlobRecord,
   EventCategoryDef,
   FamilyProfile,
+  GpuConfig,
   LifeRecord,
   ModuleId,
   NotificationPreferences,
   OutboxOp,
   RevisionRecord,
   SyncConflict,
+  SyncPolicyConfig,
   TimeLedgerEntry,
   UndoEntry,
 } from './types';
 import { THEME_PRESETS } from '../data/themes';
 import { getSystemTimeZone } from './temporal';
+import { blobUrlCache } from './blobCache';
+
+export interface SearchIndexEntry {
+  recordId: string;
+  workspaceId: string;
+  type: string;
+  updatedAt: string;
+  tokens: string[];
+}
 
 export interface DraftRecoveryEntry {
   key: string; // `${recordId}:${field}`
@@ -38,6 +49,7 @@ export class DayplanaDB extends Dexie {
   settings!: Table<AppSettings, string>;
   syncConflicts!: Table<SyncConflict, string>;
   drafts!: Table<DraftRecoveryEntry, string>;
+  searchIndex!: Table<SearchIndexEntry, string>;
 
   constructor(name = 'dayplana-v2') {
     super(name);
@@ -64,6 +76,21 @@ export class DayplanaDB extends Dexie {
       settings: 'id',
       syncConflicts: 'id, recordId, resolved',
       drafts: 'key, recordId, updatedAt',
+    });
+    // Non-destructive additive v3 upgrade (v4.2.0 §2): compound query indexes + persisted FTS token table
+    this.version(3).stores({
+      records:
+        'id, workspaceId, type, status, updatedAt, deletedAt, dueDate, doDate, *tags, [workspaceId+type], [workspaceId+deletedAt], [workspaceId+type+updatedAt], [type+updatedAt]',
+      blobs: 'hash, mimeType, createdAt, synced',
+      outbox: 'opId, recordId, createdAt',
+      undoStack: 'id, timestamp',
+      redoStack: 'id, timestamp',
+      revisions: 'id, recordId, timestamp',
+      timeLedger: 'id, workspaceId, date, linkedRecordId, startedAt',
+      settings: 'id',
+      syncConflicts: 'id, recordId, resolved',
+      drafts: 'key, recordId, updatedAt',
+      searchIndex: 'recordId, workspaceId, type, updatedAt, *tokens',
     });
   }
 }
@@ -114,8 +141,28 @@ export const DEFAULT_ENABLED_MODULES: Record<ModuleId, boolean> = {
   whiteboard: true,
   code_studio: true,
   photo_studio: true,
+  scanner: true,
+  pdf_studio: true,
   files: true,
   ai: false,
+};
+
+export const DEFAULT_SYNC_POLICY: SyncPolicyConfig = {
+  mode: 'smart',
+  inactivityDelaySec: 10,
+  maxDelaySec: 120,
+  scheduledIntervalMin: 15,
+  wifiOnly: false,
+  chargingOnly: false,
+  selectiveWorkspaceIds: [],
+};
+
+export const DEFAULT_GPU_CONFIG: GpuConfig = {
+  enabled: false,
+  privacyOptIn: false,
+  preferredModel: 'auto',
+  memoryLimitMb: 6144,
+  preferLocalFallback: true,
 };
 
 export const DEFAULT_EVENT_CATEGORIES: EventCategoryDef[] = [
@@ -271,6 +318,8 @@ export function createDefaultSettings(): AppSettings {
     syncFallbackUrl: '', // optional Tailscale IP/URL for away-from-home failover
     lastSyncSeq: 0,
     lastSyncAt: null,
+    syncPolicy: { ...DEFAULT_SYNC_POLICY },
+    gpuConfig: { ...DEFAULT_GPU_CONFIG },
     weatherEnabled: true,
     weatherLocationName: '',
     weatherLat: null,
@@ -404,6 +453,17 @@ export async function getOrInitSettings(): Promise<AppSettings> {
         ...defaults.notificationPrefs,
         ...(existing.notificationPrefs ?? {}),
       },
+      syncPolicy: {
+        ...DEFAULT_SYNC_POLICY,
+        ...(existing.syncPolicy ?? {}),
+        selectiveWorkspaceIds: Array.isArray(existing.syncPolicy?.selectiveWorkspaceIds)
+          ? existing.syncPolicy!.selectiveWorkspaceIds
+          : [],
+      },
+      gpuConfig: {
+        ...DEFAULT_GPU_CONFIG,
+        ...(existing.gpuConfig ?? {}),
+      },
     };
     return merged;
   }
@@ -438,6 +498,14 @@ export function mergeSettingsObject(base: AppSettings, patch: Partial<AppSetting
       patch.clockConfig && base.clockConfig
         ? { ...base.clockConfig, ...patch.clockConfig }
         : patch.clockConfig ?? base.clockConfig,
+    syncPolicy:
+      patch.syncPolicy && base.syncPolicy
+        ? { ...base.syncPolicy, ...patch.syncPolicy }
+        : patch.syncPolicy ?? base.syncPolicy,
+    gpuConfig:
+      patch.gpuConfig && base.gpuConfig
+        ? { ...base.gpuConfig, ...patch.gpuConfig }
+        : patch.gpuConfig ?? base.gpuConfig,
   };
 }
 
@@ -597,8 +665,11 @@ export async function storeBlob(fileOrBlob: Blob, name = 'attachment'): Promise<
 }
 
 export async function getBlobObjectUrl(hash: string, preferThumb = false): Promise<string | null> {
-  const rec = await db.blobs.get(hash);
-  if (!rec) return null;
-  const target = preferThumb && rec.thumbBlob ? rec.thumbBlob : new Blob([rec.data], { type: rec.mimeType });
-  return URL.createObjectURL(target);
+  const cacheKey = `${hash}:${preferThumb ? 'thumb' : 'full'}`;
+  return blobUrlCache.getOrLoad(cacheKey, async () => {
+    const rec = await db.blobs.get(hash);
+    if (!rec) return null;
+    const target = preferThumb && rec.thumbBlob ? rec.thumbBlob : new Blob([rec.data], { type: rec.mimeType });
+    return { blob: target, byteSize: rec.size };
+  });
 }

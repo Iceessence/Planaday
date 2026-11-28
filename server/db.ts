@@ -44,6 +44,9 @@ export class SyncDatabase {
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
+      PRAGMA temp_store = MEMORY;
+      PRAGMA cache_size = -16000;
+      PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS records (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL,
@@ -56,6 +59,9 @@ export class SyncDatabase {
         json_data TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_records_seq ON records(seq);
+      CREATE INDEX IF NOT EXISTS idx_records_ws_type ON records(workspace_id, type, deleted_at);
+      CREATE INDEX IF NOT EXISTS idx_records_type_del ON records(type, deleted_at);
+      CREATE INDEX IF NOT EXISTS idx_records_updated ON records(updated_at);
       CREATE TABLE IF NOT EXISTS applied_ops (
         op_id TEXT PRIMARY KEY,
         applied_at TEXT NOT NULL

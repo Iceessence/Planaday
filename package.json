@@ -1,6 +1,6 @@
 {
   "name": "dayplana",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": true,
   "type": "module",
   "description": "Planaday — Tactile All-in-One Customizable Life Planner, Laboratory & Creative Suite with Offline Storage & Self-Hosted Docker Sync",
@@ -25,9 +25,12 @@
     "fastify": "^5.2.2",
     "fflate": "^0.8.2",
     "lucide-react": "^0.483.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "temporal-polyfill": "^0.3.0"
+    "temporal-polyfill": "^0.3.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/dompurify": "^3.2.0",

@@ -4,6 +4,8 @@ import {
   createDefaultSettings,
   createId,
   db,
+  DEFAULT_GPU_CONFIG,
+  DEFAULT_SYNC_POLICY,
   getOrInitSettings,
   getStorageHealth,
   mergeSettingsObject,
@@ -11,6 +13,7 @@ import {
   updateSettings,
   type StorageHealth,
 } from './db';
+import { globalSearchIndex } from './searchIndex';
 import { computeLogicalDateIso, ensureTemporal } from './temporal';
 import { computeGuardedTheme, THEME_PRESETS } from '../data/themes';
 import {
@@ -128,6 +131,12 @@ interface AppContextValue {
   isModuleEnabled: (mod: ModuleId) => boolean;
   selectedNoteId: string | null;
   setSelectedNoteId: (id: string | null) => void;
+  notesInitialTab: 'all' | 'daily' | 'graph';
+  setNotesInitialTab: (tab: 'all' | 'daily' | 'graph') => void;
+  openDailyNotesArchive: (dateIso?: string) => void;
+  selectedPdfId: string | null;
+  setSelectedPdfId: (id: string | null) => void;
+  openPdfInStudio: (pdfRecordId: string) => void;
   selectedEventId: string | null;
   setSelectedEventId: (id: string | null) => void;
   openEventInCalendar: (eventId: string, dateIso?: string) => void;
@@ -223,11 +232,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [zenOpen, setZenOpen] = useState(false);
   const [zenFocusText, setZenFocusText] = useState('');
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [notesInitialTab, setNotesInitialTab] = useState<'all' | 'daily' | 'graph'>('all');
+  const [selectedPdfId, setSelectedPdfId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [ringingAlarm, setRingingAlarm] = useState<LifeRecord | null>(null);
   const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
   const firedAlertsRef = React.useRef<Set<string>>(new Set());
+  const lastMinuteCheckedRef = React.useRef<string>('');
   const [syncState, setSyncState] = useState<SyncStateSnapshot>({
     status: 'standalone',
     pendingCount: 0,
@@ -292,6 +304,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           notificationPrefs: {
             ...defaults.notificationPrefs,
             ...(liveSettings.notificationPrefs ?? {}),
+          },
+          syncPolicy: {
+            ...DEFAULT_SYNC_POLICY,
+            ...(liveSettings.syncPolicy ?? {}),
+            selectiveWorkspaceIds: Array.isArray(liveSettings.syncPolicy?.selectiveWorkspaceIds)
+              ? liveSettings.syncPolicy!.selectiveWorkspaceIds
+              : [],
+          },
+          gpuConfig: {
+            ...DEFAULT_GPU_CONFIG,
+            ...(liveSettings.gpuConfig ?? {}),
           },
         };
     return inFlightSettingsPatches.reduce((acc, item) => mergeSettingsObject(acc, item.patch), base);
@@ -364,7 +387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const unsub = subscribeSyncState(setSyncState);
     const onOnline = () => {
-      void runSyncCycle();
+      void runSyncCycle(fetch, { manual: false });
     };
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
@@ -395,6 +418,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const records = useMemo(
     () => allWorkspaceRecords.filter((r) => isRecordVisibleForProfile(r, settings.activeProfileId)),
     [allWorkspaceRecords, settings.activeProfileId]
+  );
+
+  // Incrementally keep the inverted FTS index in sync with active workspace records (O(changed) only)
+  useEffect(() => {
+    globalSearchIndex.syncFromArray(records);
+  }, [records]);
+
+  // Pre-memoized active slices so the notification scheduler never re-filters the full record table per tick (v4.2.0 §2)
+  const activeAlarms = useMemo(
+    () => records.filter((r) => r.type === 'alarm' && r.status === 'active'),
+    [records]
+  );
+  const activeEvents = useMemo(
+    () => records.filter((r) => r.type === 'event' && r.status === 'active') as Array<LifeRecord<CalendarEventPayload>>,
+    [records]
+  );
+  const activeChores = useMemo(
+    () => records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<LifeRecord<ChorePayload>>,
+    [records]
+  );
+  const activeMeds = useMemo(
+    () => records.filter((r) => r.type === 'medication' && r.status === 'active'),
+    [records]
   );
 
   const trashedRecords = useMemo(
@@ -573,7 +619,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         patch.operatingMode !== undefined ||
         patch.syncServerUrl !== undefined ||
         patch.syncFallbackUrl !== undefined ||
-        patch.syncAuthToken !== undefined
+        patch.syncAuthToken !== undefined ||
+        patch.syncPolicy !== undefined
       ) {
         await startSyncDaemon();
       }
@@ -614,7 +661,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ]);
 
   const triggerSyncNow = useCallback(async () => {
-    await runSyncCycle();
+    await runSyncCycle(fetch, { manual: true });
     const h = await getStorageHealth();
     setStorageHealth(h);
   }, []);
@@ -765,9 +812,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [logicalToday]);
 
-  // Live Notification Engine: Timers, Smart Alarms, Upcoming Calendar Events (with custom lead time), & Due Chores!
+  // Live Notification Engine (v4.2.0 §2 optimized):
+  // - Uses pre-memoized slices (zero full-record scans per tick!)
+  // - Only runs 1s polling while countdown timers are actively running; otherwise wakes every 5s
+  // - Evaluates minute-level triggers (alarms, events, chores, meds) at most ONCE per minute transition!
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const hasRunningTimers = runningTimers.some((t) => t.targetEndMs !== null);
+    const intervalMs = hasRunningTimers ? 1000 : 5000;
+
+    const tick = () => {
       const prefs = settings.notificationPrefs;
       if (!settings.notificationsEnabled || !prefs.enabled) return;
 
@@ -777,7 +830,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
       // 1. Timers (honors per-timer customSound & customVolume overrides!)
-      if (prefs.notifyTimers) {
+      if (prefs.notifyTimers && runningTimers.length > 0) {
         for (const t of runningTimers) {
           if (t.targetEndMs !== null && t.targetEndMs <= nowMs && nowMs - t.targetEndMs < 15000) {
             const key = `tmr:${t.id}:${t.targetEndMs}`;
@@ -792,12 +845,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      // Minute-boundary gate: skip alarm/event/chore/medication scans if we already checked this HH:MM
+      const calDateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const minuteKey = `${calDateIso}:${hhmm}`;
+      if (lastMinuteCheckedRef.current === minuteKey) return;
+      lastMinuteCheckedRef.current = minuteKey;
+
       // 2. Smart Alarms (respects scheduled one-time dates, repeat days of week, & chosen ringtone!)
-      if (prefs.notifyAlarms) {
-        const alarms = records.filter((r) => r.type === 'alarm' && r.status === 'active');
+      if (prefs.notifyAlarms && activeAlarms.length > 0) {
         const weekday = d.getDay();
-        const calDateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        for (const a of alarms) {
+        for (const a of activeAlarms) {
           const rawP = a.payload as Record<string, unknown>;
           const p = normalizeAlarmPayload(rawP);
           if (doesAlarmMatchMoment(rawP, calDateIso, weekday, hhmm)) {
@@ -818,11 +875,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 3. Upcoming Calendar Events (honors per-event notifyEnabled, lead time, sound, & volume!)
-      if (prefs.notifyEvents) {
-        const events = records.filter((r) => r.type === 'event' && r.status === 'active') as Array<
-          LifeRecord<CalendarEventPayload>
-        >;
-        for (const ev of events) {
+      if (prefs.notifyEvents && activeEvents.length > 0) {
+        for (const ev of activeEvents) {
           if (ev.payload.notifyEnabled === false) continue;
           if (ev.payload.allDay || !ev.payload.startTime) continue;
           const isToday = ev.recurrence
@@ -858,14 +912,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 4. Daily Chore Reminder Digest + Per-Chore Specific Reminder Times!
-      if (prefs.notifyChores) {
-        const chores = records.filter((r) => r.type === 'chore' && r.status === 'active') as Array<
-          LifeRecord<ChorePayload>
-        >;
+      if (prefs.notifyChores && activeChores.length > 0) {
         if (hhmm === prefs.choreReminderTime) {
           const key = `chores:${logicalToday}:${prefs.choreReminderTime}`;
           if (!firedAlertsRef.current.has(key)) {
-            const due = chores.filter(
+            const due = activeChores.filter(
               (c) => !c.payload.paused && c.payload.notifyEnabled !== false && !c.payload.customReminderTime && c.payload.nextDueDate <= logicalToday
             );
             if (due.length > 0) {
@@ -878,7 +929,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
         }
-        for (const c of chores) {
+        for (const c of activeChores) {
           if (c.payload.paused || c.payload.notifyEnabled === false) continue;
           if (c.payload.customReminderTime && c.payload.customReminderTime === hhmm && c.payload.nextDueDate <= logicalToday) {
             const key = `chore:${c.id}:${logicalToday}:${hhmm}`;
@@ -893,9 +944,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 5. Scheduled Medication Reminders (primary & optional 2nd time of day)
-      if (prefs.notifyAlarms) {
-        const meds = records.filter((r) => r.type === 'medication' && r.status === 'active');
-        for (const m of meds) {
+      if (prefs.notifyAlarms && activeMeds.length > 0) {
+        for (const m of activeMeds) {
           const mp = m.payload as {
             dose?: string;
             timeOfDay?: string;
@@ -923,9 +973,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       }
-    }, 1000);
+    };
+
+    const id = window.setInterval(tick, intervalMs);
     return () => window.clearInterval(id);
-  }, [runningTimers, records, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser, triggerAlarmRing]);
+  }, [runningTimers, activeAlarms, activeEvents, activeChores, activeMeds, logicalToday, settings.notificationsEnabled, settings.notificationPrefs, notifyUser, triggerAlarmRing]);
 
   // Schedule native Capacitor alerts for ALL enabled Smart Alarms' next scheduled trigger
   useEffect(() => {
@@ -977,6 +1029,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (dateIso) setActiveDate(dateIso);
     setSelectedEventId(eventId);
     setActiveView('calendar');
+  }, []);
+
+  const openDailyNotesArchive = useCallback((dateIso?: string) => {
+    if (dateIso) setActiveDate(dateIso);
+    setNotesInitialTab('daily');
+    setActiveView('notes');
+  }, []);
+
+  const openPdfInStudio = useCallback((pdfRecordId: string) => {
+    setSelectedPdfId(pdfRecordId);
+    setActiveView('pdf_studio');
   }, []);
 
   const openCustomTab = useCallback((tabId: string) => {
@@ -1088,6 +1151,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isModuleEnabled,
         selectedNoteId,
         setSelectedNoteId,
+        notesInitialTab,
+        setNotesInitialTab,
+        openDailyNotesArchive,
+        selectedPdfId,
+        setSelectedPdfId,
+        openPdfInStudio,
         selectedEventId,
         setSelectedEventId,
         openEventInCalendar,

@@ -1,4 +1,6 @@
 import { createId, db, getOrInitSettings } from './db';
+import { blobUrlCache } from './blobCache';
+import { globalSearchIndex } from './searchIndex';
 import type {
   LifeRecord,
   MealPlanPayload,
@@ -187,6 +189,7 @@ export async function createRecord<P = Record<string, unknown>>(
     }
   );
 
+  globalSearchIndex.upsert(record as LifeRecord);
   notify();
   return record;
 }
@@ -253,7 +256,10 @@ export async function updateRecord<P = Record<string, unknown>>(
       }
     );
 
-    if (updatedResult) notify();
+    if (updatedResult) {
+      globalSearchIndex.upsert(updatedResult as LifeRecord);
+      notify();
+    }
     return updatedResult;
   });
 }
@@ -270,11 +276,13 @@ export async function batchApplyChanges(
   for (const ch of changes) {
     if (ch.after) {
       await db.records.put(ch.after);
+      globalSearchIndex.upsert(ch.after);
       if (!options.skipOutbox) {
         await enqueueOutbox(ch.after, ch.before?.rev ?? 0);
       }
     } else if (ch.before) {
       await db.records.delete(ch.recordId);
+      globalSearchIndex.remove(ch.recordId);
     }
   }
 
@@ -436,6 +444,7 @@ export async function restoreFromTrash(id: string): Promise<LifeRecord | null> {
 export async function permanentlyDeleteRecord(id: string): Promise<void> {
   await db.records.delete(id);
   await db.revisions.where('recordId').equals(id).delete();
+  globalSearchIndex.remove(id);
   await runOrphanBlobGC();
   notify();
 }
@@ -485,6 +494,7 @@ export async function runOrphanBlobGC(): Promise<number> {
   const orphanHashes = blobs.filter((b) => !referenced.has(b.hash)).map((b) => b.hash);
   if (orphanHashes.length > 0) {
     await db.blobs.bulkDelete(orphanHashes);
+    for (const h of orphanHashes) blobUrlCache.invalidateHash(h);
   }
   return orphanHashes.length;
 }

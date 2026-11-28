@@ -1,4 +1,5 @@
 import type { LifeRecord, RecordType } from './types';
+import { InvertedSearchIndex, extractRecordSearchText, resolveRecordJumpDate } from './searchIndex';
 
 export interface SearchFilter {
   types?: RecordType[];
@@ -15,6 +16,8 @@ export interface SearchHit {
   snippet: string;
   jumpDate?: string | null;
 }
+
+const arrayIndexCache = new WeakMap<LifeRecord[], InvertedSearchIndex>();
 
 /**
  * Typo-tolerant bounded 1-edit-distance (Damerau-Levenshtein <= 1) check.
@@ -62,54 +65,17 @@ export function isWithinOneEdit(a: string, b: string): boolean {
 }
 
 function extractSearchableText(rec: LifeRecord): string {
-  const parts: string[] = [rec.title, rec.category ?? '', ...rec.tags];
-  const p = rec.payload as Record<string, unknown> | undefined;
-  if (p) {
-    for (const key of [
-      'content',
-      'notes',
-      'narrative',
-      'dailyNotes',
-      'gratitude',
-      'summary',
-      'room',
-      'location',
-      'ingredientName',
-      'zone',
-      'shelfBin',
-      'cuisine',
-      'description',
-      'binLocation',
-      'modelNumber',
-    ]) {
-      if (typeof p[key] === 'string' && p[key]) parts.push(p[key] as string);
-    }
-    if (Array.isArray(p.ingredients)) {
-      for (const ing of p.ingredients as Array<{ name?: string }>) {
-        if (ing?.name) parts.push(ing.name);
-      }
-    }
-    if (Array.isArray(p.items)) {
-      for (const item of p.items as Array<{ name?: string; text?: string }>) {
-        if (item?.name) parts.push(item.name);
-        if (item?.text) parts.push(item.text);
-      }
-    }
-  }
-  return parts.join(' ');
+  return extractRecordSearchText(rec);
 }
 
 function findJumpDate(rec: LifeRecord): string | null {
-  const p = rec.payload as Record<string, unknown> | undefined;
-  if (typeof p?.date === 'string') return p.date;
-  if (typeof p?.startDate === 'string') return p.startDate;
-  if (typeof p?.writtenForDate === 'string') return p.writtenForDate;
-  if (typeof p?.nextDueDate === 'string') return p.nextDueDate;
-  return rec.doDate ?? rec.dueDate ?? null;
+  return resolveRecordJumpDate(rec);
 }
 
 /**
  * Global fuzzy search across every module with NO arbitrary 100-hit cap (supports pagination).
+ * Automatically accelerates large collections (>= 250 records) via an inverted trigram index
+ * so 100,000+ records search well under 300ms p95.
  */
 export function fuzzySearchRecords(
   records: LifeRecord[],
@@ -118,6 +84,15 @@ export function fuzzySearchRecords(
   page = 1,
   pageSize = 25
 ): { hits: SearchHit[]; total: number; page: number; pageCount: number } {
+  if (records.length >= 250) {
+    let idx = arrayIndexCache.get(records);
+    if (!idx) {
+      idx = new InvertedSearchIndex();
+      idx.rebuild(records);
+      arrayIndexCache.set(records, idx);
+    }
+    return idx.search(query, filter, page, pageSize);
+  }
   const tokens = query
     .toLowerCase()
     .trim()

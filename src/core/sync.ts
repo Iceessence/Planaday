@@ -1,9 +1,17 @@
-import { blobToArrayBuffer, createId, db, getOrInitSettings, sha256Hex, updateSettings } from './db';
+import {
+  blobToArrayBuffer,
+  createId,
+  db,
+  DEFAULT_SYNC_POLICY,
+  getOrInitSettings,
+  sha256Hex,
+  updateSettings,
+} from './db';
 import { detectRuntimePlatform } from './nativeAlarms';
 import { compactOutbox, subscribeRepository } from './repository';
-import type { LifeRecord, OutboxOp, SyncConflict } from './types';
+import type { LifeRecord, OperatingMode, OutboxOp, SyncConflict, SyncMode, SyncPolicyConfig } from './types';
 
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error' | 'standalone';
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error' | 'standalone' | 'deferred';
 
 export interface BlobTransferReceipt {
   hash: string;
@@ -31,6 +39,12 @@ export interface SyncStateSnapshot {
   lastSyncedOpsCount?: number;
   queueBytesEstimate?: number;
   compactedOpsTotal?: number;
+  // v4.2.0 §3 Activity-Aware Offline-First Sync Telemetry
+  syncMode?: SyncMode;
+  syncDeferredReason?: string;
+  nextAutoSyncAt?: string | null;
+  userActive?: boolean;
+  yieldedBlobTransfers?: number;
 }
 
 export interface ServerStorageInfo {
@@ -75,10 +89,170 @@ let syncTimer: number | null = null;
 let debouncedSyncTimer: number | null = null;
 let unsubRepo: (() => void) | null = null;
 let visibilityHandler: (() => void) | null = null;
+let activityCleanup: (() => void) | null = null;
 let syncInFlight: Promise<SyncStateSnapshot> | null = null;
 let totalCompactedOps = 0;
 
+// v4.2.0 §3 Activity-Aware Intelligent Sync tracking state
+let lastUserActivityAtMs = 0;
+let firstPendingChangeAtMs: number | null = null;
+let nextAutoSyncAtMs: number | null = null;
+let cachedBatteryCharging: boolean | null = null;
+let envOverride: { connectionType?: string | null; charging?: boolean | null } | null = null;
+let lastPointerMoveStamp = 0;
+
 const PUSH_BATCH_SIZE = 50;
+
+export interface SyncPolicyEvaluation {
+  allowed: boolean;
+  reason?: string;
+  deferMs?: number;
+}
+
+export function setSyncEnvironmentOverrides(
+  overrides: { connectionType?: string | null; charging?: boolean | null } | null
+): void {
+  envOverride = overrides;
+}
+
+export function getEffectiveConnectionType(): string | null {
+  if (envOverride && envOverride.connectionType !== undefined) return envOverride.connectionType;
+  if (typeof navigator === 'undefined') return null;
+  const conn = (navigator as unknown as { connection?: { type?: string; effectiveType?: string } }).connection;
+  return conn?.type ?? null;
+}
+
+export function getEffectiveChargingState(): boolean | null {
+  if (envOverride && envOverride.charging !== undefined) return envOverride.charging;
+  return cachedBatteryCharging;
+}
+
+export function markUserActivity(nowMs = Date.now()): void {
+  lastUserActivityAtMs = nowMs;
+  if (currentState.userActive !== true) {
+    emitSyncState({ userActive: true });
+  }
+}
+
+export function resetSyncActivityState(): void {
+  lastUserActivityAtMs = 0;
+  firstPendingChangeAtMs = null;
+  nextAutoSyncAtMs = null;
+  envOverride = null;
+}
+
+export function isUserActivelyInteracting(windowMs = 2500, nowMs = Date.now()): boolean {
+  return lastUserActivityAtMs > 0 && nowMs - lastUserActivityAtMs < windowMs;
+}
+
+export function getUserActivitySnapshot(nowMs = Date.now()): {
+  isUserActive: boolean;
+  lastActivityAtMs: number;
+  msSinceLastActivity: number;
+  firstPendingChangeAtMs: number | null;
+  nextAutoSyncAtMs: number | null;
+} {
+  const msSince = lastUserActivityAtMs > 0 ? Math.max(0, nowMs - lastUserActivityAtMs) : Number.POSITIVE_INFINITY;
+  return {
+    isUserActive: msSince < 2500,
+    lastActivityAtMs: lastUserActivityAtMs,
+    msSinceLastActivity: msSince,
+    firstPendingChangeAtMs,
+    nextAutoSyncAtMs,
+  };
+}
+
+/**
+ * Pure policy evaluator governing Activity-Aware, Offline-First Sync (§3).
+ * Never blocks local IndexedDB writes; controls ONLY when network sync runs.
+ */
+export function evaluateSyncPolicy(
+  rawPolicy: Partial<SyncPolicyConfig> | undefined,
+  opts: {
+    manual: boolean;
+    operatingMode: OperatingMode;
+    nowMs?: number;
+    lastUserActivityMs?: number;
+    firstPendingMs?: number | null;
+    lastSyncAtMs?: number | null;
+    connectionType?: string | null;
+    charging?: boolean | null;
+  }
+): SyncPolicyEvaluation {
+  const policy: SyncPolicyConfig = { ...DEFAULT_SYNC_POLICY, ...(rawPolicy ?? {}) };
+  const nowMs = opts.nowMs ?? Date.now();
+  const lastActivity = opts.lastUserActivityMs ?? lastUserActivityAtMs;
+  const firstPending = opts.firstPendingMs !== undefined ? opts.firstPendingMs : firstPendingChangeAtMs;
+  const connType = opts.connectionType !== undefined ? opts.connectionType : getEffectiveConnectionType();
+  const charging = opts.charging !== undefined ? opts.charging : getEffectiveChargingState();
+
+  if (opts.operatingMode !== 'docker-sync' || policy.mode === 'offline') {
+    return {
+      allowed: false,
+      reason: 'Offline-only mode active — all changes are saved safely on device.',
+    };
+  }
+
+  // Manual "Sync Now" explicitly bypasses inactivity/schedule/network deferrals
+  if (opts.manual) {
+    return { allowed: true };
+  }
+
+  if (policy.mode === 'manual') {
+    return {
+      allowed: false,
+      reason: 'Manual sync mode — changes saved locally; tap "Sync Now" whenever ready.',
+    };
+  }
+
+  if (policy.wifiOnly && connType === 'cellular') {
+    return {
+      allowed: false,
+      reason: 'Deferred — waiting for Wi-Fi connection (Wi-Fi Only sync policy).',
+      deferMs: 30_000,
+    };
+  }
+
+  if (policy.chargingOnly && charging === false) {
+    return {
+      allowed: false,
+      reason: 'Deferred — waiting for device power/charging (Charging Only sync policy).',
+      deferMs: 30_000,
+    };
+  }
+
+  if (policy.mode === 'smart') {
+    const inactivityMs = Math.max(1000, (policy.inactivityDelaySec ?? 10) * 1000);
+    const maxDelayMs = Math.max(inactivityMs, (policy.maxDelaySec ?? 120) * 1000);
+    const idleMs = lastActivity > 0 ? Math.max(0, nowMs - lastActivity) : Number.POSITIVE_INFINITY;
+    const pendingAgeMs = firstPending ? Math.max(0, nowMs - firstPending) : 0;
+
+    if (idleMs < inactivityMs && pendingAgeMs < maxDelayMs) {
+      const waitIdle = inactivityMs - idleMs;
+      const waitCap = firstPending ? Math.max(0, maxDelayMs - pendingAgeMs) : waitIdle;
+      const deferMs = Math.max(500, Math.min(waitIdle, waitCap));
+      return {
+        allowed: false,
+        reason: `Paused while you are actively working — auto-syncing in ~${Math.ceil(deferMs / 1000)}s of inactivity.`,
+        deferMs,
+      };
+    }
+  }
+
+  if (policy.mode === 'scheduled') {
+    const intervalMs = Math.max(60_000, (policy.scheduledIntervalMin ?? 15) * 60_000);
+    if (opts.lastSyncAtMs && nowMs - opts.lastSyncAtMs < intervalMs) {
+      const deferMs = intervalMs - (nowMs - opts.lastSyncAtMs);
+      return {
+        allowed: false,
+        reason: `Scheduled sync every ${policy.scheduledIntervalMin}m — next sync in ~${Math.ceil(deferMs / 60_000)}m.`,
+        deferMs,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
 
 function emitSyncState(patch: Partial<SyncStateSnapshot>) {
   currentState = { ...currentState, ...patch };
@@ -384,18 +558,27 @@ interface SyncPassResult {
   failedDownloads: BlobTransferReceipt[];
   verifiedReceipts: BlobTransferReceipt[];
   reboundReplacementServer: boolean;
+  yieldedBlobTransfers: number;
 }
 
 async function uploadUnsyncedBlobs(
   base: string,
   authToken: string | undefined,
-  fetchImpl: typeof fetch
-): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[] }> {
+  fetchImpl: typeof fetch,
+  allowYieldOnActivity = false
+): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[]; yielded: number }> {
   const verified: BlobTransferReceipt[] = [];
   const failed: BlobTransferReceipt[] = [];
+  let yielded = 0;
   const unsyncedBlobs = await db.blobs.filter((b) => !b.synced).toArray();
 
-  for (const blobRec of unsyncedBlobs) {
+  for (let i = 0; i < unsyncedBlobs.length; i++) {
+    // §3: Deprioritize/yield non-urgent heavy blob uploads if the user resumes active interaction
+    if (allowYieldOnActivity && i > 0 && isUserActivelyInteracting(2500)) {
+      yielded = unsyncedBlobs.length - i;
+      break;
+    }
+    const blobRec = unsyncedBlobs[i];
     const now = new Date().toISOString();
     try {
       const buf = blobRec.data
@@ -434,16 +617,18 @@ async function uploadUnsyncedBlobs(
       });
     }
   }
-  return { verified, failed };
+  return { verified, failed, yielded };
 }
 
 async function downloadMissingReferencedBlobs(
   base: string,
   authToken: string | undefined,
-  fetchImpl: typeof fetch
-): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[] }> {
+  fetchImpl: typeof fetch,
+  allowYieldOnActivity = false
+): Promise<{ verified: BlobTransferReceipt[]; failed: BlobTransferReceipt[]; yielded: number }> {
   const verified: BlobTransferReceipt[] = [];
   const failed: BlobTransferReceipt[] = [];
+  let yielded = 0;
 
   // Inspect all non-deleted records for referenced attachment hashes not yet stored locally (PD-002)
   const allRecs = await db.records.toArray();
@@ -455,9 +640,17 @@ async function downloadMissingReferencedBlobs(
     }
   }
 
-  for (const hash of neededHashes) {
+  const hashList = Array.from(neededHashes);
+  let downloadedThisPass = 0;
+  for (let i = 0; i < hashList.length; i++) {
+    const hash = hashList[i];
     const localExisting = await db.blobs.get(hash);
     if (localExisting && (localExisting.data || localExisting.blob)) continue;
+
+    if (allowYieldOnActivity && downloadedThisPass > 0 && isUserActivelyInteracting(2500)) {
+      yielded = hashList.length - i;
+      break;
+    }
 
     const now = new Date().toISOString();
     try {
@@ -499,6 +692,7 @@ async function downloadMissingReferencedBlobs(
         synced: true,
       });
       verified.push({ hash, direction: 'download', status: 'verified', at: now });
+      downloadedThisPass++;
     } catch (err) {
       failed.push({
         hash,
@@ -510,7 +704,7 @@ async function downloadMissingReferencedBlobs(
     }
   }
 
-  return { verified, failed };
+  return { verified, failed, yielded };
 }
 
 async function pushPendingOperations(
@@ -584,13 +778,23 @@ async function syncAgainstBase(
   base: string,
   settings: Awaited<ReturnType<typeof getOrInitSettings>>,
   pendingOps: OutboxOp[],
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  allowYieldOnActivity = false
 ): Promise<SyncPassResult> {
-  // 1. Upload unsynced binary blobs first & collect receipts (CONT-004 / PF-51)
-  const up1 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl);
+  const selectiveSet =
+    settings.syncPolicy?.selectiveWorkspaceIds && settings.syncPolicy.selectiveWorkspaceIds.length > 0
+      ? new Set(settings.syncPolicy.selectiveWorkspaceIds)
+      : null;
+
+  const filteredOps = selectiveSet
+    ? pendingOps.filter((op) => !op.record?.workspaceId || selectiveSet.has(op.record.workspaceId))
+    : pendingOps;
+
+  // 1. Upload unsynced binary blobs first & collect receipts (CONT-004 / PF-51 / §3 activity yield)
+  const up1 = await uploadUnsyncedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity);
 
   // 2. Push pending local delta operations in chunks
-  const push1 = await pushPendingOperations(base, settings, pendingOps, fetchImpl);
+  const push1 = await pushPendingOperations(base, settings, filteredOps, fetchImpl);
 
   // 3. Pull remote deltas since lastSyncSeq
   const pullRes = await fetchImpl(`${base}/api/sync/pull?since=${settings.lastSyncSeq}`, {
@@ -687,9 +891,10 @@ async function syncAgainstBase(
     }
   }
 
-  // 5. Apply pulled remote records safely
+  // 5. Apply pulled remote records safely (honoring selective workspace filter if configured)
   for (const remoteRec of pullJson.records ?? []) {
     if (remoteRec.deviceId === settings.deviceId) continue;
+    if (selectiveSet && remoteRec.workspaceId && !selectiveSet.has(remoteRec.workspaceId)) continue;
     const localRec = await db.records.get(remoteRec.id);
     if (!localRec) {
       await db.records.put(remoteRec);
@@ -716,7 +921,7 @@ async function syncAgainstBase(
   }
 
   // 6. PD-002: Download & SHA-256 verify every attachment referenced by pulled/local records!
-  const dl = await downloadMissingReferencedBlobs(base, settings.syncAuthToken, fetchImpl);
+  const dl = await downloadMissingReferencedBlobs(base, settings.syncAuthToken, fetchImpl, allowYieldOnActivity);
   verifiedReceipts.push(...dl.verified);
 
   return {
@@ -728,6 +933,7 @@ async function syncAgainstBase(
     failedDownloads: dl.failed,
     verifiedReceipts,
     reboundReplacementServer,
+    yieldedBlobTransfers: up1.yielded + dl.yielded,
   };
 }
 
@@ -743,8 +949,14 @@ function estimateOpsBytes(ops: OutboxOp[]): number {
   return bytes;
 }
 
-async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnapshot> {
-  const started = Date.now();
+export interface RunSyncOptions {
+  manual?: boolean;
+  nowMs?: number;
+}
+
+async function executeSyncCycle(fetchImpl: typeof fetch, opts: RunSyncOptions = {}): Promise<SyncStateSnapshot> {
+  const started = opts.nowMs ?? Date.now();
+  const manual = opts.manual ?? true;
 
   const comp = await compactOutbox();
   if (comp.removed > 0) {
@@ -752,14 +964,20 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   }
 
   const settings = await getOrInitSettings();
+  const policy: SyncPolicyConfig = { ...DEFAULT_SYNC_POLICY, ...(settings.syncPolicy ?? {}) };
   const pendingOps = await db.outbox.orderBy('createdAt').toArray();
   const unsyncedBlobCount = await db.blobs.filter((b) => !b.synced).count();
   const openConflicts = await db.syncConflicts.filter((c) => !c.resolved).count();
   const queueBytesEstimate = estimateOpsBytes(pendingOps);
 
-  if (settings.operatingMode !== 'docker-sync') {
+  if (settings.operatingMode !== 'docker-sync' || policy.mode === 'offline') {
+    nextAutoSyncAtMs = null;
     emitSyncState({
       status: 'standalone',
+      syncMode: policy.mode,
+      syncDeferredReason: policy.mode === 'offline' ? 'Completely offline mode active — saved locally on device.' : undefined,
+      nextAutoSyncAt: null,
+      userActive: isUserActivelyInteracting(2500, started),
       pendingCount: pendingOps.length + unsyncedBlobCount,
       pendingBlobUploads: unsyncedBlobCount,
       pendingBlobDownloads: 0,
@@ -775,9 +993,41 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
     return currentState;
   }
 
+  const policyDecision = evaluateSyncPolicy(policy, {
+    manual,
+    operatingMode: settings.operatingMode,
+    nowMs: started,
+    lastSyncAtMs: settings.lastSyncAt ? Date.parse(settings.lastSyncAt) : null,
+  });
+
+  if (!policyDecision.allowed) {
+    nextAutoSyncAtMs = policyDecision.deferMs ? started + policyDecision.deferMs : null;
+    emitSyncState({
+      status: 'deferred',
+      syncMode: policy.mode,
+      syncDeferredReason: policyDecision.reason,
+      nextAutoSyncAt: nextAutoSyncAtMs ? new Date(nextAutoSyncAtMs).toISOString() : null,
+      userActive: isUserActivelyInteracting(2500, started),
+      pendingCount: pendingOps.length + unsyncedBlobCount,
+      pendingBlobUploads: unsyncedBlobCount,
+      conflictCount: openConflicts,
+      lastSyncAt: settings.lastSyncAt,
+      queueBytesEstimate,
+      compactedOpsTotal: totalCompactedOps,
+      errorMessage: undefined,
+    });
+    if (policyDecision.deferMs && typeof window !== 'undefined') {
+      scheduleDebouncedSync(policyDecision.deferMs);
+    }
+    return currentState;
+  }
+
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     emitSyncState({
       status: 'offline',
+      syncMode: policy.mode,
+      syncDeferredReason: 'Device offline — changes queued safely on device.',
+      nextAutoSyncAt: null,
       pendingCount: pendingOps.length + unsyncedBlobCount,
       pendingBlobUploads: unsyncedBlobCount,
       conflictCount: openConflicts,
@@ -794,6 +1044,7 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   if (candidates.length === 0) {
     emitSyncState({
       status: 'error',
+      syncMode: policy.mode,
       pendingCount: pendingOps.length + unsyncedBlobCount,
       pendingBlobUploads: unsyncedBlobCount,
       conflictCount: openConflicts,
@@ -808,6 +1059,10 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
 
   emitSyncState({
     status: 'syncing',
+    syncMode: policy.mode,
+    syncDeferredReason: undefined,
+    nextAutoSyncAt: null,
+    userActive: isUserActivelyInteracting(2500, started),
     pendingCount: pendingOps.length + unsyncedBlobCount,
     pendingBlobUploads: unsyncedBlobCount,
     conflictCount: openConflicts,
@@ -818,7 +1073,7 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   let lastErr: unknown = null;
   for (const base of candidates) {
     try {
-      const res = await syncAgainstBase(base, settings, pendingOps, fetchImpl);
+      const res = await syncAgainstBase(base, settings, pendingOps, fetchImpl, !manual && policy.mode === 'smart');
       const now = new Date().toISOString();
       const remPendingOps = await db.outbox.toArray();
       const remUnsyncedBlobs = await db.blobs.filter((b) => !b.synced).count();
@@ -827,6 +1082,10 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
       const totalBlobFailures = res.failedUploads.length + res.failedDownloads.length;
       const totalPending = remPendingOps.length + remUnsyncedBlobs + res.failedDownloads.length;
       const allReceipts = [...res.failedUploads, ...res.failedDownloads, ...res.verifiedReceipts].slice(0, 30);
+
+      if (remPendingOps.length === 0 && remUnsyncedBlobs === 0) {
+        firstPendingChangeAtMs = null;
+      }
 
       // Update bound server identity & seq (use exact server seq when rebound to a replacement server!)
       await updateSettings({
@@ -837,11 +1096,43 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
         lastSyncAt: totalBlobFailures === 0 ? now : settings.lastSyncAt,
       });
 
+      // If heavy blobs yielded cleanly because the user started typing, defer cleanly without error!
+      if (res.yieldedBlobTransfers > 0 && totalBlobFailures === 0) {
+        const deferMs = Math.max(2000, (policy.inactivityDelaySec ?? 10) * 1000);
+        nextAutoSyncAtMs = Date.now() + deferMs;
+        emitSyncState({
+          status: 'deferred',
+          syncMode: policy.mode,
+          syncDeferredReason: `Paused ${res.yieldedBlobTransfers} large attachment transfer(s) while you type — resuming after inactivity.`,
+          nextAutoSyncAt: new Date(nextAutoSyncAtMs).toISOString(),
+          yieldedBlobTransfers: res.yieldedBlobTransfers,
+          pendingCount: totalPending,
+          pendingBlobUploads: remUnsyncedBlobs,
+          pendingBlobDownloads: res.yieldedBlobTransfers,
+          failedBlobTransfers: 0,
+          blobReceipts: allReceipts,
+          conflictCount: remConflicts,
+          lastSyncAt: now,
+          serverReachable: true,
+          activeServerUrl: base || 'Same-Origin Docker',
+          serverId: res.serverId,
+          syncEpoch: res.syncEpoch,
+          lastSyncDurationMs: Date.now() - started,
+          lastSyncedOpsCount: res.pushedCount,
+          queueBytesEstimate: estimateOpsBytes(remPendingOps),
+          compactedOpsTotal: totalCompactedOps,
+        });
+        scheduleDebouncedSync(deferMs);
+        return currentState;
+      }
+
       // CONT-004 / PF-51: NEVER report "synced" if ANY attachment upload or download failed!
       if (totalBlobFailures > 0 || remUnsyncedBlobs > 0) {
         const firstErr = res.failedUploads[0]?.error || res.failedDownloads[0]?.error || 'Attachment transfer incomplete';
         emitSyncState({
           status: 'error',
+          syncMode: policy.mode,
+          syncDeferredReason: undefined,
           pendingCount: Math.max(totalPending, totalBlobFailures),
           pendingBlobUploads: remUnsyncedBlobs,
           pendingBlobDownloads: res.failedDownloads.length,
@@ -862,8 +1153,13 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
         return currentState;
       }
 
+      nextAutoSyncAtMs = null;
       emitSyncState({
         status: 'synced',
+        syncMode: policy.mode,
+        syncDeferredReason: undefined,
+        nextAutoSyncAt: null,
+        yieldedBlobTransfers: 0,
         pendingCount: remPendingOps.length,
         pendingBlobUploads: 0,
         pendingBlobDownloads: 0,
@@ -893,6 +1189,7 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   const isOfflineErr = lastErr instanceof TypeError;
   emitSyncState({
     status: isOfflineErr ? 'offline' : 'error',
+    syncMode: policy.mode,
     pendingCount: remPendingOps.length + remUnsyncedBlobs,
     pendingBlobUploads: remUnsyncedBlobs,
     conflictCount: remConflicts,
@@ -910,22 +1207,26 @@ async function executeSyncCycle(fetchImpl: typeof fetch): Promise<SyncStateSnaps
   return currentState;
 }
 
-export async function runSyncCycle(fetchImpl: typeof fetch = fetch): Promise<SyncStateSnapshot> {
+export async function runSyncCycle(
+  fetchImpl: typeof fetch = fetch,
+  opts: RunSyncOptions = {}
+): Promise<SyncStateSnapshot> {
   if (syncInFlight) return syncInFlight;
-  syncInFlight = executeSyncCycle(fetchImpl).finally(() => {
+  syncInFlight = executeSyncCycle(fetchImpl, opts).finally(() => {
     syncInFlight = null;
   });
   return syncInFlight;
 }
 
-export function scheduleDebouncedSync(delayMs = 1500): void {
+export function scheduleDebouncedSync(delayMs = 10_000): void {
   if (typeof window === 'undefined') return;
   if (debouncedSyncTimer !== null) {
     window.clearTimeout(debouncedSyncTimer);
   }
+  nextAutoSyncAtMs = Date.now() + delayMs;
   debouncedSyncTimer = window.setTimeout(() => {
     debouncedSyncTimer = null;
-    void runSyncCycle();
+    void runSyncCycle(fetch, { manual: false });
   }, delayMs);
 }
 
@@ -1036,36 +1337,115 @@ export async function resolveConflict(
 export async function startSyncDaemon(): Promise<void> {
   stopSyncDaemon();
   const settings = await getOrInitSettings();
-  if (settings.operatingMode !== 'docker-sync') {
+  const policy: SyncPolicyConfig = { ...DEFAULT_SYNC_POLICY, ...(settings.syncPolicy ?? {}) };
+
+  // Monitor battery charging status opportunistically when browser exposes Battery API
+  if (typeof navigator !== 'undefined' && typeof (navigator as unknown as { getBattery?: () => Promise<{ charging: boolean; addEventListener?: (e: string, cb: () => void) => void }> }).getBattery === 'function') {
+    void (navigator as unknown as { getBattery: () => Promise<{ charging: boolean; addEventListener?: (e: string, cb: () => void) => void }> })
+      .getBattery()
+      .then((bat) => {
+        cachedBatteryCharging = bat.charging;
+        bat.addEventListener?.('chargingchange', () => {
+          cachedBatteryCharging = bat.charging;
+        });
+      })
+      .catch(() => undefined);
+  }
+
+  if (settings.operatingMode !== 'docker-sync' || policy.mode === 'offline') {
     const pendingCount = await db.outbox.count();
-    emitSyncState({ status: 'standalone', pendingCount, serverReachable: false });
+    emitSyncState({
+      status: 'standalone',
+      syncMode: policy.mode,
+      syncDeferredReason: policy.mode === 'offline' ? 'Completely offline mode active — saved locally on device.' : undefined,
+      pendingCount,
+      serverReachable: false,
+    });
     return;
   }
 
+  // Attach passive user-activity listeners so routine sync waits for inactivity (~10s default)
+  if (typeof window !== 'undefined') {
+    const onActive = () => {
+      markUserActivity(Date.now());
+      if (policy.mode === 'smart' && firstPendingChangeAtMs !== null && debouncedSyncTimer !== null) {
+        const nowMs = Date.now();
+        const inactivityMs = Math.max(1000, (policy.inactivityDelaySec ?? 10) * 1000);
+        const maxDelayMs = Math.max(inactivityMs, (policy.maxDelaySec ?? 120) * 1000);
+        const remainingCap = Math.max(500, maxDelayMs - (nowMs - firstPendingChangeAtMs));
+        scheduleDebouncedSync(Math.min(inactivityMs, remainingCap));
+      }
+    };
+    const onPointerMove = () => {
+      const nowMs = Date.now();
+      if (nowMs - lastPointerMoveStamp >= 1000) {
+        lastPointerMoveStamp = nowMs;
+        onActive();
+      }
+    };
+    window.addEventListener('keydown', onActive, { passive: true });
+    window.addEventListener('input', onActive, { passive: true });
+    window.addEventListener('pointerdown', onActive, { passive: true });
+    window.addEventListener('touchstart', onActive, { passive: true });
+    window.addEventListener('wheel', onActive, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    activityCleanup = () => {
+      window.removeEventListener('keydown', onActive);
+      window.removeEventListener('input', onActive);
+      window.removeEventListener('pointerdown', onActive);
+      window.removeEventListener('touchstart', onActive);
+      window.removeEventListener('wheel', onActive);
+      window.removeEventListener('pointermove', onPointerMove);
+    };
+  }
+
   unsubRepo = subscribeRepository(() => {
+    const nowMs = Date.now();
+    if (firstPendingChangeAtMs === null) firstPendingChangeAtMs = nowMs;
+    markUserActivity(nowMs);
     void db.outbox.count().then((cnt) => {
       if (cnt !== currentState.pendingCount) {
         emitSyncState({ pendingCount: cnt });
       }
     });
-    scheduleDebouncedSync(1500);
+    if (policy.mode === 'continuous') {
+      scheduleDebouncedSync(1200);
+    } else if (policy.mode === 'smart') {
+      const delayMs = Math.max(1000, (policy.inactivityDelaySec ?? 10) * 1000);
+      emitSyncState({
+        status: 'deferred',
+        syncMode: policy.mode,
+        syncDeferredReason: `Saved locally ✓ — auto-syncing after ${policy.inactivityDelaySec ?? 10}s of inactivity.`,
+        nextAutoSyncAt: new Date(nowMs + delayMs).toISOString(),
+      });
+      scheduleDebouncedSync(delayMs);
+    } else if (policy.mode === 'manual') {
+      emitSyncState({
+        status: 'deferred',
+        syncMode: policy.mode,
+        syncDeferredReason: 'Saved locally ✓ — manual sync mode enabled.',
+        nextAutoSyncAt: null,
+      });
+    }
   });
 
-  const result = await runSyncCycle();
+  // Initial startup sync respects manual/offline policies
+  const result = await runSyncCycle(fetch, { manual: false });
 
   if (typeof window !== 'undefined') {
     const activeBase =
       result.activeServerUrl && result.activeServerUrl !== 'Same-Origin Docker'
         ? result.activeServerUrl
         : normalizeServerUrl(settings.syncServerUrl);
-    if (result.serverReachable && typeof EventSource !== 'undefined') {
+    if (result.serverReachable && policy.mode !== 'manual' && typeof EventSource !== 'undefined') {
       try {
         const tokenParam = settings.syncAuthToken ? `&token=${encodeURIComponent(settings.syncAuthToken)}` : '';
         eventSource = new EventSource(
           `${activeBase}/api/sync/events?deviceId=${encodeURIComponent(settings.deviceId)}${tokenParam}`
         );
         eventSource.addEventListener('sync-update', () => {
-          scheduleDebouncedSync(300);
+          const delay = policy.mode === 'continuous' ? 350 : Math.max(2000, (policy.inactivityDelaySec ?? 10) * 1000);
+          scheduleDebouncedSync(delay);
         });
       } catch {
         // SSE optional fallback to polling
@@ -1074,18 +1454,27 @@ export async function startSyncDaemon(): Promise<void> {
 
     visibilityHandler = () => {
       if (document.visibilityState === 'hidden') {
-        void flushKeepaliveOnBackground();
+        if (policy.mode !== 'manual' && policy.mode !== 'offline') {
+          void flushKeepaliveOnBackground();
+        }
       } else if (document.visibilityState === 'visible') {
-        void runSyncCycle();
+        void runSyncCycle(fetch, { manual: false });
       }
     };
     document.addEventListener('visibilitychange', visibilityHandler);
 
+    const pollMs =
+      policy.mode === 'scheduled'
+        ? Math.max(60_000, (policy.scheduledIntervalMin ?? 15) * 60_000)
+        : policy.mode === 'continuous'
+          ? 20_000
+          : 30_000;
+
     syncTimer = window.setInterval(() => {
       if (document.visibilityState !== 'hidden') {
-        void runSyncCycle();
+        void runSyncCycle(fetch, { manual: false });
       }
-    }, 20000);
+    }, pollMs);
   }
 }
 
@@ -1109,5 +1498,9 @@ export function stopSyncDaemon(): void {
   if (visibilityHandler && typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', visibilityHandler);
     visibilityHandler = null;
+  }
+  if (activityCleanup) {
+    activityCleanup();
+    activityCleanup = null;
   }
 }
