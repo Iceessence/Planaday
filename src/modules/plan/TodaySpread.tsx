@@ -27,6 +27,7 @@ import {
 } from '../../core/planActions';
 import { scheduleMealWithPrepReminder } from '../../core/kitchenActions';
 import { createRecord, softDeleteRecord, updateRecord } from '../../core/repository';
+import { findCanonicalDailyNote, getNotesForPlannerDate, upsertCanonicalDailyNote } from '../../core/dailyNotes';
 import { createId, storeBlob } from '../../core/db';
 import { getDailyFact, getFactTopics } from '../../data/facts';
 import { ModalDialog } from '../../components/Common/ModalDialog';
@@ -63,6 +64,8 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
     activeDate,
     setActiveDate,
     setActiveView,
+    setSelectedNoteId,
+    openDailyNotesArchive,
     openEventInCalendar,
     pushToast,
     startCountdownTimer,
@@ -264,6 +267,23 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
   const diary: DiaryPayload = diaryRecord?.payload ?? { date: activeDate };
 
+  // v4.2.0 §4 Unified Daily Note: single canonical note record referenced by BOTH Today Spread & Daily Notes Archive!
+  const canonicalDailyNote = useMemo(
+    () => findCanonicalDailyNote(records, activeDate),
+    [records, activeDate]
+  );
+  const dateLinkedNotes = useMemo(
+    () => getNotesForPlannerDate(records, activeDate),
+    [records, activeDate]
+  );
+  const dailyNotesText = canonicalDailyNote?.payload.content ?? diary.dailyNotes ?? '';
+
+  const saveCanonicalDailyNotes = async (val: string) => {
+    await upsertCanonicalDailyNote(records, activeDate, val, {
+      diaryRecordId: diaryRecord?.id ?? null,
+    });
+  };
+
   const saveDiaryField = async (patch: Partial<DiaryPayload>) => {
     if (diaryRecord) {
       await updateRecord<DiaryPayload>(
@@ -380,13 +400,21 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
       const totalSec = Math.max(1, (quickDurationMin || 0) * 60 + (quickTimerSec || 0));
       await startCountdownTimer(text || 'Today Timer', totalSec, 'countdown');
     } else if (quickKind === 'note') {
-      await createRecord<NotePayload>('note', text, {
-        notebookId: 'nb_personal',
-        writtenForDate: activeDate,
-        content: `# ${text}\n`,
-        touchedDates: [activeDate],
-      });
-      pushToast(`Created note "${text}" for ${activeDate}`, { canUndo: true });
+      await createRecord<NotePayload>(
+        'note',
+        text,
+        {
+          notebookId: 'nb_personal',
+          writtenForDate: activeDate,
+          sourcePlannerDate: activeDate,
+          isDailyNote: true,
+          dailyCategory: 'daily_specific',
+          content: `# ${text}\n`,
+          touchedDates: [activeDate],
+        },
+        { tags: ['daily-note'] }
+      );
+      pushToast(`Created daily note "${text}" for ${activeDate} (visible in Daily Notes Archive)`, { canUndo: true });
     } else if (quickKind === 'thought') {
       await createRecord<ThoughtPayload>('thought', text.slice(0, 64), {
         content: text,
@@ -1300,16 +1328,55 @@ export const TodaySpread: React.FC<{ renderDecorOverlay?: (spreadKey: string) =>
 
           <div className="dp-section-title">
             <span>Daily Notes &amp; Margin Scratchpad</span>
-            <span className="dp-muted" style={{ fontSize: '0.78rem' }}>Auto-saved locally · Synced to Diary</span>
+            <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <span className="dp-muted" style={{ fontSize: '0.76rem' }}>Unified with Notes · Zero Duplication</span>
+              {canonicalDailyNote && (
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => {
+                    setSelectedNoteId(canonicalDailyNote.id);
+                    setActiveView('notes');
+                  }}
+                >
+                  Open Full Note
+                </button>
+              )}
+              <button
+                type="button"
+                className="dp-btn dp-btn-sm"
+                onClick={() => openDailyNotesArchive(activeDate)}
+              >
+                📅 Daily Notes Archive →
+              </button>
+            </div>
           </div>
           <SafeTextarea
             recordKey={`today:${activeDate}:dailyNotes`}
-            externalValue={diary.dailyNotes ?? ''}
-            onCommit={(val) => saveDiaryField({ dailyNotes: val })}
+            externalValue={dailyNotesText}
+            onCommit={saveCanonicalDailyNotes}
             className="dp-textarea"
             style={{ minHeight: 130, background: 'transparent' }}
-            placeholder="Jot freeform notes, meeting highlights, or sketches for today…"
+            placeholder="Jot freeform notes, meeting highlights, or sketches for today — automatically archived in Notes → Daily Notes…"
           />
+          {dateLinkedNotes.length > 0 && (
+            <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap', fontSize: '0.76rem' }}>
+              <span className="dp-muted">Notes for {activeDate}:</span>
+              {dateLinkedNotes.slice(0, 6).map((dn) => (
+                <button
+                  key={dn.id}
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={() => {
+                    setSelectedNoteId(dn.id);
+                    setActiveView('notes');
+                  }}
+                >
+                  📝 {dn.title}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Unlimited Custom Daily Note Sections (Section 11.1) */}
           {customDailySections.length > 0 && (

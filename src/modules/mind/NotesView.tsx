@@ -3,7 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ArrowLeft,
   BookmarkPlus,
+  Calendar,
+  Camera,
   CheckSquare,
+  ExternalLink,
   FilePlus,
   History,
   Image as ImageIcon,
@@ -12,6 +15,7 @@ import {
   PenTool,
   Pin,
   Save,
+  Sparkles,
   Square,
   Trash2,
 } from 'lucide-react';
@@ -23,6 +27,13 @@ import {
   softDeleteRecord,
   updateRecord,
 } from '../../core/repository';
+import {
+  convertDailyNoteToTarget,
+  DAILY_NOTE_CATEGORIES,
+  isDailyArchiveNote,
+  upsertCanonicalDailyNote,
+  type DailyNoteCategory,
+} from '../../core/dailyNotes';
 import { db, getBlobObjectUrl, storeBlob } from '../../core/db';
 import { DEFAULT_NOTEBOOKS } from '../../data/sampleData';
 import { extractInlineEntities } from '../../core/mindActions';
@@ -38,11 +49,31 @@ export const NotesView: React.FC = () => {
     patchSettings,
     records,
     logicalToday,
+    activeDate,
+    setActiveDate,
+    setActiveView,
     pushToast,
     selectedNoteId,
     setSelectedNoteId,
+    notesInitialTab,
+    setNotesInitialTab,
     syncState,
   } = useApp();
+
+  const [notesTab, setNotesTab] = useState<'all' | 'daily' | 'graph'>(notesInitialTab);
+  const [dailyCategoryFilter, setDailyCategoryFilter] = useState<'all' | DailyNoteCategory>('all');
+  const [dailyDateFilter, setDailyDateFilter] = useState<string>('');
+  const [dailyCalendarMonth, setDailyCalendarMonth] = useState<string>(() => (activeDate || logicalToday).slice(0, 7));
+
+  useEffect(() => {
+    if (notesInitialTab !== 'all') {
+      setNotesTab(notesInitialTab);
+      if (notesInitialTab === 'daily') {
+        setDailyCalendarMonth((activeDate || logicalToday).slice(0, 7));
+      }
+      setNotesInitialTab('all');
+    }
+  }, [notesInitialTab, activeDate, logicalToday, setNotesInitialTab]);
 
   const [activeNotebook, setActiveNotebook] = useState<string>('all');
   const [noteSearch, setNoteSearch] = useState('');
@@ -87,14 +118,40 @@ export const NotesView: React.FC = () => {
     [records]
   );
 
+  const dailyArchiveNotes = useMemo(
+    () => notes.filter((n) => isDailyArchiveNote(n)),
+    [notes]
+  );
+
+  const dailyNoteDatesMap = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const n of dailyArchiveNotes) {
+      if (n.payload.archived && !showArchived) continue;
+      const d = n.payload.sourcePlannerDate || n.payload.writtenForDate;
+      if (d) counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+    return counts;
+  }, [dailyArchiveNotes, showArchived]);
+
   const visibleNotes = useMemo(() => {
     const q = noteSearch.trim().toLowerCase();
-    const list = notes.filter((n) => {
+    const baseSource = notesTab === 'daily' ? dailyArchiveNotes : notes;
+    const list = baseSource.filter((n) => {
       if (!showArchived && n.payload.archived) return false;
       if (activeNotebook !== 'all' && n.payload.notebookId !== activeNotebook) return false;
       if (notePinFilter === 'pinned' && !n.payload.pinned && !n.payload.favorite) return false;
+      if (notesTab === 'daily') {
+        if (dailyCategoryFilter !== 'all') {
+          const cat = n.payload.dailyCategory ?? (n.payload.isDailyNote ? 'daily_specific' : 'uncategorized');
+          if (cat !== dailyCategoryFilter) return false;
+        }
+        if (dailyDateFilter) {
+          const d = n.payload.sourcePlannerDate || n.payload.writtenForDate;
+          if (d !== dailyDateFilter) return false;
+        }
+      }
       if (q) {
-        const hay = `${n.title} ${n.payload.description ?? ''} ${n.payload.content ?? ''} ${(n.tags ?? []).join(' ')}`.toLowerCase();
+        const hay = `${n.title} ${n.payload.description ?? ''} ${n.payload.content ?? ''} ${n.payload.writtenForDate ?? ''} ${(n.tags ?? []).join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -104,7 +161,11 @@ export const NotesView: React.FC = () => {
       const pinDiff = Number(Boolean(b.payload.pinned)) - Number(Boolean(a.payload.pinned));
       if (pinDiff !== 0) return pinDiff;
       if (noteSortBy === 'title') return a.title.localeCompare(b.title) * dir;
-      if (noteSortBy === 'created') return a.createdAt.localeCompare(b.createdAt) * dir;
+      if (noteSortBy === 'created') {
+        const da = a.payload.sourcePlannerDate || a.payload.writtenForDate || a.createdAt;
+        const dbDate = b.payload.sourcePlannerDate || b.payload.writtenForDate || b.createdAt;
+        return da.localeCompare(dbDate) * dir;
+      }
       if (noteSortBy === 'words') {
         const wa = (a.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length;
         const wb = (b.payload.content ?? '').trim().split(/\s+/).filter(Boolean).length;
@@ -112,7 +173,19 @@ export const NotesView: React.FC = () => {
       }
       return a.updatedAt.localeCompare(b.updatedAt) * dir;
     });
-  }, [notes, activeNotebook, noteSearch, notePinFilter, noteSortBy, noteSortDir, showArchived]);
+  }, [
+    notes,
+    dailyArchiveNotes,
+    notesTab,
+    dailyCategoryFilter,
+    dailyDateFilter,
+    activeNotebook,
+    noteSearch,
+    notePinFilter,
+    noteSortBy,
+    noteSortDir,
+    showArchived,
+  ]);
 
   const noteById = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
 
@@ -167,35 +240,37 @@ export const NotesView: React.FC = () => {
     [notes, selectedNoteId, visibleNotes]
   );
 
-  // Load object URLs cleanly — revokes exact created URLs (fixes ObjectURL memory leak!)
+  // Load object URLs via bounded LRU blobUrlCache (lifecycle managed centrally in blobCache.ts!)
   useEffect(() => {
     let active = true;
-    const createdUrls: string[] = [];
     const ids = [
       ...(activeNote?.payload.attachmentBlobIds ?? []),
       ...(activeNote?.payload.voiceMemoBlobIds ?? []),
       ...(activeNote?.payload.sketchBlobId ? [activeNote.payload.sketchBlobId] : []),
+      ...(activeNote?.payload.ocrSourceBlobIds ?? []),
     ];
     (async () => {
       const next: Record<string, string> = {};
       for (const h of ids) {
         const u = await getBlobObjectUrl(h);
         if (u) {
-          createdUrls.push(u);
           next[h] = u;
         }
       }
       if (active) {
         setBlobUrls(next);
-      } else {
-        createdUrls.forEach((u) => URL.revokeObjectURL(u));
       }
     })();
     return () => {
       active = false;
-      createdUrls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [activeNote?.id, activeNote?.payload.attachmentBlobIds?.length, activeNote?.payload.voiceMemoBlobIds?.length, activeNote?.payload.sketchBlobId]);
+  }, [
+    activeNote?.id,
+    activeNote?.payload.attachmentBlobIds?.length,
+    activeNote?.payload.voiceMemoBlobIds?.length,
+    activeNote?.payload.sketchBlobId,
+    activeNote?.payload.ocrSourceBlobIds?.length,
+  ]);
 
   // IME-safe, cursor-preserving, RECORD-BOUND title & body commits (eliminates PD-016 cross-note overwrite!)
   const activeNoteId = activeNote?.id ?? null;
@@ -503,28 +578,188 @@ export const NotesView: React.FC = () => {
               ? `Waiting for sync (${syncState.pendingCount})`
               : 'Fully synchronized ✓';
 
+  // Automatic bidirectional EntityLink connections (Tasks, Projects, Diary, PDFs, Scans!)
+  const linkedRecords = useMemo(() => {
+    if (!activeNote) return [];
+    const byId = new Map(records.map((r) => [r.id, r]));
+    const out = new Map<string, { record: LifeRecord; relation: string }>();
+    for (const lnk of activeNote.links ?? []) {
+      const rec = byId.get(lnk.targetId);
+      if (rec) out.set(rec.id, { record: rec, relation: lnk.relation });
+    }
+    for (const r of records) {
+      if (r.id === activeNote.id) continue;
+      if ((r.links ?? []).some((l) => l.targetId === activeNote.id)) {
+        out.set(r.id, { record: r, relation: 'backlink' });
+      }
+    }
+    return Array.from(out.values());
+  }, [activeNote, records]);
+
+  // Month Calendar grid cells for Daily Notes Archive navigation (§4)
+  const calendarMonthCells = useMemo(() => {
+    const [yrStr, moStr] = dailyCalendarMonth.split('-');
+    const year = Number(yrStr) || new Date().getFullYear();
+    const month = (Number(moStr) || 1) - 1;
+    const firstDay = new Date(year, month, 1);
+    const startPad = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{ iso: string | null; day: number | null; count: number }> = [];
+    for (let i = 0; i < startPad; i++) cells.push({ iso: null, day: null, count: 0 });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      cells.push({ iso, day: d, count: dailyNoteDatesMap.get(iso) ?? 0 });
+    }
+    return { year, month, cells };
+  }, [dailyCalendarMonth, dailyNoteDatesMap]);
+
+  const shiftCalendarMonth = (delta: number) => {
+    const d = new Date(calendarMonthCells.year, calendarMonthCells.month + delta, 1);
+    setDailyCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
+
   return (
     <div className="dp-paper-sheet dp-stack" data-paper={settings.paperMaterial} style={{ padding: 'var(--dp-space-4)' }}>
-      <div className="dp-between">
+      <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <h2>Rich Block / Live-Markdown Notes & Knowledge Graph</h2>
+          <h2>Rich Block / Live-Markdown Notes, Daily Notes Archive &amp; Knowledge Graph</h2>
           <p className="dp-muted" style={{ margin: '4px 0 0', fontSize: '0.84rem' }}>
-            Unlimited word count · 20+ revisions with restore · [[WikiLinks]] & Backlinks · Blobs & Voice Memos
+            Unlimited word count · Unified Daily Notes (zero duplication) · [[WikiLinks]] &amp; Backlinks · Blobs &amp; Voice Memos
           </p>
         </div>
-        <div className="dp-row">
-          <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleCreateNote()}>
-            <FilePlus size={14} /> New Note
+        <div className="dp-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <button
+            type="button"
+            className={`dp-btn dp-btn-sm ${notesTab === 'all' ? 'dp-btn-primary' : ''}`}
+            onClick={() => {
+              setNotesTab('all');
+              if (viewMode === 'graph') setViewMode('edit');
+            }}
+          >
+            All Notes ({notes.length})
           </button>
           <button
             type="button"
-            className={`dp-btn dp-btn-sm ${viewMode === 'graph' ? 'dp-btn-primary' : ''}`}
-            onClick={() => setViewMode(viewMode === 'graph' ? 'edit' : 'graph')}
+            className={`dp-btn dp-btn-sm ${notesTab === 'daily' ? 'dp-btn-primary' : ''}`}
+            onClick={() => {
+              setNotesTab('daily');
+              if (viewMode === 'graph') setViewMode('edit');
+            }}
           >
-            <Network size={14} /> {viewMode === 'graph' ? 'Back to Editor' : 'Connection Graph'}
+            <Calendar size={14} /> Daily Notes ({dailyArchiveNotes.length})
+          </button>
+          <button
+            type="button"
+            className={`dp-btn dp-btn-sm ${notesTab === 'graph' || viewMode === 'graph' ? 'dp-btn-primary' : ''}`}
+            onClick={() => {
+              const nextGraph = viewMode !== 'graph';
+              setViewMode(nextGraph ? 'graph' : 'edit');
+              setNotesTab(nextGraph ? 'graph' : 'all');
+            }}
+          >
+            <Network size={14} /> Connection Graph
+          </button>
+          <button type="button" className="dp-btn dp-btn-sm" onClick={() => setActiveView('scanner')}>
+            <Camera size={14} /> Scan Physical Note
+          </button>
+          <button type="button" className="dp-btn dp-btn-primary dp-btn-sm" onClick={() => void handleCreateNote()}>
+            <FilePlus size={14} /> New Note
           </button>
         </div>
       </div>
+
+      {/* §4 Dedicated Daily Notes Archive Bar: Calendar Navigator + Category Filters */}
+      {notesTab === 'daily' && (
+        <div className="dp-card dp-stack" style={{ padding: 12, gap: 10, background: 'var(--dp-surface-2)' }}>
+          <div className="dp-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <div className="dp-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <strong>📅 Daily Notes Archive</strong>
+              <span className="dp-pill">References exact Today Spread notes (zero duplicates)</span>
+              {dailyDateFilter && (
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => setDailyDateFilter('')}>
+                  Showing {dailyDateFilter} × Clear
+                </button>
+              )}
+            </div>
+            <div className="dp-row" style={{ gap: 6 }}>
+              <button
+                type="button"
+                className="dp-btn dp-btn-primary dp-btn-sm"
+                onClick={async () => {
+                  const targetDate = dailyDateFilter || activeDate || logicalToday;
+                  const created = await upsertCanonicalDailyNote(records, targetDate, '');
+                  setSelectedNoteId(created.id);
+                  setMobilePane('editor');
+                  pushToast(`Opened canonical Daily Note for ${targetDate}`);
+                }}
+              >
+                + Open / Create Daily Note ({dailyDateFilter || activeDate || logicalToday})
+              </button>
+            </div>
+          </div>
+
+          <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={`dp-btn dp-btn-sm ${dailyCategoryFilter === 'all' ? 'dp-btn-primary' : ''}`}
+              onClick={() => setDailyCategoryFilter('all')}
+            >
+              All Categories
+            </button>
+            {DAILY_NOTE_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                className={`dp-btn dp-btn-sm ${dailyCategoryFilter === cat.id ? 'dp-btn-primary' : ''}`}
+                onClick={() => setDailyCategoryFilter(cat.id)}
+              >
+                {cat.emoji} {cat.label}
+              </button>
+            ))}
+          </div>
+
+          <details className="dp-details" open>
+            <summary>
+              Calendar Date Navigator ({calendarMonthCells.year}-{String(calendarMonthCells.month + 1).padStart(2, '0')}) — click any highlighted day to filter
+            </summary>
+            <div className="dp-stack" style={{ gap: 6, marginTop: 8 }}>
+              <div className="dp-between">
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => shiftCalendarMonth(-1)}>← Prev Month</button>
+                <strong>
+                  {new Date(calendarMonthCells.year, calendarMonthCells.month, 1).toLocaleString(settings.locale || 'en-US', { month: 'long', year: 'numeric' })}
+                </strong>
+                <button type="button" className="dp-btn dp-btn-sm" onClick={() => shiftCalendarMonth(1)}>Next Month →</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, fontSize: '0.74rem' }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((wd) => (
+                  <div key={wd} className="dp-muted" style={{ textAlign: 'center', fontWeight: 600 }}>{wd}</div>
+                ))}
+                {calendarMonthCells.cells.map((cell, idx) =>
+                  cell.iso ? (
+                    <button
+                      key={cell.iso}
+                      type="button"
+                      className={`dp-btn dp-btn-sm ${dailyDateFilter === cell.iso ? 'dp-btn-primary' : ''}`}
+                      style={{
+                        padding: '4px 2px',
+                        justifyContent: 'center',
+                        borderColor: cell.count > 0 ? 'var(--dp-accent)' : undefined,
+                        fontWeight: cell.count > 0 ? 700 : 400,
+                      }}
+                      onClick={() => setDailyDateFilter((prev) => (prev === cell.iso ? '' : cell.iso!))}
+                    >
+                      {cell.day}
+                      {cell.count > 0 ? ` · ${cell.count}` : ''}
+                    </button>
+                  ) : (
+                    <div key={`pad-${idx}`} />
+                  )
+                )}
+              </div>
+            </div>
+          </details>
+        </div>
+      )}
 
       {/* PF-55: Draft Recovery Inbox — surfaces interrupted or failed note drafts without cross-note overwrite */}
       {recoveredDrafts && recoveredDrafts.length > 0 && (
@@ -1032,10 +1267,84 @@ export const NotesView: React.FC = () => {
                     }
                   />
                 </label>
+                <select
+                  aria-label="Daily note category"
+                  className="dp-select"
+                  style={{ width: 'auto', padding: '4px 8px' }}
+                  value={activeNote.payload.dailyCategory ?? (activeNote.payload.isDailyNote ? 'daily_specific' : 'uncategorized')}
+                  onChange={(e) =>
+                    void updateRecord<NotePayload>(activeNote.id, (c) => ({
+                      ...c,
+                      payload: { ...c.payload, dailyCategory: e.target.value as DailyNoteCategory },
+                    }), { skipRevision: true })
+                  }
+                >
+                  {DAILY_NOTE_CATEGORIES.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.emoji} {cat.label}</option>
+                  ))}
+                </select>
+                {(activeNote.payload.sourcePlannerDate || activeNote.payload.writtenForDate) && (
+                  <button
+                    type="button"
+                    className="dp-btn dp-btn-sm"
+                    onClick={() => {
+                      const d = activeNote.payload.sourcePlannerDate || activeNote.payload.writtenForDate;
+                      if (d) setActiveDate(d);
+                      setActiveView('today');
+                    }}
+                  >
+                    <ExternalLink size={12} /> Open Daily Planner ({activeNote.payload.sourcePlannerDate || activeNote.payload.writtenForDate})
+                  </button>
+                )}
                 <span className="dp-muted">
                   Created: {new Date(activeNote.createdAt).toLocaleDateString()} · Modified: {new Date(activeNote.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ·{' '}
                   <strong>{wordCount.toLocaleString()}</strong> words · {charCount.toLocaleString()} chars · {paragraphCount} ¶ · ~{readTimeMin}m read
                 </span>
+              </div>
+
+              {/* §4 1-Click Daily Note Conversion & Promotion Bar (with automatic bidirectional backlinks) */}
+              <div className="dp-row" style={{ gap: 5, flexWrap: 'wrap', fontSize: '0.76rem' }}>
+                <span className="dp-muted">Convert / Promote:</span>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={async () => {
+                    const res = await convertDailyNoteToTarget(activeNote, 'task', records);
+                    pushToast(res.summary, { canUndo: true });
+                  }}
+                >
+                  → Task
+                </button>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={async () => {
+                    const res = await convertDailyNoteToTarget(activeNote, 'project', records);
+                    pushToast(res.summary, { canUndo: true });
+                  }}
+                >
+                  → Project
+                </button>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={async () => {
+                    const res = await convertDailyNoteToTarget(activeNote, 'diary', records);
+                    pushToast(res.summary, { canUndo: true });
+                  }}
+                >
+                  → Diary Reflection
+                </button>
+                <button
+                  type="button"
+                  className="dp-btn dp-btn-sm"
+                  onClick={async () => {
+                    const res = await convertDailyNoteToTarget(activeNote, 'permanent_knowledge', records);
+                    pushToast(res.summary, { tone: 'ok' });
+                  }}
+                >
+                  <Sparkles size={12} /> {activeNote.payload.promotedToKnowledgeAt ? 'Permanent Knowledge ✓' : 'Promote to Permanent Knowledge'}
+                </button>
               </div>
 
               {/* Rich Block Toolbar */}
@@ -1438,16 +1747,40 @@ export const NotesView: React.FC = () => {
                   )}
                 </div>
                 <div className="dp-stack" style={{ gap: 6 }}>
-                  <strong style={{ fontSize: '0.84rem' }}>Backlinks ({backlinks.length})</strong>
-                  {backlinks.length === 0 ? (
-                    <span className="dp-muted" style={{ fontSize: '0.8rem' }}>No notes link here yet.</span>
+                  <strong style={{ fontSize: '0.84rem' }}>Backlinks &amp; Linked Records ({backlinks.length + linkedRecords.length})</strong>
+                  {backlinks.length === 0 && linkedRecords.length === 0 ? (
+                    <span className="dp-muted" style={{ fontSize: '0.8rem' }}>No notes or records link here yet.</span>
                   ) : (
-                    backlinks.map(({ note, context }) => (
-                      <button key={note.id} type="button" className="dp-card" style={{ padding: 8, textAlign: 'start', cursor: 'pointer' }} onClick={() => setSelectedNoteId(note.id)}>
-                        <strong style={{ fontSize: '0.84rem' }}>{note.title}</strong>
-                        <div className="dp-muted" style={{ fontSize: '0.76rem' }}>…{context}…</div>
-                      </button>
-                    ))
+                    <>
+                      {backlinks.map(({ note, context }) => (
+                        <button key={note.id} type="button" className="dp-card" style={{ padding: 8, textAlign: 'start', cursor: 'pointer' }} onClick={() => setSelectedNoteId(note.id)}>
+                          <strong style={{ fontSize: '0.84rem' }}>{note.title}</strong>
+                          <div className="dp-muted" style={{ fontSize: '0.76rem' }}>…{context}…</div>
+                        </button>
+                      ))}
+                      {linkedRecords.map(({ record, relation }) => (
+                        <div key={record.id} className="dp-card dp-between" style={{ padding: 8, fontSize: '0.8rem' }}>
+                          <div>
+                            <strong>{record.title}</strong>{' '}
+                            <span className="dp-pill">{record.type}</span>{' '}
+                            <span className="dp-muted">({relation})</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="dp-btn dp-btn-sm"
+                            onClick={() => {
+                              if (record.type === 'note') setSelectedNoteId(record.id);
+                              else if (record.type === 'task') setActiveView('tasks');
+                              else if (record.type === 'project') setActiveView('projects');
+                              else if (record.type === 'diary') setActiveView('diary');
+                              else if (record.type === 'pdf_doc') setActiveView('pdf_studio');
+                            }}
+                          >
+                            Open
+                          </button>
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
               </div>
