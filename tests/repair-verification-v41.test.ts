@@ -529,7 +529,7 @@ describe('Planaday v4.1.0 Repair Verification Suite (PD-001..PD-020, CONT-001..C
     const after = await getOrInitSettings();
     expect(after.calendarPrefs?.intervalMin).toBe(1);
     expect(after.calendarPrefs?.adaptiveText).toBe(false);
-    expect(PLANADAY_RELEASE.version).toBe('4.1.0');
+    expect(PLANADAY_RELEASE.version).toBe('4.2.0');
     expect(PLANADAY_RELEASE.indexedDbName).toBe('dayplana-v2');
   });
 

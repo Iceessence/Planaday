@@ -1,12 +1,39 @@
 # PLANADAY — Active Working Ledger (`PLANADAY_WORKING.md`)
 
-**Last Updated:** 2026-11-24
-**Base Audited Revision:** `d82bdc73742e8982732b5e73d3c44d63e805d842` (Planaday `4.0.0`)
-**Current Completed Checkpoint:** Planaday `4.1.0` — Batches 1–6 Complete (`178/178` automated tests passing; `26/28` audit issues developer-verified; `2/28` production host items waiting on owner authorization)
+**Last Updated:** 2026-11-27
+**Base Audited Revision:** `d82bdc73742e8982732b5e73d3c44d63e805d842` (Planaday `4.0.0`) → `bd96a55` (`4.1.0`)
+**Current Completed Checkpoint:** Planaday `4.2.0` — All 8 Directive Batches Complete (`14/14` test files, **`186/186` automated tests PASS**; `26/28` audit issues developer-verified; `2/28` production host items waiting on owner authorization; 100k-record search **`14.32 ms` p95**; cold-boot JS **−39.1% raw / −34.0% gzip**)
 
 ---
 
-## Completed Checkpoint Summary (Planaday `4.1.0`)
+## Completed Checkpoint Summary (Planaday `4.2.0` — 2026-11-27)
+
+1. **§2 Comprehensive Performance Overhaul (DONE — Measured & Verified):**
+   - Lazy-loaded all 28+ non-initial views in `src/App.tsx` and `src/modules/life/AllInOneView.tsx` + refactored `vite.config.ts` to function-based `manualChunks(id)` isolating `appCore`, `vendor`, `pdfEngine`, `ocrEngine`, `pdfStudio`, `scannerStudio`, and all studio chunks (zero lazy chunks preloaded on cold boot; eager boot JS dropped `1.32 MB` → `806.1 KB` raw / `249.8 KB` gzip!).
+   - Non-destructive additive Dexie v3 schema (`src/core/db.ts`) adding compound record indexes + `searchIndex` table.
+   - Built incremental inverted trigram FTS engine (`src/core/searchIndex.ts`, `src/core/search.ts`, `GlobalSearchDialog.tsx`): **100,000 records searched in `2.01 ms` p50 / `14.32 ms` p95** (`0.19 ms` incremental upsert).
+   - Added bounded LRU ObjectURL cache (`src/core/blobCache.ts`) + `VirtualList` (`src/components/Common/VirtualList.tsx`).
+   - Optimized `AppContext.tsx` notification scheduler (~60× fewer idle scans) and tuned SQLite composite indexes + 16 MB page cache PRAGMAs in `server/db.ts`.
+2. **§3 Activity-Aware Offline-First Sync Engine & Dashboard (DONE — Verified):**
+   - Upgraded `src/core/sync.ts` with passive user activity tracking, `smart` inactivity deferral (~10s default + 120s max postponement cap), activity-yielding blob transfers, `manual`/`scheduled`/`continuous`/`offline` modes, `wifiOnly`, `chargingOnly`, and `selectiveWorkspaceIds`.
+   - Added full Sync Policy Dashboard UI in `src/components/Settings/SettingsView.tsx`.
+3. **§4 Unified Daily Notes Archive (DONE — Verified):**
+   - Created `src/core/dailyNotes.ts` and unified `TodaySpread.tsx` & `NotesView.tsx` onto one canonical `note` record (zero duplication!) with Month Calendar date navigation, 6 daily categories, Jump-to-Daily-Planner navigation, 1-click Task/Project/Diary/Permanent-Knowledge conversion, and automatic bidirectional backlinks.
+4. **§5 Physical Note Scanner & Handwriting OCR Studio (DONE — Verified):**
+   - Built `src/core/documentScanner.ts` (Sobel edge detection, exact 4-point projective homography warp, integral-image shadow reduction, crisp B&W mode, table-to-CSV parser, `<70%` confidence analysis, hybrid GPU → offline `tesseract.js` → manual fallback, mandatory Lab review safety gate) and `src/modules/studio/DocumentScannerView.tsx`.
+5. **§6 Optional Self-Hosted NVIDIA RTX 5050 GPU Service & Bridge (DONE — Verified):**
+   - Created `gpu-service/` (`app.py`, `Dockerfile`, `requirements.txt`, `README.md`), `docker-compose.gpu.yml` overlay (`GPU_MEMORY_LIMIT_MB=6144`, persistent `/models` volume), authenticated `server/gpuBridge.ts` + `/api/gpu/*` routes in `server/index.ts`, and Settings GPU Acceleration & Privacy Controls Dashboard.
+6. **§7 Integrated PDF Reader, Editor & Secure Redaction Studio (DONE — Verified):**
+   - Built `src/core/pdfEngine.ts` (`pdfjs-dist` + `pdf-lib`: inspect, extract text, search, rotate, crop, duplicate, add blank, delete, reorder, merge, split, image insert, AcroForm read/fill, annotation embedding, and **true irreversible secure redaction** removing underlying secret text bytes) and `src/modules/studio/PdfStudioView.tsx`, wired across navigation and `FileManagerView.tsx`.
+7. **§8 & §9 Size/Completeness Audit & Store Readiness (DONE — Verified):**
+   - Published `PLANADAY_PERFORMANCE_AUDIT.md`, `PLANADAY_SIZE_AND_COMPLETENESS_AUDIT.md`, and `docs/STORE_DISTRIBUTION.md`.
+   - Updated Windows Electron packaging (`desktop/package.json`, `main.cjs`, `preload.cjs`: `.pdf`/`.dmtheme` file associations, multi-window, native print, NSIS/MSIX metadata) and Android CI (`.github/workflows/build-apps.yml`: `versionCode 420` / `4.2.0`, R8 shrinking, PDF/image `VIEW`/`SEND` intents, optional secret-gated AAB build).
+8. **§10 Benchmarks & Acceptance Tests (DONE):**
+   - Added `tests/performance-benchmarks.test.ts` (3/3 PASS) and `tests/v42-features.test.ts` (5/5 PASS). Full suite: **`14/14` files, `186/186` tests PASS**, `0` TypeScript errors, `0` Chrome 74 syntax hits, `0` `localStorage`, `0` native dialogs, `0` `eval`, `0` stubs.
+
+---
+
+## Prior Completed Checkpoint Summary (Planaday `4.1.0`)
 
 1. **Batch 1 — Canonical Documentation & Matrix Repair (DONE):**
    - Established all permanent canonical root documents (`PLANADAY_MASTER.md`, `PLANADAY_DEVELOPMENT_ROADMAP.md`, `PLANADAY_WORKING.md`, `PLANADAY_FEATURE_MATRIX.csv`, `PLANADAY_ISSUES.md`, `PLANADAY_EXPANSION_CATALOG.md`, `PLANADAY_TEST_RESULTS.md`, `PLANADAY_RELEASE_CHECKLIST.md`, `CHANGELOG.md`) while keeping `docs/audits/` immutable.

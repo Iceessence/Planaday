@@ -18,6 +18,38 @@ Preserved unmodified in `docs/audits/planaday-independent-review-continuation/`:
 
 ---
 
+## Developer Verification Log (`4.2.0` — 2026-11-27 — Pending Independent Verification)
+
+### 1. Build, Bundle & Compatibility Verification — **PASS (Developer-verified)**
+- **Command:** `npm.cmd run build` (`tsc --noEmit && vite build && tsc -p tsconfig.server.json`)
+- **Result:** Exit code `0` (`1,921` modules transformed; Vite built in `3.87s`; zero TypeScript errors across web client, server, and test suites).
+- **Cold-Boot Bundle Improvement (§2):** Eager JS parsed on startup reduced from **`1,324,578` B raw (`~378.6 KB` gz)** to **`806,056` B raw (`249.8 KB` gz)** (**−39.1% raw / −34.0% gz**). Zero lazy feature views (`settings`, `calendarPlan`, `mindTime`, `kitchenLife`, `lab`, `mathOffice`, `pdfStudio`, `pdfEngine`, `scannerStudio`, `ocrEngine`, `archive`) are preloaded in `dist/index.html`.
+- **Offline Asset Manifest (`PD-009`):** `dist/offline-manifest.json` emitted cleanly (`version: "4.2.0"`, covering all `26` dist assets).
+- **Chrome 74 / Android 10 WebView Compatibility Scan (`CONT-005`):** Scanned all built app `.js` chunks in `dist/assets/` -> `chrome74SyntaxHits: 0`.
+- **Static Safety & Completeness Scan (`src/`):** `45` module files (`33,235` lines); `0` `localStorage` data calls, `0` native `alert/confirm/prompt`, `0` `eval()`, `0` stubs/placeholders.
+
+### 2. Full Automated Test Suite (`vitest run`) — **14/14 Files, 186/186 Tests PASS (Developer-verified)**
+- **Command:** `npm.cmd test` (`vitest run`, Duration `4.85s`)
+- **New `v4.2.0` Suites (8/8 PASS):**
+  - `tests/performance-benchmarks.test.ts` (**3 / 3 PASS**):
+    1. **100,000-Record `InvertedSearchIndex` Benchmark:** `build=648.5ms`, **`p50=2.01ms`**, **`p95=14.32ms`** (target `< 300ms`), `max=14.32ms`, `incUpsert=0.19ms`, `vocab=100,110` across 20 queries (exact, multi-term, prefix, 1-edit typo, type/tag filters).
+    2. **100 Local IndexedDB CRUD Actions Benchmark:** **`p50=0.62ms`**, **`p95=1.43ms`** (target `95% < 100ms`).
+    3. **`BoundedBlobUrlCache` LRU Eviction:** Verified strict capacity cap + automatic `URL.revokeObjectURL` eviction.
+  - `tests/v42-features.test.ts` (**5 / 5 PASS**):
+    1. **§3 Activity-Aware Sync:** Verified `smart` deferral while typing, firing after inactivity, `maxDelaySec` postponement cap, `manual`/`offline`/`wifiOnly`/`chargingOnly` policies, and Selective Workspace Sync (`ws_lab` pushed, `ws_personal` untouched).
+    2. **§4 Unified Daily Notes Archive:** Verified Today Spread + Notes reference identical canonical `record.id` (zero duplication), Task/Project bidirectional `EntityLink` conversions, and in-place Permanent Knowledge promotion.
+    3. **§5 Physical Note Scanner:** Verified Sobel quad detection, 4-point projective homography warp, integral-image shadow brightening, table-to-CSV parsing, `<70%` uncertain word flagging, and mandatory manual-review Lab safety gate.
+    4. **§7 Integrated PDF Engine & True Secure Redaction:** Verified real `pdf-lib` metadata/AcroForm filling, rotate/crop/duplicate/add/delete/reorder/merge/split, Global Search indexing of `pdf_doc`, and **irreversible stream-stripped redaction** proven across raw bytes + Flate-inflated streams + hex-decoded `Tj` text (secret `TOP-SECRET-SSN-999-88-7777` present before redaction, **0 occurrences** after redaction, unredacted page 2 preserved).
+    5. **§6 Optional GPU Bridge:** Verified live Fastify `401` enforcement on `/api/gpu/*`, graceful `{ ok: true, available: false, fallback: 'local' }` when unconfigured, and live authenticated round-trip (`/status`, `/ocr`, `/jobs/:id/cancel`, `/benchmark`) against a mock local GPU HTTP worker.
+- **All Prior 12 Suites Retained & Passing (`178/178` PASS):** `tests/audit-references.test.ts` (117/117), `tests/repair-verification-v41.test.ts` (14/14), plus all 10 baseline suites (47/47).
+
+### 3. Environment-Blocked / Hardware Checks (Not Claimed as Passed)
+- **Physical NVIDIA RTX 5050 CUDA Benchmark & PaddleOCR Container Execution:** Requires deploying `docker-compose.gpu.yml` on the owner's RTX 5050 Docker host (verified via mock HTTP worker in automated tests; real GPU inference timing pending hardware run).
+- **Live Chrome / Firefox / WebKit Browser Automation & Physical Android/Windows Packaging Runs:** Not executed in this session (require Playwright/browser bridge, physical Android handsets, and Windows/GitHub Actions runners).
+- **Live Production Docker / TrueNAS Host Verification (`CONT-001`, `CONT-009`):** Intentionally not executed without owner authorization.
+
+---
+
 ## Developer Verification Log (`4.1.0` — 2026-11-24 — Pending Independent Verification)
 
 ### 1. Build, Typecheck & Packaging Verification — **PASS (Developer-verified)**

@@ -1,11 +1,11 @@
 # PLANADAY — Master Issue Register (`PLANADAY_ISSUES.md`)
 
 **Baseline Audited Revision:** `d82bdc73742e8982732b5e73d3c44d63e805d842` (Planaday `4.0.0`)
-**Current Development Revision:** Planaday `4.1.0` (2026-11-24)
+**Current Development Revision:** Planaday `4.2.0` (2026-11-27)
 **Note:** Per audit records, tentative `CONT-002` was consolidated into `PD-016`. All 28 original issue IDs (`PD-001`–`PD-020`, `CONT-001`, `CONT-003`–`CONT-009`) are permanently tracked below. Statuses strictly distinguish **Developer-verified (Pending independent verification)** vs. **Blocked (Owner Action / Production Environment)**.
 
 ## Summary Counts (28 Tracked Audit Issues)
-- **Developer-verified (Pending independent verification):** **26 / 28** (`PD-001`–`PD-020`, `CONT-003`–`CONT-008`) — all 4 P0 defects, 15 P1 defects, and 7 P2 defects repaired in source and verified by 178 passing automated tests (`tests/audit-references.test.ts` 117/117 + `tests/repair-verification-v41.test.ts` 14/14 + existing 47/47).
+- **Developer-verified (Pending independent verification):** **26 / 28** (`PD-001`–`PD-020`, `CONT-003`–`CONT-008`) — all 4 P0 defects, 15 P1 defects, and 7 P2 defects repaired in source and verified by **186 passing automated tests** across 14 test suites (including `v4.2.0` performance benchmarks & feature acceptance tests).
 - **Blocked (Owner Action / Live Production Host):** **2 / 28** (`CONT-001`, `CONT-009`) — source-side prerequisites (`PF-42`, `PF-52`, versioned release identity, verified SQLite+blob manifest backups) are implemented; live server (`192.168.88.31:3000`), Dockge, and TrueNAS host inspection/migration intentionally untouched without explicit owner authorization.
 - **Independent Audit Re-Verification:** Pending (all 26 fixes require independent post-fix verification + physical-device hardware checks).
 

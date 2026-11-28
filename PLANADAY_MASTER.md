@@ -1,8 +1,9 @@
 # PLANADAY — Master Product Specification (`PLANADAY_MASTER.md`)
 
-**Authoritative Version:** `4.1.0-dev` (baseline audited at `4.0.0`, commit `d82bdc73742e8982732b5e73d3c44d63e805d842`)
-**Application Name:** Planaday (formerly Dayplana; internal storage IDs `dayplana-v2`, `dayplana_db`, `/data/dayplana.sqlite`, and Android package ID preserved for backward compatibility and zero data loss)
+**Authoritative Version:** `4.2.0` (continuously evolved atop audited `4.0.0` `d82bdc7` and hardened `4.1.0` `bd96a55`)
+**Application Name:** Planaday (formerly Dayplana; internal storage IDs `dayplana-v2`, `dayplana_db`, `/data/dayplana.sqlite`, and Android package ID `com.dayplana.app` preserved for backward compatibility and zero data loss)
 **Historical Audit Archive:** Preserved immutably in `docs/audits/planaday-independent-review/` and `docs/audits/planaday-independent-review-continuation/`.
+**Companion Audits:** `PLANADAY_PERFORMANCE_AUDIT.md`, `PLANADAY_SIZE_AND_COMPLETENESS_AUDIT.md`, `docs/STORE_DISTRIBUTION.md`.
 
 ---
 
@@ -58,8 +59,12 @@ Planaday is an offline-first, self-hostable, deeply customizable all-in-one pers
 - **Infinite Whiteboard (§34):** Pan/zoom canvas, snap grid, minimap, bookmarks, drawing tools, sticky notes/frames/cards, live-attached diagram connectors, and SVG/PDF export.
 - **Code Editor & Sandboxed Testing Studio (§35):** Multi-file projects, snippet library, isolated null-origin sandbox execution for JS/TS/HTML with bounded timeout, unit test runner, and external-toolchain syntax editing for compiled languages.
 - **Camera, Photo Library & Non-Destructive Editor (§36):** Capture/import/paste/drop, deduplicated SHA-256 library, albums, non-destructive Canvas editing preserving originals, and cross-module attachment reuse.
-- **Universal Document & File Hub (§37):** Nested folders, favorites, archive, Personal vs. Professional Lab separation, and Global Fuzzy Search.
+- **Universal Document & File Hub (§37):** Nested folders, favorites, archive, Personal vs. Professional Lab separation, and Global Fuzzy Search powered by an incremental inverted trigram FTS index (`InvertedSearchIndex`).
+- **Unified Daily Notes Archive (v4.2.0 §4):** Today Spread's Daily Notes & Margin Scratchpad and the dedicated **Notes → 📅 Daily Notes** tab reference the exact same canonical `note` record (zero duplication), with month-calendar navigation, daily categorization, jump-to-planner-date, 1-click conversion to Task/Project/Diary/Permanent Knowledge Note, and automatic bidirectional backlinks.
+- **Physical Note Scanner & Handwriting OCR Studio (v4.2.0 §5):** Camera capture, multi-page scan queues, automatic Sobel edge detection, 4-point projective homography perspective correction, integral-image shadow reduction, crisp B&W mode, table-to-CSV detection, hybrid offline `tesseract.js` Web Worker + optional self-hosted RTX 5050 GPU OCR, `<70%` low-confidence word flags with mandatory manual review gate before saving to Laboratory records, and original scan preservation.
+- **Integrated PDF Reader, Editor & Secure Redaction Studio (v4.2.0 §7):** 100% offline PDF reading (`pdfjs-dist`: single, 2-page spread, continuous scroll, zoom, bookmarks, full-text search, reading progress), highlights/ink/comments/stamps/signatures, AcroForm reading & filling, true structural page rotate/crop/duplicate/add/delete/reorder/merge/split/image-insert (`pdf-lib`), scanned-page OCR search indexing, and true irreversible secure redaction replacing redacted pages so underlying text bytes are permanently destroyed.
+- **Optional Self-Hosted NVIDIA GPU Acceleration (v4.2.0 §6):** Optional Docker/Dockge FastAPI+CUDA microservice (`gpu-service/` + `docker-compose.gpu.yml`) with VRAM caps (`GPU_MEMORY_LIMIT_MB=6144`), persistent `/models` volume, priority job queue with cancellation & OOM recovery, authenticated `/api/gpu/*` server bridge, explicit privacy opt-in, and automatic offline on-device fallback.
 
 ### 2.8 Mobile, Desktop, Storage, Sync & Deployment Requirements
-- **Mobile Excellence:** Zero horizontal overflow down to 320px viewports, 4 selectable phone layout modes, UI scaling (80–130%), keyboard-safe forms, accessible touch targets, and Android/WebView compatibility.
-- **Multi-Platform Delivery:** Consistent single-source release metadata across Web/PWA (with build-versioned offline asset precaching), self-hosted Docker/Node server (SQLite WAL + staged SHA-256 blobs + authenticated pairing + outbound egress policy), Android Capacitor APK, and supported Electron Windows Desktop package.
+- **Mobile Excellence & True Offline-First Activity-Aware Sync:** Zero horizontal overflow down to 320px viewports, 4 selectable phone layout modes, UI scaling (80–130%), keyboard-safe forms, accessible touch targets, Android/WebView 74+ compatibility, immediate local IndexedDB v3 saves, and intelligent activity-aware sync (Smart Inactivity ~10s default + max delay cap + Manual/Scheduled/Continuous/Offline + Wi-Fi/Charging/Selective Workspace policies).
+- **Multi-Platform Delivery & Store Readiness:** Consistent single-source release metadata (`4.2.0`) across Web/PWA (build-versioned offline precaching), self-hosted Docker/Node server (SQLite WAL + composite indexes + staged SHA-256 blobs + authenticated pairing + outbound egress policy + optional GPU bridge), Android Capacitor APK / secret-gated AAB (R8 shrinking + PDF/image `VIEW`/`SEND` intents), and Windows Electron 39 desktop package (portable `.exe`, NSIS, MSIX metadata, `.pdf`/`.dmtheme` file associations, multi-window, native Print).

@@ -2,10 +2,10 @@
 
 Preserves all 56 audit-proposed product improvement packages (`PF-01`–`PF-56`) from `docs/audits/planaday-independent-review/15_COMPLETE_NEW_FEATURE_CATALOG.md` and `docs/audits/planaday-independent-review-continuation/20_UPDATED_PRODUCT_IMPROVEMENT_CATALOG.md`.
 
-**Current Status Summary (Planaday `4.1.0`):**
-- **Implemented (Developer-verified, Pending independent verification):** **13** (`PF-01`, `PF-02`, `PF-03`, `PF-04`, `PF-05`, `PF-06`, `PF-07`, `PF-08`, `PF-30`, `PF-42`, `PF-51`, `PF-52`, `PF-55`)
-- **Partially Implemented:** **35** (`PF-09`–`PF-11`, `PF-13`–`PF-21`, `PF-23`–`PF-29`, `PF-31`–`PF-34`, `PF-36`–`PF-40`, `PF-43`–`PF-44`, `PF-46`–`PF-49`, `PF-53`, `PF-54`)
-- **Planned / Future Phases:** **8** (`PF-12`, `PF-22`, `PF-35`, `PF-41`, `PF-45`, `PF-50`, `PF-56`, plus live production verification for `PF-42`)
+**Current Status Summary (Planaday `4.2.0`):**
+- **Implemented (Developer-verified, Pending independent verification):** **17** (`PF-01`, `PF-02`, `PF-03`, `PF-04`, `PF-05`, `PF-06`, `PF-07`, `PF-08`, `PF-10`, `PF-22`, `PF-30`, `PF-35`, `PF-37`, `PF-42`, `PF-51`, `PF-52`, `PF-55`)
+- **Partially Implemented:** **33** (`PF-09`, `PF-11`, `PF-13`–`PF-21`, `PF-23`–`PF-29`, `PF-31`–`PF-34`, `PF-36`, `PF-38`–`PF-40`, `PF-43`–`PF-44`, `PF-46`–`PF-49`, `PF-50`, `PF-53`, `PF-54`)
+- **Planned / Future Phases:** **6** (`PF-12`, `PF-41`, `PF-45`, `PF-56`, plus live production verification for `PF-42`)
 
 | ID | Priority | Package | Dependencies | Current Status |
 |---|---|---|---|---|
@@ -18,7 +18,7 @@ Preserves all 56 audit-proposed product improvement packages (`PF-01`–`PF-56`)
 | **PF-07** | P1 | Long-note editor performance and recovery | `PD-010`, `PD-016` | **Implemented (Developer-verified)** — deferred O(n) counters, 12k autoGrow cap, durable `db.drafts` (live 100k browser timing pending) |
 | **PF-08** | P1 | File interchange and calculator correctness | `PD-006`, `PD-007`, `PD-008`, `CONT-006`, `CONT-007`, `PD-018` | **Implemented (Developer-verified)** — 117/117 math/unit/sheet/lab refs, RFC 4180 CSV, typed `downloadFile`, rich HTML deck export |
 | **PF-09** | P2 | Typed relationships and deep links | `PF-01` | Partially Implemented (unified `EntityLink` + project links) |
-| **PF-10** | P2 | Incremental search and saved search scopes | `PF-01` | Partially Implemented (`GlobalSearchDialog` + Personal/Lab filter) |
+| **PF-10** | P2 | Incremental search and saved search scopes | `PF-01` | **Implemented (Developer-verified)** — `InvertedSearchIndex` (100k records in `14.32ms` p95, `0.19ms` incremental upsert) + PDF/OCR indexing |
 | **PF-11** | P2 | Schedule proposals with decision history | `R-0005`..`R-0054` | Partially Implemented (`TaskCalendarView` auto-placement + `FlowCalendarView` drag-resize) |
 | **PF-12** | P2 | Shared availability, resources, and travel buffers | `PF-04`, `PF-11` | Planned |
 | **PF-13** | P2 | Project dependencies, timelines, and capacity | `PF-09`, `PF-11` | Partially Implemented (`ProjectsView` milestones & subprojects) |
@@ -30,7 +30,7 @@ Preserves all 56 audit-proposed product improvement packages (`PF-01`–`PF-56`)
 | **PF-19** | P3 | Offline travel packs with time zones | `PF-05` | Partially Implemented (`TravelPeopleHomeView`) |
 | **PF-20** | P3 | Collections and reading templates | `PF-09` | Partially Implemented (`LearningMediaView` + Custom Record Types) |
 | **PF-21** | P3 | Learning plans and evidence notebooks | `PF-09`, `PF-02` | Partially Implemented (`LearningMediaView` + Notes) |
-| **PF-22** | P3 | Structured document and PDF review | `PF-02`, `PF-08` | Planned |
+| **PF-22** | P3 | Structured document and PDF review | `PF-02`, `PF-08` | **Implemented (Developer-verified)** — Integrated `PdfStudioView` (`pdf-lib` + `pdfjs-dist`): reading, annotations, forms, merge/split, OCR & true irreversible redaction |
 | **PF-23** | P3 | Laboratory custody and sample execution | `PF-01`, `PF-04` | Partially Implemented (`LabWorkspaceView` 15 tabs) |
 | **PF-24** | P3 | Laboratory QC, method validation, and uncertainty | `PF-23`, `PF-08` | Partially Implemented (`LabWetNirView` + Calibration/QC) |
 | **PF-25** | P3 | Laboratory procurement and capacity planning | `PF-23` | Partially Implemented (`LabWorkspaceView` inventory/purchasing/budget) |
@@ -43,9 +43,9 @@ Preserves all 56 audit-proposed product improvement packages (`PF-01`–`PF-56`)
 | **PF-32** | P3 | Reusable photo originals and editing recipes | `PF-02`, `PD-019` | Partially Implemented (`PhotoStudioView` non-destructive copies) |
 | **PF-33** | P3 | Scientific calculation worksheets | `PF-08`, `PF-24` | Partially Implemented (`CalculatorView` Lab Mode + Save to Note) |
 | **PF-34** | P4 | Previewable user automation | `PF-01`, `PF-04` | Partially Implemented (`StudioExtrasView` automations) |
-| **PF-35** | P4 | Owner-controlled local assistance | `PF-04`, `PD-014` | Planned (guarded by explicit owner opt-in & outbound policy) |
+| **PF-35** | P4 | Owner-controlled local assistance | `PF-04`, `PD-014` | **Implemented (Developer-verified)** — Optional self-hosted RTX 5050 GPU service (`gpu-service/` + `server/gpuBridge.ts`) with explicit privacy opt-in & offline fallback |
 | **PF-36** | P4 | Declarative workspace builder | `PF-09`, `PF-06` | Partially Implemented (`ProjectsView` Custom Record Builder + Custom Tabs) |
-| **PF-37** | P2 | Native capture and device actions | `PF-02`, `CONT-005` | Partially Implemented (Camera input + Quick Capture) |
+| **PF-37** | P2 | Native capture and device actions | `PF-02`, `CONT-005` | **Implemented (Developer-verified)** — `DocumentScannerView` (camera capture, homography deskew, shadow cleanup, hybrid OCR) + Android PDF/image intents & Windows file associations |
 | **PF-38** | P2 | Desktop project panes and keyboard workflows | `PD-020`, `PF-06` | Partially Implemented (Command Palette + shortcuts + Electron 39) |
 | **PF-39** | P4 | Permission-controlled historical timelines | `PF-04`, `PF-09` | Partially Implemented (`HistoryView` + `ReportsView`) |
 | **PF-40** | P4 | Living documents and evidence snapshots | `PF-01`, `PF-08` | Partially Implemented (Live Spreadsheet Data Pull + Note checkpoints) |
